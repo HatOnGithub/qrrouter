@@ -9,13 +9,38 @@ function qrr_h($value) {
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/** Translation values are plain UTF-8; HTML escaping belongs at the rendering boundary. */
+function qrr_plain_translation($value) {
+    return html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+}
+
+function qrr_translation_text($key, $fallback) {
+    global $langs;
+    $translated = $fallback;
+    if (isset($langs) && is_object($langs)) {
+        if (method_exists($langs, 'transnoentitiesnoconv')) {
+            $translated = $langs->transnoentitiesnoconv($key);
+        } elseif (method_exists($langs, 'trans')) {
+            $translated = $langs->trans($key);
+        }
+    }
+    if (!is_string($translated) || $translated === '' || $translated === $key) {
+        $translated = $fallback;
+    }
+    return qrr_plain_translation($translated);
+}
+
 /** Translate module UI text through Dolibarr's current locale. The message key
  * is deterministic, and English is always the fallback. No stored item values
  * or backend machine identifiers are translated. */
 function qrr_t($english) {
     global $langs;
-    if (!isset($langs) || !is_object($langs) || !method_exists($langs, 'trans')) {
-        return (string) $english;
+    if (
+        !isset($langs) ||
+        !is_object($langs) ||
+        (!method_exists($langs, 'trans') && !method_exists($langs, 'transnoentitiesnoconv'))
+    ) {
+        return qrr_plain_translation($english);
     }
     static $loaded = false;
     if (!$loaded && method_exists($langs, 'load')) {
@@ -23,10 +48,7 @@ function qrr_t($english) {
         $loaded = true;
     }
     $key = 'QRRUI_' . substr(sha1((string) $english), 0, 12);
-    $translated = $langs->trans($key);
-    return is_string($translated) && $translated !== $key && $translated !== ''
-        ? $translated
-        : (string) $english;
+    return qrr_translation_text($key, $english);
 }
 /** Translate static HTML text and descriptive attributes, while leaving all
  * form values, links, scripts, styles and inventory data untouched. The source

@@ -6,6 +6,7 @@ import argparse
 import ast
 import contextlib
 import http.cookiejar
+import hashlib
 import importlib.util
 import json
 import os
@@ -32,6 +33,7 @@ if args.extension_dir:
 for path in (root / 'dolibarr/qrrouter').rglob('*.php'):
     subprocess.run(php + ['-l', str(path)], check=True, stdout=subprocess.DEVNULL)
 print('All PHP adapter files pass syntax checks.', flush=True)
+subprocess.run(php + [str(root / 'tests/test_translation.php')], check=True)
 spec = importlib.util.spec_from_file_location('native_fixture', root / 'reference/module-2.6.14/qrrouter/tests/test_http_inventory.py')
 fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
@@ -68,6 +70,26 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-angular-') as directory:
     main = main.replace("elseif(str_contains($sql,'FROM llx_user')){", "elseif(str_contains($sql,'FROM llx_user')){ if (!empty($s['users_empty'])) return true;")
     locale_source = ast.parse((root / 'reference/module-2.6.14/qrrouter/tests/test_http_locales.py').read_text(encoding='utf-8'))
     locale_fixture = next(ast.literal_eval(node.value) for node in locale_source.body if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'LANGS' for target in node.targets))
+    entity_text = (
+        'Tools &amp; parts&hellip; &mdash; &quot;quoted&quot; &#39;single&#39; '
+        '&lt;img src=&quot;entity-regression&quot; '
+        'onerror=&quot;window.__entityExecuted=true&quot;&gt;'
+    )
+    entity_expected = (
+        'Tools & parts… — "quoted" \'single\' '
+        '<img src="entity-regression" onerror="window.__entityExecuted=true">'
+    )
+    inventory_key = 'QRRUI_' + hashlib.sha1(b'Inventory').hexdigest()[:12]
+    locale_fixture = locale_fixture.replace(
+        "public function trans($key){return $this->map[$key]??$key;}",
+        """public function trans($key) {
+  return htmlentities($this->transnoentitiesnoconv($key), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+ }
+ public function transnoentitiesnoconv($key) {
+  if (!empty($_GET['testentities']) && $key === '%s') return '%s';
+  return $this->map[$key] ?? $key;
+ }""" % (inventory_key, entity_text),
+    )
     before_return, _, after_return = main.rpartition('return 1;')
     main = before_return + locale_fixture + '\nreturn 1;' + after_return
     main = main.replace("$GLOBALS['user']=new class {public $id=8,$admin=1;public function hasRight(...$a){return true;}};", """
@@ -128,6 +150,9 @@ class Commande { public $entity=1,$ref='SO-0039',$lines=[]; public function __co
             with client.open(base + 'api.php?resource=bootstrap&testlang=' + locale) as response:
                 localized = json.load(response)
                 assert localized['locale'] == locale and localized['translations']['Inventory'] == translated
+        with client.open(base + 'api.php?resource=bootstrap&testentities=1') as response:
+            decoded = json.load(response)['translations']['Inventory']
+            assert decoded == entity_expected
         populated = json.loads(native_path.read_text())
         populated['users_empty'] = False
         native_path.write_text(json.dumps(populated))

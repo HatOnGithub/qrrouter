@@ -219,3 +219,20 @@ test('controls and dropdowns follow a dark Dolibarr host without changing its th
     'rgb(32, 33, 36)'
   );
 });
+
+test('translation entities render as text characters while decoded markup stays inert', async ({
+  page,
+}) => {
+  await page.route('**/api.php?resource=bootstrap', async route => {
+    const response = await route.fetch({ url: route.request().url() + '&testentities=1' });
+    await route.fulfill({ response });
+  });
+  await open(page, 'inventory');
+
+  const expected =
+    'Tools & parts… — "quoted" \'single\' ' +
+    '<img src="entity-regression" onerror="window.__entityExecuted=true">';
+  await expect(page.getByRole('heading', { name: expected, exact: true })).toBeVisible();
+  await expect(page.locator('qrr-root img[src="entity-regression"]')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__entityExecuted)).toBeUndefined();
+});

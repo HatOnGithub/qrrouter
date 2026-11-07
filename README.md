@@ -65,8 +65,20 @@ Inside the Dolibarr container, use `QRR_SERVICE_URL=http://qrrouter-api:8080` an
 To build the Angular module entirely with Docker, without installing Node locally:
 
 ```sh
-docker build --target dolibarr-module --output type=local,dest=artifacts/docker-module .
+docker buildx build --target dolibarr-module --output type=local,dest=artifacts/docker-module .
 ```
+
+If your Docker installation does not support Buildx or reports `unknown flag: --output`, export from a temporary, stopped container instead:
+
+```sh
+docker build --target dolibarr-module -t qrrouter-module:3.1.0 .
+mkdir -p artifacts/docker-module
+module_container=$(docker create qrrouter-module:3.1.0 /unused)
+docker cp "$module_container:/qrrouter" artifacts/docker-module/
+docker rm "$module_container"
+```
+
+The temporary container is never started; `/unused` only supplies the command required to create a container from the artifact image.
 
 The output is `artifacts/docker-module/qrrouter`, ready to copy to Dolibarr's `htdocs/custom`. The default Docker target remains the C# runtime; frontend dependencies are not included in the API runtime image. Docker image execution still needs verification on a machine with a running Docker daemon.
 

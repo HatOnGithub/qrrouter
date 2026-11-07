@@ -67,15 +67,18 @@ function qrr_api_translations() {
         if (!preg_match('/^(QRRUI_[^=]+)=(.*)$/', $line, $m)) {
             continue;
         }
-        $value = isset($langs) && is_object($langs) ? $langs->trans($m[1]) : $m[2];
-        $result[$m[2]] = $value !== $m[1] ? $value : $m[2];
+        $english = qrr_plain_translation($m[2]);
+        $result[$english] = qrr_translation_text($m[1], $m[2]);
     }
     $locale = substr((string) ($langs->defaultlang ?? 'en_US'), 0, 2);
     $extra = __DIR__ . '/langs/' . $locale . '.spa.json';
     if (is_file($extra)) {
         $result = array_merge(
             $result,
-            json_decode(file_get_contents($extra), true, 512, JSON_THROW_ON_ERROR),
+            array_map(
+                'qrr_plain_translation',
+                json_decode(file_get_contents($extra), true, 512, JSON_THROW_ON_ERROR),
+            ),
         );
     }
     return (object) $result;
