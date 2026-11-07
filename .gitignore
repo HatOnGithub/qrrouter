@@ -5,3 +5,28 @@
 data/
 artifacts/
 __pycache__/
+
+# Angular / Node dependencies and generated output
+**/node_modules/
+**/dist/
+**/.angular/
+**/out-tsc/
+**/coverage/
+**/.cache/
+**/.vite/
+**/playwright-report/
+**/test-results/
+dolibarr/qrrouter/spa/
+
+# Local environment overrides and editor state
+.env.*
+!.env.example
+*.user
+*.suo
+.idea/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
