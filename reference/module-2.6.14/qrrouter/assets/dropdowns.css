@@ -1,0 +1,25 @@
+/* QR Router v2.6.6: bounded fields and scrollable dropdowns (Firefox/touch safe). */
+.qrr, .qrr-panel, .qrr-grid, .qrr-grid > *, .qrr-flex > * { min-width: 0; box-sizing: border-box; }
+.qrr-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.qrr-input { min-width: 0; max-width: 100%; }
+.qrr-select-wrap { display: block; width: 100%; min-width: 0; max-width: 100%; position: relative; }
+.qrr-select-native { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; border: 0 !important; opacity: 0; pointer-events: none; }
+.qrr-select-button { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; width: 100%; text-align: left; font: inherit; background: var(--colorbackground, #fff); color: inherit; cursor: pointer; }
+.qrr-select-button:focus-visible { outline: 2px solid #174a7a; outline-offset: 2px; }
+.qrr-select-button.qrr-invalid { border-color: #b35b06; }
+.qrr-select-value { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.qrr-select-caret { flex: none; }
+.qrr-floating { z-index: 2147482000; position: fixed; box-sizing: border-box; min-width: 0; max-width: calc(100vw - 24px); border: 1px solid #9da7b1; border-radius: 7px; background: var(--colorbackground, #fff); color: var(--colortext, #1b232a); box-shadow: 0 7px 22px rgba(0,0,0,.18); overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y; scrollbar-width: auto; scrollbar-gutter: stable; -webkit-overflow-scrolling: touch; }
+.qrr-floating[hidden] { display: none !important; }
+.qrr-select-popup { overflow: hidden; }
+.qrr-select-filter { display: block; box-sizing: border-box; width: 100%; max-width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid #cbd5df; border-radius: 0; font: inherit; background: inherit; color: inherit; }
+.qrr-select-filter[hidden] { display: none; }
+.qrr-select-options { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: auto; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.qrr-select-choice { display: block; box-sizing: border-box; width: 100%; min-height: 38px; border: 0; border-bottom: 1px solid #dce1e6; padding: 10px 12px; background: transparent; color: inherit; cursor: pointer; text-align: left; font: inherit; white-space: normal; overflow-wrap: anywhere; }
+.qrr-select-choice:last-child { border-bottom: 0; }
+.qrr-select-choice:hover, .qrr-select-choice:focus-visible, .qrr-select-choice[aria-selected="true"] { background: #e7f0f8; color: #163755; outline: 2px solid #174a7a; outline-offset: -2px; }
+.qrr-select-choice:disabled { opacity: .55; cursor: not-allowed; }
+.qrr-lookup-results.qrr-floating { display: block; max-height: 340px; overflow-y: auto; }
+.qrr-lookup-results.qrr-floating .qrr-lookup-option { max-width: 100%; }
+@media (max-width: 650px) { .qrr-select-button { padding: 11px; } .qrr-floating { max-width: calc(100vw - 24px); } }
+@media print { .qrr-floating { display: none !important; } }

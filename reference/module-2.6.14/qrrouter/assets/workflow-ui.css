@@ -1,0 +1,42 @@
+/* QR Router workflow screens: aligned with Dolibarr but independent of its global table styles. */
+.qrr-registration-options{gap:9px!important;align-items:stretch}
+.qrr-registration-options .qrr-option-card{margin:0!important;padding:14px!important;display:flex;flex-direction:column;gap:8px;min-height:0}
+.qrr-option-card h3,.qrr-option-card p{margin:0!important}
+.qrr-option-card .qrr-btn{margin-top:auto;align-self:flex-start}
+/* The scanner is a camera viewfinder, not a full-width video player.
+ * Keep a stable bounded stage while the stream starts (and when permission is denied).
+ * The video is fitted inside it, without allowing intrinsic stream dimensions or
+ * Dolibarr's global media styles to expand the layout. */
+.qrr-camera-stage{box-sizing:border-box;position:relative;width:100%;max-width:480px;height:clamp(190px,34dvh,270px);min-height:0;margin:10px auto 8px;border:1px solid #b5c8d7;border-radius:14px;background:#172b3b;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.qrr-camera-stage video{position:absolute;inset:0;display:block;box-sizing:border-box;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;object-fit:cover;background:#172b3b}
+.qrr-camera-stage video:not([srcobject]){background:#172b3b}
+.qrr-camera-placeholder{position:absolute;inset:0;display:grid;place-items:center;padding:25px;text-align:center;color:#fff;font-weight:600;pointer-events:none}
+.qrr-camera-stage.qrr-camera-active .qrr-camera-placeholder{display:none}
+.qrr-camera-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+.qrr-review-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 8px}
+.qrr-review-all{display:inline-flex!important;align-items:center;gap:8px;font-size:13px;font-weight:600;margin:0!important}
+.qrr-review-all input,.qrr-review-check{width:19px;height:19px;accent-color:#174a7a;cursor:pointer}
+.qrr-review-count{font-size:12px;color:#53687b}
+.qrr-review-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;border:1px solid #d3dfe9;border-radius:11px;background:#fff}
+.qrr-review-table{border-collapse:collapse;width:100%;min-width:640px;font-size:13px;line-height:1.3;color:#203448}
+.qrr-review-table th{text-align:left;background:#edf3f8;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#476279}
+.qrr-review-table th,.qrr-review-table td{padding:9px 11px;vertical-align:middle;border-bottom:1px solid #e2e9ef}
+.qrr-review-table tr:last-child td{border-bottom:0}
+.qrr-review-table tbody tr:nth-child(even){background:#f8fbfe}
+.qrr-review-table tbody tr:hover{background:#eaf3fc}
+.qrr-review-table small{display:block;color:#617587;font-size:11px;margin-top:3px}
+.qrr-review-identity{display:flex;align-items:center;gap:9px;min-width:0}
+.qrr-review-identity img{width:42px;height:42px;object-fit:contain;flex:none;border:1px solid #dde5ed;border-radius:7px;padding:2px;background:white}
+.qrr-review-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;font-weight:700;overflow-wrap:anywhere}
+.qrr-review-status{display:inline-block;border-radius:999px;background:#e7eef6;padding:3px 8px;font-size:11px;font-weight:650;white-space:nowrap}
+.qrr-review-unknown{opacity:.7}
+.qrr-manual-entry{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.qrr-manual-entry .qrr-panel{margin:0}
+@media(max-width:680px){.qrr-manual-entry{grid-template-columns:1fr}.qrr-camera-stage{width:100%;max-width:420px;height:clamp(170px,30dvh,240px);margin:10px auto 8px}.qrr-review-table{min-width:590px}.qrr-review-table th,.qrr-review-table td{padding:7px 9px}}
+/* Keep the inclusion control visible when a narrow phone scrolls the table. */
+.qrr-review-table th:first-child,.qrr-review-table td:first-child{position:sticky;left:0;z-index:1;background:#fff;border-right:1px solid #e3eaf0}
+.qrr-review-table thead th:first-child{background:#edf3f8;z-index:2}
+.qrr-review-table tbody tr:nth-child(even) td:first-child{background:#f8fbfe}
+.qrr-review-table tbody tr:hover td:first-child{background:#eaf3fc}
+.qrr-review-qty-label{display:block;font-size:11px;margin-top:4px}
+.qrr-review-missing{display:inline-grid;place-items:center;border:1px dashed #b0bcc8;border-radius:7px;width:42px;height:42px;font-weight:700;color:#617587}
