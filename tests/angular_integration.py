@@ -69,6 +69,8 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-angular-') as directory:
         (webroot / folder).mkdir(parents=True, exist_ok=True)
     main = fixture.MAIN.replace("if(str_contains($sql,'FROM llx_entrepot')){", "if(str_contains($sql,'FROM llx_product WHERE')){$this->rows=[(object)['rowid'=>3,'ref'=>'PART-003','label'=>'Fixture Part']];}elseif(str_contains($sql,'FROM llx_entrepot')){")
     main = main.replace('<meta charset="utf-8">', '<meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:rgb(40,40,40);background:rgb(250,250,250)}.butAction{background:rgb(83,101,117);color:white;border:1px solid gray;border-radius:3px}.flat{background:white;color:rgb(40,40,40)}</style>')
+    main = main.replace('function llxHeader($a,$title){print ', 'function llxHeader($a,$title){global $conf; print ')
+    main = main.replace("</head><body><main data-title=", "</head><body>'.(empty($conf->dol_hide_leftmenu)?'<aside id=\"id-left\">Native left menu</aside>':'').'<main data-title=")
     main = main.replace("elseif(str_contains($sql,'FROM llx_user')){", "elseif(str_contains($sql,'FROM llx_user')){ if (!empty($s['users_empty'])) return true;")
     main = main.replace("$GLOBALS['db']=new FakeDB();", """
 $GLOBALS['db']=new FakeDB();
@@ -127,6 +129,7 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
                             'product/stock/class/entrepot.class.php': fixture.WAREHOUSE,
                             'custom/binloc/class/binlocwarehouselevel.class.php': fixture.BINLOC,
                             'commande/class/commande.class.php': commande,
+                            'native.php': "<?php require __DIR__.'/main.inc.php'; llxHeader('', 'Native Dolibarr page'); llxFooter();",
                             'core/lib/admin.lib.php': admin}.items():
         (webroot / target).write_text(content, encoding='utf-8')
     native_path = data / 'native.json'

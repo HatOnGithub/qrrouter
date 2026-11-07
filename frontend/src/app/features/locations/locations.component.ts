@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { BinSummary, Level } from '@core/models/inventory';
@@ -30,14 +31,23 @@ export class LocationsComponent {
   protected showWarehouse = false;
   private sequence = 0;
 
-  protected async load(newWarehouse = false): Promise<void> {
+  constructor() {
+    const query = inject(ActivatedRoute).snapshot.queryParamMap;
+    const warehouse = Number(query.get('warehouse_id'));
+    if (this.api.context()!.warehouses[warehouse]) {
+      this.warehouse = warehouse;
+      void this.load(true, query.get('bin') || '');
+    }
+  }
+
+  protected async load(newWarehouse = false, initialBin = ''): Promise<void> {
     const request = ++this.sequence;
     this.error.set('');
     this.notice.set('');
     this.data.set(null);
     if (!this.warehouse) return;
     if (newWarehouse) {
-      this.bin = '';
+      this.bin = initialBin;
       this.levels.set([]);
     }
     this.busy.set(true);

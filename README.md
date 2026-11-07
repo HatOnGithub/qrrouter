@@ -29,7 +29,9 @@ python tools/package.py
 
 On Windows, use `npm.cmd` if PowerShell prevents invoking `npm.ps1`. The build copies hashed production bundles into `dolibarr/qrrouter/spa` and produces `artifacts/module_qrrouter-3.1.0.zip`. Dependencies, Angular caches, compiled bundles and test output are excluded from Git; `frontend/package-lock.json` is tracked. Always rebuild before packaging a source checkout. Production PHP requires neither Node nor an Angular development server.
 
-The UI opens at `/custom/qrrouter/index.php`. Angular uses hash routes such as `#/inventory` and `#/items/23456X`, so Apache/Nginx rewrite rules are unnecessary. The installed module has one Dolibarr top-level menu entry; Angular provides its internal navigation. The package contains the app and native print/media endpoints, not the original PHP screen implementation.
+The UI opens at `/custom/qrrouter/index.php`. Angular uses hash routes such as `#/inventory` and `#/items/23456X`, so Apache/Nginx rewrite rules are unnecessary. The installed module has one Dolibarr top-level menu entry; Angular provides its internal navigation. QR Router pages omit Dolibarr's left sidebar on desktop and mobile, without changing navigation on other Dolibarr pages. Bin content printouts are available under **Bins and locations**, box transfers under **Transfer contents between containers**, and QR picking sheets under **Picking**. The package contains the app and native print/media endpoints, not the original PHP screen implementation.
+
+Scanning pages request camera access automatically when their scanner appears. Operators can stop or restart the camera, and manual or hardware-scanner entry remains available if camera access is denied. Leaving a scanning page releases its camera stream.
 
 Frontend changes must be rebuilt and deployed with the complete module directory, including `spa/`. Rebuilding the C# service alone does not deploy Angular or PHP changes. After copying an updated module, reload the page; restart PHP workers if opcode caching is configured to retain old PHP files.
 

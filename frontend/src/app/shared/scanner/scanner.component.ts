@@ -2,6 +2,7 @@ import {
   Component,
   ElementRef,
   OnDestroy,
+  afterNextRender,
   effect,
   inject,
   input,
@@ -40,6 +41,7 @@ export class ScannerComponent implements OnDestroy {
 
   constructor() {
     effect(() => this.codes.set([...this.initial()]));
+    afterNextRender(() => void this.start());
   }
 
   protected add(raw = this.manual): void {

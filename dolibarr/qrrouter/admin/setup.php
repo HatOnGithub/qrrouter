@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-llxHeader('', qrr_t('QR Router setup'));
+qrr_page_header('QR Router setup');
 ?>
 <h1><?php print qrr_h(qrr_t('QR Router setup')); ?></h1>
 <?php if ($error !== '') { ?>

@@ -125,6 +125,8 @@ test('manual scanner rejects invalid input, deduplicates and handles camera deni
     })
   );
   await open(page, 'scan');
+  await expect(page.getByRole('alert')).toHaveText('Camera denied for test');
+  await expect(page.getByRole('button', { name: 'Start camera', exact: true })).toBeEnabled();
   await page.getByRole('textbox', { name: 'QR identifiers' }).fill('bad-code');
   await page.getByRole('button', { name: 'Add codes', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Invalid identifier');
@@ -174,7 +176,8 @@ test('move workflow confirms native transfer and refreshes authoritative state',
 });
 
 test('picking preview uses native order lookup and server allocation', async ({ page }) => {
-  await open(page, 'picking');
+  await open(page, 'inventory');
+  await page.locator('nav').getByRole('link', { name: 'Picking', exact: true }).click();
   await page.getByRole('combobox', { name: 'Customer order', exact: true }).fill('SO');
   await page.getByRole('option', { name: /SO-0039/ }).click();
   await choose(page, 'Warehouse', 'MAIN');
@@ -184,10 +187,78 @@ test('picking preview uses native order lookup and server allocation', async ({ 
   ).toBeEnabled();
 });
 
+test('box transfer is available from navigation and updates both container quantities', async ({
+  page,
+}) => {
+  const source = await blank(page);
+  const destination = await blank(page);
+  const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
+  for (const code of [source, destination]) {
+    const response = await page.request.post('api.php?action=register', {
+      form: {
+        token: bootstrap.token,
+        qrr_token: bootstrap.csrf,
+        payload: JSON.stringify({
+          type: 'box',
+          codes: [code],
+          label: 'Transfer container',
+          product_id: 3,
+          warehouse_id: 1,
+          qty: 5,
+        }),
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
+  await open(page, 'inventory');
+  await page
+    .locator('nav')
+    .getByRole('link', { name: 'Transfer contents between containers', exact: true })
+    .click();
+  await page.getByRole('textbox', { name: 'QR identifiers' }).fill(source + '\n' + destination);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await page.getByRole('button', { name: 'Review selected items', exact: true }).click();
+  await page.getByRole('spinbutton', { name: 'Quantity', exact: true }).first().fill('2');
+  await page.getByRole('button', { name: 'Confirm operation', exact: true }).click();
+  await expect(
+    page.getByText('Container contents transferred; native stock unchanged').first()
+  ).toBeVisible();
+  const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
+  expect(state.items[source].qty).toBe(3);
+  expect(state.items[destination].qty).toBe(7);
+});
+
+test('bin printouts open from locations and return to the selected warehouse', async ({ page }) => {
+  await open(page, 'inventory');
+  await page.locator('nav').getByRole('link', { name: 'Bins and locations', exact: true }).click();
+  await choose(page, 'Warehouse', 'MAIN');
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('link', { name: 'Print bin inventory', exact: true }).click();
+  const printout = await popupPromise;
+  await expect(
+    printout.getByRole('heading', { name: 'Bin content sheets', exact: true })
+  ).toBeVisible();
+  await expect(printout.locator('#id-left')).toHaveCount(0);
+  await printout.getByRole('link', { name: 'Back to bins', exact: true }).click();
+  await expect(
+    printout.getByRole('heading', { name: 'Bins and locations', exact: true })
+  ).toBeVisible();
+  await expect(printout.getByRole('combobox', { name: 'Warehouse', exact: true })).toContainText(
+    'MAIN'
+  );
+  await expect(
+    printout.getByRole('link', { name: 'Print bin inventory', exact: true })
+  ).toBeVisible();
+  await printout.close();
+});
+
 test('responsive navigation inherits the host styling without DeltaNext branding', async ({
   page,
 }) => {
   await open(page, 'inventory');
+  await expect(page.locator('#id-left')).toHaveCount(0);
+  const nativePage = await page.request.get('../../native.php');
+  expect(await nativePage.text()).toContain('id="id-left"');
   await expect(page.locator('qrr-card article').first()).toHaveCSS('background-image', 'none');
   await expect(page.locator('qrr-card article').first()).toHaveCSS(
     'background-color',
@@ -197,6 +268,7 @@ test('responsive navigation inherits the host styling without DeltaNext branding
   await expect(page.getByText('DELTANEXT', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: '../artifacts/angular-inventory.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#id-left')).toHaveCount(0);
   await page.getByRole('button', { name: /Menu/ }).click();
   await page.locator('nav').getByRole('link', { name: 'Scan QR', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Scan QR', exact: true })).toBeVisible();
@@ -221,14 +293,16 @@ test('fresh install with no employees explains setup and blocks checkout confirm
   await expect(page.getByRole('button', { name: 'Confirm operation', exact: true })).toBeDisabled();
 });
 
-test('camera streams stop when leaving the scanner route', async ({ page }) => {
+test('camera auto-starts on scanning pages and stops when leaving them', async ({ page }) => {
   await page.addInitScript(() => {
+    (window as any).__cameraRequests = 0;
     (window as any).__stoppedTracks = 0;
     HTMLMediaElement.prototype.play = async () => {};
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
         getUserMedia: async () => {
+          (window as any).__cameraRequests++;
           const stream = new MediaStream();
           stream.getTracks = () =>
             [{ stop: () => (window as any).__stoppedTracks++ }] as unknown as MediaStreamTrack[];
@@ -238,10 +312,62 @@ test('camera streams stop when leaving the scanner route', async ({ page }) => {
     });
   });
   await open(page, 'scan');
+  await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__cameraRequests)).toBe(1);
+  await page.getByRole('button', { name: 'Stop camera', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Start camera', exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => (window as any).__stoppedTracks)).toBe(1);
+  expect(await page.evaluate(() => (window as any).__cameraRequests)).toBe(1);
   await page.getByRole('button', { name: 'Start camera', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
   await page.locator('nav').getByRole('link', { name: 'Inventory', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).__stoppedTracks)).toBe(2);
+  for (const label of [
+    'Register items',
+    'Move items',
+    'Consume items',
+    'Check out items',
+    'Check in items',
+  ]) {
+    await page.locator('nav').getByRole('link', { name: label, exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
+    await page.locator('nav').getByRole('link', { name: 'Inventory', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible();
+  }
+  expect(await page.evaluate(() => (window as any).__cameraRequests)).toBe(7);
+  expect(await page.evaluate(() => (window as any).__stoppedTracks)).toBe(7);
+});
+
+test('a camera granted after leaving the scanning page is released immediately', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).__stoppedTracks = 0;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: () =>
+          new Promise(resolve => {
+            (window as any).__grantCamera = () => {
+              const stream = new MediaStream();
+              stream.getTracks = () =>
+                [
+                  { stop: () => (window as any).__stoppedTracks++ },
+                ] as unknown as MediaStreamTrack[];
+              resolve(stream);
+            };
+          }),
+      },
+    });
+  });
+  await open(page, 'scan');
+  await expect
+    .poll(() => page.evaluate(() => typeof (window as any).__grantCamera))
+    .toBe('function');
+  await page.locator('nav').getByRole('link', { name: 'Inventory', exact: true }).click();
+  await expect(page.locator('qrr-scanner')).toHaveCount(0);
+  await page.evaluate(() => (window as any).__grantCamera());
   await expect.poll(() => page.evaluate(() => (window as any).__stoppedTracks)).toBe(1);
 });
 

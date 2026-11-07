@@ -28,7 +28,7 @@ $products = qrr_products_index($db, array_column($state['items'], 'product_id'))
 qrr_layout_start('Bin content sheets');
 print '<style>@page{size:A5 portrait;margin:10mm}.qrr-binsheet{background:white;color:#111;padding:6mm;border:1px solid #aaa;min-height:172mm;box-sizing:border-box;page-break-after:always;font:11pt Arial,sans-serif}.qrr-binsheet h1{font-size:22pt;line-height:1.1;margin:0 0 3mm}.qrr-binsheet h2{font-size:13pt;margin:5mm 0 2mm}.qrr-binsheet table{border-collapse:collapse;width:100%;font-size:9.5pt}.qrr-binsheet th,.qrr-binsheet td{border-bottom:1px solid #ccc;padding:2mm;text-align:left;overflow-wrap:anywhere}.qrr-binsheet .qty{text-align:right;white-space:nowrap}.qrr-binsheet .meta{font-size:8pt;color:#555}.qrr-binsheet .warning{border:1px solid #b35b06;padding:2mm}.qrr-print-tool{margin:12px 0}@media print{body{background:white!important}.qrr-binsheet{border:0;padding:0;margin:0;min-height:0}.qrr-print-tool{display:none!important}.qrr{max-width:none!important}header,nav,footer,#id-left,.vmenu,.tabs,.qrr-noprint{display:none!important}}</style>';
 print '<div class="qrr-print-tool qrr-noprint"><button class="qrr-btn" onclick="window.print()">Print / Save as PDF</button> <a class="qrr-btn alt" href="' .
-    qrr_h(qrr_link('bins.php', ['warehouse_id' => $wid])) .
+    qrr_h(qrr_app_link('locations', ['warehouse_id' => $wid, 'bin' => $bin])) .
     '">Back to bins</a></div>';
 if (!$bins) {
     print '<div class="qrr-alert">There are no QR-managed bins to print.</div>';

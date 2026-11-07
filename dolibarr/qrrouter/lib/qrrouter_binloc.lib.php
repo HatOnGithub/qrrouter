@@ -343,7 +343,7 @@ function qrr_binloc_levels_form($db, $warehouseId, $values = [], $oldBin = '', $
     }
     $html .=
         '</div><p class="qrr-small">Select the full location here so positions remain unambiguous. A separate local-label setting can hide levels already marked on shelves or aisles without removing them from the saved location. Leave all levels blank for an unassigned location. <a href="' .
-        qrr_h(qrr_link('binloc_labels.php', ['warehouse_id' => $warehouseId])) .
+        qrr_h(qrr_app_link('locations', ['warehouse_id' => $warehouseId])) .
         '">Configure local labels</a>.</p>';
     if ($legacy && $oldBin !== '') {
         $html .=

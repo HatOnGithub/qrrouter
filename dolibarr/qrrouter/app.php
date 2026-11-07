@@ -16,14 +16,14 @@ header('Cache-Control: no-store');
 $index = __DIR__ . '/spa/index.html';
 if (!is_file($index)) {
     http_response_code(503);
-    llxHeader('', 'QR Router');
+    qrr_page_header('QR Router');
     print '<p>QR Router frontend is not built. Run python tools/build-frontend.py before packaging the module.</p>';
     llxFooter();
     exit();
 }
 $markup = file_get_contents($index);
 $base = dol_buildpath('/qrrouter/spa/', 1);
-llxHeader('', 'QR Router');
+qrr_page_header('QR Router');
 preg_match_all(
     '~<link\b[^>]*rel="stylesheet"[^>]*>|<script\b[^>]*src="[^"]+"[^>]*></script>~i',
     $markup,

@@ -537,8 +537,14 @@ function qrr_css() {
     return '<style>.qrr-item-identity{display:inline-flex;flex-direction:column;align-items:flex-start;max-width:100%;min-width:0;gap:3px}.qrr-item-name{font-size:14px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}.qrr-item-id{display:block;color:#637486;font-size:11px;line-height:1.3;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-weight:400;overflow-wrap:anywhere}.qrr-item-code-muted{display:block;color:#637486;font-size:12px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}.qrr-item-heading{margin:0 0 4px;overflow-wrap:anywhere}.qrr{max-width:1120px;margin:auto}.qrr-panel{padding:18px;border:1px solid #d5dbe2;border-radius:10px;margin:14px 0;background:var(--colorbackground,#fff)}.qrr-flex{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.qrr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.qrr-input{box-sizing:border-box;width:100%;padding:11px;font-size:16px;border:1px solid #9da7b1;border-radius:6px}.qrr-btn{padding:11px 15px;display:inline-block;background:#174a7a;color:#fff!important;text-decoration:none;border:0;border-radius:7px;cursor:pointer;font-size:15px}.qrr-btn.alt{background:#f3f5f7;color:#163755!important;border:1px solid #9da7b1}.qrr-table{width:100%;border-collapse:collapse}.qrr-table th,.qrr-table td{text-align:left;padding:9px;border-bottom:1px solid #dce1e6;vertical-align:top}.qrr-small{color:#59636f;font-size:13px}.qrr-tag{font:600 14px monospace;word-break:break-word}.qrr-alert{border-left:4px solid #b35b06;padding:12px;background:#fff6e9}.qrr-ok{border-left:4px solid #35824f;padding:12px;background:#eff9f1}.qrr-code-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:10px;margin-top:15px}.qrr-code-tile{display:flex;gap:6px;align-items:center;padding:6px;border:1px solid #cbd5df;border-radius:8px;text-decoration:none;overflow:hidden}.qrr-code-tile img{object-fit:contain;background:#fff;flex-shrink:0}.qrr-code-tile .qrr-tag{font-size:11px}.qrr-scan-thumb{width:112px;height:112px;object-fit:cover;border:1px solid #cbd5df;border-radius:8px;background:#fff;padding:4px}.qrr-lookup-results{display:block;box-sizing:border-box;width:100%;max-height:260px;overflow-y:auto;overscroll-behavior:contain;border:1px solid #9da7b1;border-radius:6px;background:var(--colorbackground,#fff);margin-top:5px;scrollbar-width:auto;-webkit-overflow-scrolling:touch}.qrr-lookup-results[hidden]{display:none!important}.qrr-lookup-option{display:block;box-sizing:border-box;width:100%;padding:11px 12px;background:transparent;color:inherit;border:0;border-bottom:1px solid #dce1e6;text-align:left;white-space:normal;overflow-wrap:anywhere;cursor:pointer;font:inherit}.qrr-lookup-option:last-child{border-bottom:0}.qrr-lookup-option:hover,.qrr-lookup-option:focus-visible{background:#e7f0f8;color:#163755;outline:2px solid #174a7a;outline-offset:-2px}@media(max-width:650px){.qrr-table thead{display:none}.qrr-table tr{display:block;border-bottom:1px solid #ccd2da;padding:9px}.qrr-table td{display:block;border:0;padding:3px}}@media print{.qrr-noprint,header,nav,footer,#id-left,.vmenu{display:none!important}.qrr{max-width:none}.qrr-panel{border:0;padding:0}}</style>';
 }
 
-function qrr_layout_start($title) {
+function qrr_page_header($title) {
+    global $conf;
+    // Request-local: keep Dolibarr's top menu and let QR Router provide navigation.
+    $conf->dol_hide_leftmenu = 1;
     llxHeader('', qrr_t($title));
+}
+function qrr_layout_start($title) {
+    qrr_page_header($title);
     ob_start();
     print qrr_css() .
         '<div class="qrr"><p class="qrr-noprint"><a href="' .
@@ -599,6 +605,12 @@ function qrr_fields($item) {
 }
 function qrr_link($file, $pairs = []) {
     return qrr_base() . $file . (count($pairs) ? '?' . http_build_query($pairs) : '');
+}
+function qrr_app_link($route, $pairs = []) {
+    return qrr_base() .
+        'index.php#/' .
+        $route .
+        (count($pairs) ? '?' . http_build_query($pairs) : '');
 }
 function qrr_form_token() {
     return '<input type="hidden" name="token" value="' .
