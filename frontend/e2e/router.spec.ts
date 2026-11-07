@@ -24,6 +24,71 @@ async function blank(page: Page): Promise<string> {
   return updated.state.batches[id].codes[0];
 }
 
+test('product results remain selectable outside a clipping form container', async ({ page }) => {
+  await open(page, 'create');
+  await page.locator('qrr-lookup').evaluate(host => {
+    const wrapper = document.createElement('div');
+    wrapper.style.height = host.getBoundingClientRect().height + 'px';
+    wrapper.style.overflow = 'hidden';
+    host.parentElement!.insertBefore(wrapper, host);
+    wrapper.appendChild(host);
+  });
+
+  const input = page.getByRole('combobox', { name: 'Dolibarr product', exact: true });
+  await input.fill('Fixture');
+  const result = page.getByRole('option', { name: 'PART-003 — Fixture Part', exact: true });
+  await expect(result).toBeVisible();
+  await input.press('ArrowDown');
+  await input.press('Enter');
+  await expect(input).toHaveValue('PART-003 — Fixture Part');
+  await expect(page.locator('qrr-lookup small')).toContainText('PART-003 — Fixture Part');
+  await expect(result).not.toBeVisible();
+});
+
+test('product lookup failures are visible and do not leave stale results', async ({ page }) => {
+  await page.route('**/api.php?resource=products&**', route =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Product lookup unavailable for test' }),
+    })
+  );
+  await open(page, 'create');
+  await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Fixture');
+  await expect(page.getByRole('alert')).toHaveText('Product lookup unavailable for test');
+  await expect(page.getByRole('option')).toHaveCount(0);
+});
+
+test('pages scroll below navigation and expand fully for printing', async ({ page }) => {
+  await open(page, 'create');
+  const content = page.locator('qrr-root .content');
+  await content.evaluate(element => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '2000px';
+    spacer.textContent = 'Long page content';
+    element.appendChild(spacer);
+  });
+  await expect(content).toHaveCSS('overflow-y', 'auto');
+  expect(await content.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  const navigationTop = await page
+    .locator('qrr-root nav')
+    .evaluate(element => element.getBoundingClientRect().top);
+  await content.evaluate(element => (element.scrollTop = element.scrollHeight));
+  expect(await content.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  expect(
+    await page.locator('qrr-root nav').evaluate(element => element.getBoundingClientRect().top)
+  ).toBe(navigationTop);
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await expect
+    .poll(async () => (await content.boundingBox())!.y + (await content.boundingBox())!.height)
+    .toBeLessThanOrEqual(700);
+  await page.emulateMedia({ media: 'print' });
+  await expect(content).toHaveCSS('overflow-y', 'visible');
+  expect(await content.evaluate(element => element.clientHeight >= element.scrollHeight)).toBe(
+    true
+  );
+});
+
 test('inventory and item deep links render the Angular app', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -81,8 +146,8 @@ test('register a container using the product lookup and native warehouse selecti
   await page
     .getByRole('textbox', { name: 'Item name / label', exact: true })
     .fill('Browser container');
-  await page.getByRole('textbox', { name: 'Dolibarr product', exact: true }).fill('Fixture');
-  await page.getByRole('button', { name: 'PART-003 — Fixture Part', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Fixture');
+  await page.getByRole('option', { name: 'PART-003 — Fixture Part', exact: true }).click();
   await choose(page, 'Warehouse', 'MAIN');
   await page
     .getByRole('spinbutton', { name: 'Container quantity (blank = unknown)', exact: true })
@@ -110,8 +175,8 @@ test('move workflow confirms native transfer and refreshes authoritative state',
 
 test('picking preview uses native order lookup and server allocation', async ({ page }) => {
   await open(page, 'picking');
-  await page.getByRole('textbox', { name: 'Customer order', exact: true }).fill('SO');
-  await page.getByRole('button', { name: /SO-0039/ }).click();
+  await page.getByRole('combobox', { name: 'Customer order', exact: true }).fill('SO');
+  await page.getByRole('option', { name: /SO-0039/ }).click();
   await choose(page, 'Warehouse', 'MAIN');
   await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
   await expect(

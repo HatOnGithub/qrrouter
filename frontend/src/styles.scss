@@ -39,6 +39,7 @@ qrr-root,
   --mat-select-enabled-trigger-text-color: var(--qrr-text, currentColor);
   --mat-select-enabled-arrow-color: var(--qrr-text, currentColor);
   --mat-select-panel-background-color: var(--qrr-surface, Canvas);
+  --mat-autocomplete-background-color: var(--qrr-surface, Canvas);
   --mat-option-label-text-font: var(--qrr-font, inherit);
   --mat-option-label-text-color: var(--qrr-text, currentColor);
   --mat-option-selected-state-label-text-color: var(--qrr-text, currentColor);
@@ -65,97 +66,97 @@ qrr-root,
   --mat-checkbox-label-text-color: var(--qrr-text, currentColor);
 }
 // Shared layout and typography used across routed screens.
-qrr-root *,
 .cdk-overlay-container.qrr-theme * {
   box-sizing: border-box;
 }
-qrr-root a {
-  color: var(--colortextlink, inherit);
-}
-qrr-root h1 {
-  font-size: 1.4em;
-  margin: 0 0 6px;
-}
-qrr-root .subtitle {
-  opacity: 0.75;
-  margin: 0 0 20px;
-}
-qrr-root .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 16px;
-}
-qrr-root .stack {
-  display: grid;
-  gap: 20px;
-}
-qrr-root .actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 16px 0;
-}
-qrr-root .alert {
-  padding: 12px;
-  border: 1px solid currentColor;
-  border-left-width: 3px;
-  margin-bottom: 16px;
-  overflow-wrap: anywhere;
-}
-qrr-root .success {
-  border-left-width: 5px;
-}
-qrr-root mat-form-field {
-  width: 100%;
-}
-// Material internals and overlays cannot be styled through component encapsulation.
-qrr-root .mat-mdc-form-field-flex {
-  background: var(--qrr-input-bg, transparent);
-  border-radius: 3px;
-}
-qrr-root .mat-mdc-unelevated-button {
-  background: var(--qrr-action-background, ButtonFace);
-}
-qrr-root table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-}
-qrr-root th {
-  font-weight: bold;
-  white-space: nowrap;
-}
-qrr-root td,
-qrr-root th {
-  padding: 9px;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-  vertical-align: top;
-}
-qrr-root td small {
-  display: block;
-  opacity: 0.7;
-}
-qrr-root .table-scroll {
-  overflow: auto;
-}
-qrr-root .badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 3px;
-  font-size: 0.85em;
-  white-space: nowrap;
-}
-qrr-root .muted {
-  opacity: 0.7;
-}
-qrr-root .empty {
-  text-align: center;
-  opacity: 0.7;
-  padding: 28px;
+qrr-root {
+  * {
+    box-sizing: border-box;
+  }
+  a {
+    color: var(--colortextlink, inherit);
+  }
+  h1 {
+    font-size: 1.4em;
+    margin: 0 0 6px;
+  }
+  .subtitle {
+    opacity: 0.75;
+    margin: 0 0 20px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    gap: 16px;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .alert {
+    padding: 12px;
+    border: 1px solid currentColor;
+    border-left-width: 3px;
+    margin-bottom: 16px;
+    overflow-wrap: anywhere;
+  }
+  .success {
+    border-left-width: 5px;
+  }
+  mat-form-field {
+    width: 100%;
+  }
+  // Material internals and overlays cannot be styled through component encapsulation.
+  .mat-mdc-form-field-flex {
+    background: var(--qrr-input-bg, transparent);
+    border-radius: 3px;
+  }
+  .mat-mdc-unelevated-button {
+    background: var(--qrr-action-background, ButtonFace);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+  th {
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  td,
+  th {
+    padding: 9px;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+    vertical-align: top;
+  }
+  td small {
+    display: block;
+    opacity: 0.7;
+  }
+  .table-scroll {
+    overflow: auto;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-radius: 3px;
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+  .muted {
+    opacity: 0.7;
+  }
+  .empty {
+    text-align: center;
+    opacity: 0.7;
+    padding: 28px;
+  }
 }
 @media print {
   .no-print,
@@ -165,11 +166,13 @@ qrr-root .empty {
   .tmenu {
     display: none !important;
   }
-  qrr-root a {
-    color: black;
-  }
-  qrr-root td,
-  qrr-root th {
-    border-color: gray;
+  qrr-root {
+    a {
+      color: black;
+    }
+    td,
+    th {
+      border-color: gray;
+    }
   }
 }

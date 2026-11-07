@@ -14,6 +14,7 @@ interface LocationData {
   standalone: true,
   imports: [SharedModule],
   templateUrl: './locations.component.html',
+  styleUrl: './locations.component.css',
 })
 export class LocationsComponent {
   protected api = inject(InventoryService);

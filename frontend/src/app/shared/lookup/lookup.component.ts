@@ -2,11 +2,12 @@ import { Component, input, output, signal, inject } from '@angular/core';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { Lookup } from '@core/models/inventory';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 
 @Component({
   selector: 'qrr-lookup',
   standalone: true,
-  imports: [SharedModule],
+  imports: [SharedModule, MatAutocompleteModule],
   templateUrl: './lookup.component.html',
   styleUrl: './lookup.component.css',
 })
@@ -18,19 +19,23 @@ export class LookupComponent {
   readonly disabled = input(false);
   readonly selected = output<Lookup | null>();
   readonly rows = signal<Lookup[]>([]);
-  readonly open = signal(false);
   readonly loading = signal(false);
   readonly selectedText = signal('');
   readonly error = signal('');
   protected query = '';
   private sequence = 0;
 
+  protected browse(): void {
+    // Material restores input focus after selection; keep that selection intact.
+    if (!this.selectedText()) void this.search(this.query);
+  }
+
   async search(query: string): Promise<void> {
     this.query = query;
     this.selectedText.set('');
     this.selected.emit(null);
-    this.open.set(true);
     const request = ++this.sequence;
+    this.rows.set([]);
     this.loading.set(true);
     this.error.set('');
     try {
@@ -48,7 +53,10 @@ export class LookupComponent {
     this.query = row.text;
     this.selectedText.set(row.text);
     this.selected.emit(row);
-    this.open.set(false);
+  }
+
+  protected displayRow(value: Lookup | string | null): string {
+    return typeof value === 'string' ? value : value?.text || '';
   }
 
   clear(): void {
@@ -56,6 +64,8 @@ export class LookupComponent {
     this.query = '';
     this.selectedText.set('');
     this.selected.emit(null);
-    this.open.set(false);
+    this.rows.set([]);
+    this.loading.set(false);
+    this.error.set('');
   }
 }

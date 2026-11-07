@@ -4,28 +4,31 @@
     matInput
     [value]="query"
     (input)="search($any($event.target).value)"
-    (focus)="search(query)"
+    (focus)="browse()"
     [disabled]="disabled()"
+    [matAutocomplete]="results"
     autocomplete="off"
     [attr.aria-label]="label() | t"
   />
-</mat-form-field>
-@if (open()) {
-  <div class="lookup" role="list" [attr.aria-label]="label() | t">
+  <mat-autocomplete
+    #results="matAutocomplete"
+    [displayWith]="displayRow"
+    (optionSelected)="choose($event.option.value)"
+  >
     @if (loading()) {
-      <mat-progress-bar mode="indeterminate" />
+      <mat-option disabled>{{ 'Searching…' | t }}</mat-option>
+    } @else {
+      @for (row of rows(); track row.id) {
+        <mat-option [value]="row">{{ row.text }}</mat-option>
+      }
+      @if (!rows().length && !error()) {
+        <mat-option disabled>{{ 'No matching records' | t }}</mat-option>
+      }
     }
-    @if (error()) {
-      <p role="alert">{{ error() }}</p>
-    }
-    @for (row of rows(); track row.id) {
-      <button type="button" mat-button (click)="choose(row)">{{ row.text }}</button>
-    }
-    @if (!loading() && !rows().length && !error()) {
-      <p>{{ 'No matching records' | t }}</p>
-    }
-    <button type="button" mat-button (click)="open.set(false)">{{ 'Close' | t }}</button>
-  </div>
+  </mat-autocomplete>
+</mat-form-field>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
 }
 @if (selectedText()) {
   <small>
