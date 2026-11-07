@@ -2,6 +2,18 @@
 Module503871Name=QR Product Router
 Module503871Desc=QR-artikelbeheer, containers met aantallen, Binloc-locaties en magazijnhandelingen
 Qrrouter=QR Product Router
+# Module connection settings
+QRRUI_5e79c27833d2=QR Router instellen
+QRRUI_036d1f48cbe4=Verbinding met bedrijfsservice
+QRRUI_077225837f3d=Service-URL
+QRRUI_2d01608ddd59=API-sleutel van de service
+QRRUI_73d724e1fb79=Gebruik http://127.0.0.1:5087 voor PHP op dezelfde host, of http://qrrouter-api:8080 voor containers op een gedeeld netwerk.
+QRRUI_25bca30448a4=Er is een API-sleutel opgeslagen. Laat dit veld leeg om deze te behouden.
+QRRUI_b24ae0f4bd5e=Voer dezelfde API-sleutel in als bij de bedrijfsservice.
+QRRUI_f133b2924e9e=Instellingen opgeslagen.
+QRRUI_c8b0991b4f02=De verbindingsinstellingen konden niet worden opgeslagen.
+QRRUI_8fae2dcb2134=Voer een geldige HTTP- of HTTPS-service-URL in zonder inloggegevens, query of fragment.
+QRRUI_74bc0066fef5=De API-sleutel van de service moet 32 tot 512 afdrukbare tekens zonder spaties bevatten.
 # 1. Get QR labels
 QRRUI_5c569a935e50=1. QR-labels ophalen
 # 2. What do you want to register?

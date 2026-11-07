@@ -43,14 +43,14 @@ Frontend changes must be rebuilt and deployed with the complete module directory
    ```
 
 3. Install `artifacts/module_qrrouter-3.1.0.zip` through Dolibarr's external-module installer, or copy the built `dolibarr/qrrouter` directory to `htdocs/custom/qrrouter`. Enable QR Router and its dependencies.
-4. Set the following in the **PHP server/FPM/container environment** and restart its workers:
+4. In Dolibarr, open **Setup → Modules/Applications → QR Router → configuration gear** (or `/custom/qrrouter/admin/setup.php`). Set:
 
    ```text
-   QRR_SERVICE_URL=http://127.0.0.1:5087
-   QRR_SERVICE_API_KEY=<the same secret as .env>
+   Service URL: http://127.0.0.1:5087
+   Service API key: <the same secret as .env>
    ```
 
-   PHP's `getenv()` must see both variables. PHP-FPM with `clear_env` enabled needs explicit pool `env[...]` settings.
+   Save the settings. Only administrators can access this page. Settings are stored for the current Dolibarr entity through its native configuration API, including native secret encryption for the key. The saved key is never filled back into the form; leave the key field empty on later saves to keep it. No PHP/FPM environment variables are required or read for this connection. The C# container still gets its matching key from `.env` through Compose; the module cannot configure a separate service's startup environment.
 5. Sign in using your normal Dolibarr administrator account. QR inventory starts empty; no sample accounts or inventory are installed. Create products, warehouses and Binloc levels in Dolibarr, then print labels and register existing stock. Registration records metadata and does not increase native stock.
 6. Create active employee users in Dolibarr before using checkout. Give operators QR read/manage rights and, where needed, native stock movement rights. Personal warehouses can be mapped by an administrator or resolved/created through native Dolibarr APIs at checkout. Empty employee lists show setup guidance and disable checkout confirmation.
 
@@ -62,7 +62,7 @@ If Dolibarr runs in Docker, set `DOLIBARR_NETWORK` to its existing network and u
 docker compose -f compose.yaml -f compose.dolibarr.yaml up -d --build --wait
 ```
 
-Inside the Dolibarr container, use `QRR_SERVICE_URL=http://qrrouter-api:8080` and the same secret. The override attaches the service to that existing network; it does not deploy or modify a Dolibarr database. Use HTTPS when PHP and the service communicate across hosts. Never expose the shared service key in Angular configuration.
+In QR Router's module settings, use `http://qrrouter-api:8080` as the service URL and the same secret. The override attaches the service to that existing network; it does not deploy or modify a Dolibarr database. Use HTTPS when PHP and the service communicate across hosts. Never expose the shared service key in Angular configuration.
 
 To build the Angular module entirely with Docker, without installing Node locally:
 

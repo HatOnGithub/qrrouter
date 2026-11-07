@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -34,6 +35,7 @@ for path in (root / 'dolibarr/qrrouter').rglob('*.php'):
     subprocess.run(php + ['-l', str(path)], check=True, stdout=subprocess.DEVNULL)
 print('All PHP adapter files pass syntax checks.', flush=True)
 subprocess.run(php + [str(root / 'tests/test_translation.php')], check=True)
+subprocess.run(php + [str(root / 'tests/test_service_settings.php')], check=True)
 spec = importlib.util.spec_from_file_location('native_fixture', root / 'reference/module-2.6.14/qrrouter/tests/test_http_inventory.py')
 fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
@@ -63,11 +65,16 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-angular-') as directory:
     data = tmp / 'data'
     data.mkdir()
     shutil.copytree(root / 'dolibarr/qrrouter', webroot / 'custom/qrrouter')
-    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'commande/class']:
+    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'commande/class', 'core/lib']:
         (webroot / folder).mkdir(parents=True, exist_ok=True)
     main = fixture.MAIN.replace("if(str_contains($sql,'FROM llx_entrepot')){", "if(str_contains($sql,'FROM llx_product WHERE')){$this->rows=[(object)['rowid'=>3,'ref'=>'PART-003','label'=>'Fixture Part']];}elseif(str_contains($sql,'FROM llx_entrepot')){")
     main = main.replace('<meta charset="utf-8">', '<meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:rgb(40,40,40);background:rgb(250,250,250)}.butAction{background:rgb(83,101,117);color:white;border:1px solid gray;border-radius:3px}.flat{background:white;color:rgb(40,40,40)}</style>')
     main = main.replace("elseif(str_contains($sql,'FROM llx_user')){", "elseif(str_contains($sql,'FROM llx_user')){ if (!empty($s['users_empty'])) return true;")
+    main = main.replace("$GLOBALS['db']=new FakeDB();", """
+$GLOBALS['db']=new FakeDB();
+$GLOBALS['conf']->entity = max(1, (int) ($_GET['entity'] ?? 1));
+$GLOBALS['conf']->global = (object) ($GLOBALS['db']->state()['constants'][(string) $GLOBALS['conf']->entity] ?? []);
+""")
     locale_source = ast.parse((root / 'reference/module-2.6.14/qrrouter/tests/test_http_locales.py').read_text(encoding='utf-8'))
     locale_fixture = next(ast.literal_eval(node.value) for node in locale_source.body if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'LANGS' for target in node.targets))
     entity_text = (
@@ -103,10 +110,24 @@ $GLOBALS['user']=new class($role) {
     commande = """<?php
 class Commande { public $entity=1,$ref='SO-0039',$lines=[]; public function __construct($db){} public function fetch($id){return (int)$id===39?1:-1;} public function fetch_lines(){$this->lines=[(object)['fk_product'=>3,'qty'=>3,'product_ref'=>'PART-003','product_label'=>'Fixture Part']];} }
 """
+    admin = """<?php
+function dolibarr_set_const($db, $name, $value, $type='chaine', $visible=0, $note='', $entity=1) {
+    global $conf;
+    if ($visible !== 0 || $entity !== $conf->entity) throw new RuntimeException('Invalid constant scope');
+    $state = $db->txn ?? $db->state();
+    if (($state['fail_setting'] ?? '') === $name) return -1;
+    $state['constants'][(string) $entity][$name] = $value;
+    if ($db->txn !== null) $db->txn = $state; else $db->save($state);
+    $conf->global->$name = $value;
+    return 1;
+}
+function setEventMessages($message, $errors=null, $style='mesgs') {}
+"""
     for target, content in {'main.inc.php': main, 'product/class/product.class.php': fixture.PRODUCT,
                             'product/stock/class/entrepot.class.php': fixture.WAREHOUSE,
                             'custom/binloc/class/binlocwarehouselevel.class.php': fixture.BINLOC,
-                            'commande/class/commande.class.php': commande}.items():
+                            'commande/class/commande.class.php': commande,
+                            'core/lib/admin.lib.php': admin}.items():
         (webroot / target).write_text(content, encoding='utf-8')
     native_path = data / 'native.json'
     native_path.write_text(json.dumps({'warehouses': {'1': {'ref': 'MAIN', 'lieu': 'Main', 'status': 1}, '2': {'ref': 'OTHER', 'lieu': 'Other', 'status': 1}},
@@ -115,7 +136,9 @@ class Commande { public $entity=1,$ref='SO-0039',$lines=[]; public function __co
     web_base = f'http://127.0.0.1:{port()}'
     key = secrets.token_hex(32)
     service_env = dict(os.environ, AppSettings__ApiKey=key, AppSettings__DataDirectory=str(data / 'qrrouter'), ASPNETCORE_URLS=api_base)
-    php_env = dict(os.environ, QRR_SERVICE_URL=api_base, QRR_SERVICE_API_KEY=key)
+    php_env = dict(os.environ)
+    for name in ['QRR_SERVICE_URL', 'QRR_SERVICE_API_KEY']:
+        php_env.pop(name, None)
     service_log = open(tmp / 'service.log', 'w', encoding='utf-8')
     php_log = open(tmp / 'php.log', 'w', encoding='utf-8')
     service = subprocess.Popen(['dotnet', str(root / 'src/QrRouterApi/bin/Release/net10.0/QrRouterApi.dll')], env=service_env, cwd=root, stdout=service_log, stderr=service_log)
@@ -142,6 +165,51 @@ class Commande { public $entity=1,$ref='SO-0039',$lines=[]; public function __co
                 raise AssertionError((status, raw[:1500])) from None
             assert status == expected, (action or resource, status, expected, result)
             return result.get('result') if action else result
+
+        def settings_request(form=None, role='admin', entity=1, expected=200):
+            url = base + 'admin/setup.php?' + urlencode({'role': role, 'entity': entity})
+            body = None if form is None else urlencode(form).encode()
+            try:
+                with client.open(url, body, timeout=15) as response:
+                    status, html = response.status, response.read().decode()
+            except HTTPError as error:
+                status, html = error.code, error.read().decode()
+            assert status == expected, ('module settings', status, expected)
+            assert key not in html, 'Saved API key exposed in settings HTML'
+            return html
+
+        assert 'module settings' in request(expected=409)['message']
+        settings_html = settings_request()
+        csrf = re.search(r'name="qrr_token" value="([^"]+)"', settings_html)[1]
+        settings_request(role='reader', expected=403)
+        form = {'token': 'fixture-dolibarr-token', 'qrr_token': csrf,
+                'service_url': api_base, 'service_api_key': key}
+        settings_request(form, role='reader', expected=403)
+        settings_request({**form, 'qrr_token': 'invalid'}, expected=403)
+        settings_request({**form, 'service_api_key': ''}, expected=400)
+        settings_request({**form, 'service_url': 'file:///tmp/not-a-service'}, expected=400)
+        assert 'constants' not in json.loads(native_path.read_text())
+        settings_request(form)
+        stored = json.loads(native_path.read_text())['constants']['1']
+        assert stored == {'QRR_SERVICE_URL': api_base, 'QRR_SERVICE_API_KEY': key}
+        # Saving a blank password preserves the key and never renders it back to the browser.
+        settings_html = settings_request({**form, 'service_api_key': ''})
+        assert 'An API key is saved.' in settings_html
+        assert re.search(r'name="service_api_key"\s+value=""', settings_html)
+        assert json.loads(native_path.read_text())['constants']['1'] == stored
+        # Failed second write must not leave the first constant changed.
+        failing = json.loads(native_path.read_text())
+        failing['fail_setting'] = 'QRR_SERVICE_API_KEY'
+        native_path.write_text(json.dumps(failing))
+        settings_request({**form, 'service_url': 'http://127.0.0.1:1'}, expected=500)
+        failing = json.loads(native_path.read_text())
+        assert failing['constants']['1'] == stored
+        del failing['fail_setting']
+        native_path.write_text(json.dumps(failing))
+        settings_request({**form, 'service_url': 'http://entity-two:8080'}, entity=2)
+        assert json.loads(native_path.read_text())['constants']['1'] == stored
+        assert json.loads(native_path.read_text())['constants']['2']['QRR_SERVICE_URL'] == 'http://entity-two:8080'
+        print('Module settings PASS: admin permissions, CSRF, validation, persistence, blank-key preservation, rollback, entity scope and no secret in HTML.', flush=True)
 
         bootstrap = request()
         assert bootstrap['state']['schema'] == 2 and bootstrap['permissions']['admin']

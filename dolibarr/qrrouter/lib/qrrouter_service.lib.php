@@ -4,19 +4,52 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
 
-function qrr_service($method, $action, $data = null) {
-    global $user, $conf;
-    $base = rtrim((string) getenv('QRR_SERVICE_URL'), '/');
-    $key = (string) getenv('QRR_SERVICE_API_KEY');
+function qrr_validate_service_settings($url, $key) {
+    $base = rtrim(trim((string) $url), '/');
+    $parts = parse_url($base);
     if (
-        !preg_match('~^https?://[^\s]+$~D', $base) ||
-        strlen($key) < 32 ||
-        preg_match('/[\r\n]/', $key)
+        strlen($base) > 2048 ||
+        filter_var($base, FILTER_VALIDATE_URL) === false ||
+        !is_array($parts) ||
+        !in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true) ||
+        empty($parts['host']) ||
+        isset($parts['user']) ||
+        isset($parts['pass']) ||
+        isset($parts['query']) ||
+        isset($parts['fragment']) ||
+        preg_match('/[\s\x00-\x1f\x7f]/', $base)
     ) {
-        throw new RuntimeException(
-            'Configure QRR_SERVICE_URL and QRR_SERVICE_API_KEY on the Dolibarr server.',
+        throw new InvalidArgumentException(
+            'Enter a valid HTTP or HTTPS service URL without credentials, a query or a fragment.',
         );
     }
+    if (strlen($key) < 32 || strlen($key) > 512 || preg_match('/[^\x21-\x7e]/', $key)) {
+        throw new InvalidArgumentException(
+            'The service API key must contain 32 to 512 printable characters without spaces.',
+        );
+    }
+    return ['url' => $base, 'key' => $key];
+}
+
+function qrr_service_settings() {
+    global $conf;
+    try {
+        return qrr_validate_service_settings(
+            (string) ($conf->global->QRR_SERVICE_URL ?? ''),
+            (string) ($conf->global->QRR_SERVICE_API_KEY ?? ''),
+        );
+    } catch (InvalidArgumentException $error) {
+        throw new RuntimeException(
+            'Configure the service URL and API key in the QR Router module settings.',
+        );
+    }
+}
+
+function qrr_service($method, $action, $data = null) {
+    global $user, $conf;
+    $settings = qrr_service_settings();
+    $base = $settings['url'];
+    $key = $settings['key'];
     if (!function_exists('curl_init')) {
         throw new RuntimeException('QR Router requires PHP cURL.');
     }

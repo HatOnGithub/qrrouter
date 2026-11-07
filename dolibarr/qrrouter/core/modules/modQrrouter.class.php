@@ -19,7 +19,7 @@ class modQrrouter extends DolibarrModules {
         $this->picto = 'barcode';
         $this->langfiles = ['qrrouter@qrrouter'];
         $this->dirs = [];
-        $this->config_page_url = [];
+        $this->config_page_url = ['setup.php@qrrouter'];
         $this->depends = ['modProduct', 'modStock', 'modBinloc'];
         $this->requiredby = [];
         $this->conflictwith = [];

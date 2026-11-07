@@ -2,6 +2,18 @@
 Module503871Name=QR Product Router
 Module503871Desc=QR item management, counted containers, Binloc locations and warehouse workflows
 Qrrouter=QR Product Router
+# Module connection settings
+QRRUI_5e79c27833d2=QR Router setup
+QRRUI_036d1f48cbe4=Business service connection
+QRRUI_077225837f3d=Service URL
+QRRUI_2d01608ddd59=Service API key
+QRRUI_73d724e1fb79=Use http://127.0.0.1:5087 for PHP on the same host, or http://qrrouter-api:8080 for containers on a shared network.
+QRRUI_25bca30448a4=An API key is saved. Leave this field empty to keep it.
+QRRUI_b24ae0f4bd5e=Enter the same API key configured on the business service.
+QRRUI_f133b2924e9e=Settings saved.
+QRRUI_c8b0991b4f02=Unable to save the connection settings.
+QRRUI_8fae2dcb2134=Enter a valid HTTP or HTTPS service URL without credentials, a query or a fragment.
+QRRUI_74bc0066fef5=The service API key must contain 32 to 512 printable characters without spaces.
 # 1. Get QR labels
 QRRUI_5c569a935e50=1. Get QR labels
 # 2. What do you want to register?
