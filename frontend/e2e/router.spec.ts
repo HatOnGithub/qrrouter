@@ -236,3 +236,28 @@ test('translation entities render as text characters while decoded markup stays 
   await expect(page.locator('qrr-root img[src="entity-regression"]')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__entityExecuted)).toBeUndefined();
 });
+
+test('navigation decodes repeated HTML entities from the translation response', async ({
+  page,
+}) => {
+  await page.route('**/api.php?resource=bootstrap', async route => {
+    const response = await route.fetch();
+    const bootstrap = await response.json();
+    bootstrap.translations.Inventory =
+      'Inventory &amp; tools &amp;hellip; &amp;mdash; &quot;quoted&quot;';
+    bootstrap.translations['Scan QR'] =
+      '&amp;lt;img src=&amp;quot;entity-regression&amp;quot; ' +
+      'onerror=&amp;quot;window.__entityExecuted=true&amp;quot;&amp;gt;';
+    await route.fulfill({ response, json: bootstrap });
+  });
+  await open(page, 'inventory');
+
+  const expected = 'Inventory & tools … — "quoted"';
+  await expect(page.getByRole('heading', { name: expected, exact: true })).toBeVisible();
+  await expect(
+    page.locator('nav').getByRole('link', { name: expected, exact: true })
+  ).toBeVisible();
+  await expect(page.locator('nav').getByText('&amp;', { exact: false })).toHaveCount(0);
+  await expect(page.locator('nav img')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__entityExecuted)).toBeUndefined();
+});

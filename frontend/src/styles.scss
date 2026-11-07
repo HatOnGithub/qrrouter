@@ -64,12 +64,7 @@ qrr-root,
   --mat-checkbox-label-text-font: var(--qrr-font, inherit);
   --mat-checkbox-label-text-color: var(--qrr-text, currentColor);
 }
-qrr-root {
-  display: block;
-  font: inherit;
-  color: inherit;
-  background: transparent;
-}
+// Shared layout and typography used across routed screens.
 qrr-root *,
 .cdk-overlay-container.qrr-theme * {
   box-sizing: border-box;
@@ -114,6 +109,7 @@ qrr-root .success {
 qrr-root mat-form-field {
   width: 100%;
 }
+// Material internals and overlays cannot be styled through component encapsulation.
 qrr-root .mat-mdc-form-field-flex {
   background: var(--qrr-input-bg, transparent);
   border-radius: 3px;
@@ -161,15 +157,6 @@ qrr-root .empty {
   opacity: 0.7;
   padding: 28px;
 }
-qrr-root .number {
-  max-width: 130px;
-}
-qrr-root .qr-image {
-  background: white;
-  width: 160px;
-  height: 160px;
-  padding: 8px;
-}
 @media print {
   .no-print,
   #id-top,
@@ -177,10 +164,6 @@ qrr-root .qr-image {
   .side-nav,
   .tmenu {
     display: none !important;
-  }
-  qrr-root {
-    background: white;
-    color: black;
   }
   qrr-root a {
     color: black;

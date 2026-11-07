@@ -13,7 +13,7 @@
   }
   <qrr-card [title]="'Item registration' | t">
     <form (ngSubmit)="save()" #form="ngForm">
-      <fieldset [disabled]="busy()" style="border: 0; padding: 0; min-width: 0">
+      <fieldset [disabled]="busy()">
         <mat-form-field appearance="outline">
           <mat-label>{{ 'QR type' | t }}</mat-label>
           <mat-select

@@ -31,6 +31,8 @@ On Windows, use `npm.cmd` if PowerShell prevents invoking `npm.ps1`. The build c
 
 The UI opens at `/custom/qrrouter/index.php`. Angular uses hash routes such as `#/inventory` and `#/items/23456X`, so Apache/Nginx rewrite rules are unnecessary. The installed module has one Dolibarr top-level menu entry; Angular provides its internal navigation. The package contains the app and native print/media endpoints, not the original PHP screen implementation.
 
+Frontend changes must be rebuilt and deployed with the complete module directory, including `spa/`. Rebuilding the C# service alone does not deploy Angular or PHP changes. After copying an updated module, reload the page; restart PHP workers if opcode caching is configured to retain old PHP files.
+
 ## Docker deployment
 
 1. Copy `.env.example` to `.env`. Set `QRR_SERVICE_API_KEY` to a random secret of at least 32 characters.

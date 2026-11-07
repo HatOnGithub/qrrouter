@@ -12,6 +12,7 @@ import { ItemType } from '@core/models/inventory';
   standalone: true,
   imports: [SharedModule, ScannerComponent, LookupComponent, LocationFieldsComponent],
   templateUrl: './editor.component.html',
+  styleUrl: './editor.component.css',
 })
 export class EditorComponent {
   protected api = inject(InventoryService);

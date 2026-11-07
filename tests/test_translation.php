@@ -17,7 +17,9 @@ same_translation(qrr_plain_translation('&#38; &#8230; &#8212;'), '& … —', 'D
 same_translation(qrr_plain_translation('&#x26; &#x2026; &#x2014;'), '& … —', 'Hex entities');
 same_translation(qrr_plain_translation('&quot;A&quot; &apos;B&apos;'), '"A" \'B\'', 'Quotes');
 same_translation(qrr_plain_translation('é è ë & … —'), 'é è ë & … —', 'Existing UTF-8');
-same_translation(qrr_plain_translation('&notARealEntity; &amp;amp;'), '&notARealEntity; &amp;', 'Decode once');
+same_translation(qrr_plain_translation('&notARealEntity; &amp;amp;'), '&notARealEntity; &', 'Repeated encoding');
+same_translation(qrr_plain_translation('&amp;hellip; &amp;mdash; &amp;#8230;'), '… — …', 'Nested named and numeric references');
+same_translation(qrr_plain_translation('&amp;amp;amp;amp;amp;'), '&amp;', 'Bound repeated decoding');
 
 $langs = new class {
     public function trans($key) {

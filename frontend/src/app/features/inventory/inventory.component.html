@@ -1,6 +1,6 @@
 <h1>{{ (loans ? 'Loans' : 'Inventory') | t }}</h1>
 <p class="subtitle">{{ 'Track individual items, generic units and counted containers.' | t }}</p>
-<div class="grid" style="margin-bottom: 24px">
+<div class="grid inventory-summary">
   <qrr-card [title]="'QR labels' | t">
     <strong>{{ stats().labels }}</strong>
   </qrr-card>

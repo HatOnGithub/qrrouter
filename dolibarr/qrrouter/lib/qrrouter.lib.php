@@ -11,7 +11,15 @@ function qrr_h($value) {
 
 /** Translation values are plain UTF-8; HTML escaping belongs at the rendering boundary. */
 function qrr_plain_translation($value) {
-    return html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = (string) $value;
+    for ($pass = 0; $pass < 4; $pass++) {
+        $decoded = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if ($decoded === $text) {
+            break;
+        }
+        $text = $decoded;
+    }
+    return $text;
 }
 
 function qrr_translation_text($key, $fallback) {

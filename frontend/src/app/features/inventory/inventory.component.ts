@@ -9,6 +9,7 @@ import { Item } from '@core/models/inventory';
   standalone: true,
   imports: [SharedModule],
   templateUrl: './inventory.component.html',
+  styleUrl: './inventory.component.css',
 })
 export class InventoryComponent {
   protected api = inject(InventoryService);

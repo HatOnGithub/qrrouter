@@ -7,6 +7,7 @@ import { InventoryService } from '@services/inventory.service';
   standalone: true,
   imports: [SharedModule],
   templateUrl: './labels.component.html',
+  styleUrl: './labels.component.css',
 })
 export class LabelsComponent {
   protected api = inject(InventoryService);

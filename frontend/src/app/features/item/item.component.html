@@ -46,7 +46,7 @@
           {{ item.consumed_units || 0 }}
         </p>
         <p>{{ item.serial }} {{ item.native_batch }}</p>
-        <p style="white-space: pre-wrap">{{ item.details }}</p>
+        <p class="item-details">{{ item.details }}</p>
         @if (item.checkout) {
           <p>
             {{ 'On loan' | t }}:

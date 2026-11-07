@@ -13,6 +13,7 @@ import { Subscription, combineLatest } from 'rxjs';
   standalone: true,
   imports: [SharedModule, ScannerComponent, LookupComponent, LocationFieldsComponent],
   templateUrl: './workflow.component.html',
+  styleUrl: './workflow.component.css',
 })
 export class WorkflowComponent implements OnDestroy {
   protected api = inject(InventoryService);
