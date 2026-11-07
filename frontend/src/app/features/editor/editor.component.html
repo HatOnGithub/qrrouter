@@ -1,0 +1,153 @@
+<h1>{{ (editing ? 'Edit QR item' : registering ? 'Register items' : 'Create QR item') | t }}</h1>
+<p class="subtitle">
+  {{ 'Registration records existing inventory. It does not increase Dolibarr stock.' | t }}
+</p>
+@if (!api.context()!.permissions.manage) {
+  <p class="alert">{{ 'QR management permission required' | t }}</p>
+} @else {
+  @if (error()) {
+    <p class="alert" role="alert">{{ error() }}</p>
+  }
+  @if (notice()) {
+    <p class="alert success" role="status">{{ notice() }}</p>
+  }
+  <qrr-card [title]="'Item registration' | t">
+    <form (ngSubmit)="save()" #form="ngForm">
+      <fieldset [disabled]="busy()" style="border: 0; padding: 0; min-width: 0">
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'QR type' | t }}</mat-label>
+          <mat-select
+            name="type"
+            [ngModel]="model.type"
+            (ngModelChange)="typeChanged($event)"
+            [disabled]="editing && original?.type !== 'unassigned'"
+          >
+            <mat-option value="tracked">{{ 'Tracked Individual' | t }}</mat-option>
+            <mat-option value="generic">{{ 'Tracked Generic' | t }}</mat-option>
+            <mat-option value="box">{{ 'Counted Container' | t }}</mat-option>
+            @if (!registering) {
+              <mat-option value="unassigned">{{ 'Unassigned printable label' | t }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        @if (registering) {
+          <qrr-scanner
+            [multiple]="model.type === 'generic'"
+            [initial]="codes()"
+            (changed)="codesChanged($event)"
+            (thumbnail)="thumbnail = $event"
+          />
+          @if (codes().length) {
+            <p>{{ 'Selected' | t }}: {{ codes().join(', ') }}</p>
+          }
+        }
+        @if (model.type !== 'unassigned') {
+          <div class="grid">
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'Item name / label' | t }}</mat-label>
+              <input matInput name="label" [(ngModel)]="model.label" maxlength="140" />
+            </mat-form-field>
+            <div>
+              <qrr-lookup
+                [label]="'Dolibarr product'"
+                (selected)="model.product_id = $event?.id || 0"
+                [disabled]="editing && !!original?.product_id"
+              />
+              <p class="muted">
+                {{ 'Selected product' | t }}:
+                {{ api.context()!.products[model.product_id]?.ref || model.product_id || '—' }}
+              </p>
+            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'Warehouse' | t }}</mat-label>
+              <mat-select
+                name="warehouse"
+                [ngModel]="model.warehouse_id"
+                (ngModelChange)="warehouseChanged($event)"
+                [disabled]="editing && !!original?.product_id && !!original?.warehouse_id"
+                required
+              >
+                <mat-option [value]="0">—</mat-option>
+                @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+                  <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            @if (model.type === 'box') {
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Container quantity (blank = unknown)' | t }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  name="qty"
+                  [(ngModel)]="model.qty"
+                  min="0"
+                  max="100000000"
+                  step="1"
+                  [readonly]="editing && original?.type === 'box'"
+                />
+              </mat-form-field>
+            }
+          </div>
+          <qrr-location-fields
+            [warehouse]="model.warehouse_id"
+            [initial]="initialLevels"
+            (selected)="model.levels = $event"
+          />
+          @if (model.keep_legacy) {
+            <mat-checkbox name="keepLegacy" [(ngModel)]="model.keep_legacy">
+              {{ 'Preserve legacy bin location' | t }}: {{ original?.bin }}
+            </mat-checkbox>
+          }
+          @if (model.type === 'tracked') {
+            <div class="grid">
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'External serial / DeltaCube ID' | t }}</mat-label>
+                <input matInput name="serial" [(ngModel)]="model.serial" maxlength="100" />
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Native Dolibarr lot/serial' | t }}</mat-label>
+                <input matInput name="batch" [(ngModel)]="model.native_batch" maxlength="100" />
+              </mat-form-field>
+            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'Tracked-item details' | t }}</mat-label>
+              <textarea
+                matInput
+                name="details"
+                [(ngModel)]="model.details"
+                maxlength="2000"
+                rows="3"
+              ></textarea>
+            </mat-form-field>
+          }
+        }
+        @if (!editing && !registering) {
+          <mat-form-field appearance="outline" class="number">
+            <mat-label>{{ 'Number of labels' | t }}</mat-label>
+            <input
+              matInput
+              type="number"
+              name="count"
+              [(ngModel)]="count"
+              min="1"
+              max="200"
+              step="1"
+              required
+            />
+          </mat-form-field>
+        }
+        <div class="actions">
+          <button
+            type="submit"
+            mat-flat-button
+            [disabled]="busy() || form.invalid || (registering && !codes().length)"
+          >
+            {{ (busy() ? 'Saving…' : 'Save') | t }}
+          </button>
+          <a mat-button routerLink="/inventory">{{ 'Cancel' | t }}</a>
+        </div>
+      </fieldset>
+    </form>
+  </qrr-card>
+}

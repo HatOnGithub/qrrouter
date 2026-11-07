@@ -1,0 +1,93 @@
+<h1>{{ (loans ? 'Loans' : 'Inventory') | t }}</h1>
+<p class="subtitle">{{ 'Track individual items, generic units and counted containers.' | t }}</p>
+<div class="grid" style="margin-bottom: 24px">
+  <qrr-card [title]="'QR labels' | t">
+    <strong>{{ stats().labels }}</strong>
+  </qrr-card>
+  <qrr-card [title]="'Unassigned' | t">
+    <strong>{{ stats().unassigned }}</strong>
+  </qrr-card>
+  <qrr-card [title]="'On loan' | t">
+    <strong>{{ stats().loans }}</strong>
+  </qrr-card>
+  <qrr-card [title]="'Pending operations' | t">
+    <strong>{{ stats().pending }}</strong>
+  </qrr-card>
+</div>
+<qrr-card [title]="(loans ? 'Loaned items' : 'All items') | t">
+  <div class="grid no-print">
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Search inventory' | t }}</mat-label>
+      <input matInput [ngModel]="query()" (ngModelChange)="query.set($event)" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Warehouse' | t }}</mat-label>
+      <mat-select [ngModel]="warehouse()" (ngModelChange)="warehouse.set($event)">
+        <mat-option [value]="0">{{ 'All warehouses' | t }}</mat-option>
+        @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+          <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Type' | t }}</mat-label>
+      <mat-select [ngModel]="type()" (ngModelChange)="type.set($event)">
+        <mat-option value="">{{ 'All types' | t }}</mat-option>
+        <mat-option value="tracked">{{ 'Tracked Individual' | t }}</mat-option>
+        <mat-option value="generic">{{ 'Tracked Generic' | t }}</mat-option>
+        <mat-option value="box">{{ 'Counted Container' | t }}</mat-option>
+        <mat-option value="unassigned">{{ 'Unassigned' | t }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ 'Item / QR' | t }}</th>
+          <th>{{ 'Product' | t }}</th>
+          <th>{{ 'Location' | t }}</th>
+          <th>{{ 'Quantity' | t }}</th>
+          <th>{{ 'Status' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of rows(); track item.code) {
+          <tr>
+            <td>
+              <a [routerLink]="['/items', item.code]">{{ item.label || item.code }}</a>
+              <small>{{ item.code }} · {{ item.type }}</small>
+            </td>
+            <td>
+              {{ api.context()!.products[item.product_id]?.ref || '—' }}
+              <small>{{ item.serial }}</small>
+            </td>
+            <td>
+              {{ api.context()!.warehouses[item.warehouse_id]?.ref || '—' }}
+              <small>{{ item.bin }}</small>
+            </td>
+            <td>{{ item.qty ?? '?' }}</td>
+            <td>
+              <span class="badge">{{ status(item) | t }}</span>
+              @if (item.checkout) {
+                <small>
+                  {{ api.context()!.users[item.checkout.user_id] || item.checkout.user_id }}
+                </small>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="empty">{{ 'No matching items' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <div action>
+    @if (api.context()!.permissions.manage) {
+      <a mat-flat-button routerLink="/create">{{ 'Create QR item' | t }}</a>
+      <a mat-stroked-button routerLink="/register">{{ 'Register items' | t }}</a>
+    }
+  </div>
+</qrr-card>

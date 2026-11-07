@@ -1,0 +1,34 @@
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+}
+<div class="grid">
+  @for (level of levels(); track level.id) {
+    <mat-form-field appearance="outline">
+      <mat-label>{{ level.label }}</mat-label>
+      @if (level.datatype === 'list' || level.datatype === 'letter') {
+        <mat-select
+          [ngModel]="value(level.id)"
+          (ngModelChange)="change(level.id, $event)"
+          [disabled]="disabled()"
+        >
+          <mat-option value="">—</mat-option>
+          @for (option of level.options; track option.id) {
+            <mat-option [value]="option.id">{{ option.value }}</mat-option>
+          }
+        </mat-select>
+      } @else {
+        <input
+          matInput
+          [type]="level.datatype === 'number' ? 'number' : 'text'"
+          [ngModel]="value(level.id)"
+          (ngModelChange)="change(level.id, $event)"
+          [disabled]="disabled()"
+          maxlength="64"
+        />
+      }
+    </mat-form-field>
+  }
+</div>

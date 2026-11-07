@@ -1,0 +1,67 @@
+<h1>{{ 'Personal warehouses' | t }}</h1>
+<p class="subtitle">
+  {{ 'Each employee uses a separate native Dolibarr warehouse for loans.' | t }}
+</p>
+@if (!api.context()!.permissions.admin) {
+  <p class="alert">{{ 'Administrator permission required' | t }}</p>
+} @else {
+  @if (!(api.context()!.users | keyvalue).length) {
+    <p class="alert">
+      {{
+        'No employees yet. Create active employee users in Dolibarr before assigning warehouses.'
+          | t
+      }}
+    </p>
+  }
+  @if (error()) {
+    <p class="alert" role="alert">{{ error() }}</p>
+  }
+  @if (notice()) {
+    <p class="alert success" role="status">{{ notice() | t }}</p>
+  }
+  <qrr-card [title]="'Warehouse mapping' | t">
+    <form (ngSubmit)="save()" #form="ngForm">
+      <div class="grid">
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'Employee' | t }}</mat-label>
+          <mat-select name="person" [(ngModel)]="person" required>
+            @for (p of api.context()!.users | keyvalue; track p.key) {
+              <mat-option [value]="+p.key">{{ p.value }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'Warehouse' | t }}</mat-label>
+          <mat-select name="warehouse" [(ngModel)]="warehouse">
+            <mat-option [value]="0">{{ 'Remove mapping' | t }}</mat-option>
+            @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+              <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <p class="muted">
+        {{ 'Return employee loans and reconcile pending transfers before changing mappings.' | t }}
+      </p>
+      <button mat-flat-button [disabled]="busy() || form.invalid || !person">
+        {{ 'Save mapping' | t }}
+      </button>
+    </form>
+    <table>
+      <thead>
+        <tr>
+          <th>{{ 'Employee' | t }}</th>
+          <th>{{ 'Warehouse' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (mapping of api.context()!.state.personal_warehouses | keyvalue; track mapping.key) {
+          <tr>
+            <td>{{ api.context()!.users[mapping.key] || mapping.key }}</td>
+            <td>{{ api.context()!.warehouses[mapping.value]?.ref || mapping.value }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </qrr-card>
+}

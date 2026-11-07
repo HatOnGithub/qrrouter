@@ -1,0 +1,64 @@
+<h1>{{ 'Print QR labels' | t }}</h1>
+<p class="subtitle">{{ 'Print blank labels, then scan them to register inventory.' | t }}</p>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+@if (api.context()!.permissions.manage) {
+  <qrr-card [title]="'Create printable batch' | t">
+    <form (ngSubmit)="create()" #form="ngForm">
+      <mat-form-field class="number" appearance="outline">
+        <mat-label>{{ 'Number of QR codes (1–200)' | t }}</mat-label>
+        <input
+          matInput
+          type="number"
+          name="count"
+          [(ngModel)]="count"
+          min="1"
+          max="200"
+          step="1"
+          required
+        />
+      </mat-form-field>
+      <button mat-flat-button type="submit" [disabled]="busy() || form.invalid">
+        {{ 'Create batch' | t }}
+      </button>
+    </form>
+  </qrr-card>
+}
+<qrr-card [title]="'Label batches' | t">
+  <table>
+    <thead>
+      <tr>
+        <th>{{ 'Batch' | t }}</th>
+        <th>{{ 'Created' | t }}</th>
+        <th>{{ 'Labels' | t }}</th>
+        <th>{{ 'Unassigned' | t }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of batches(); track row.id) {
+        <tr>
+          <td>{{ row.id }}</td>
+          <td>{{ row.batch.created_at | date: 'medium' }}</td>
+          <td>{{ row.batch.codes.length }}</td>
+          <td>{{ row.unassigned }}</td>
+          <td>
+            <a
+              mat-stroked-button
+              [href]="api.link('batch_print.php', { batch: row.id })"
+              target="_blank"
+              rel="noopener"
+            >
+              {{ 'Print' | t }}
+            </a>
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="5" class="empty">{{ 'No label batches yet' | t }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</qrr-card>

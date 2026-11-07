@@ -1,0 +1,52 @@
+<div class="app-shell">
+  <header class="toolbar no-print">
+    <strong>QR Router</strong>
+    <div>
+      <small>{{ 'Revision' | t }} {{ inventory.context()?.state?.revision ?? '—' }}</small>
+      <button mat-stroked-button (click)="inventory.refresh()" [disabled]="inventory.loading()">
+        {{ 'Refresh' | t }}
+      </button>
+    </div>
+    <button
+      mat-button
+      class="menu-toggle"
+      (click)="menuOpen.set(!menuOpen())"
+      [attr.aria-expanded]="menuOpen()"
+    >
+      ☰ {{ 'Menu' | t }}
+    </button>
+  </header>
+  <div class="module-navigation no-print" [class.open]="menuOpen()">
+    <nav [attr.aria-label]="'QR Router navigation' | t">
+      @for (link of links; track link.path) {
+        @if (allowed(link.path)) {
+          <a [routerLink]="link.path" routerLinkActive="active" (click)="menuOpen.set(false)">
+            {{ link.label | t }}
+          </a>
+        }
+      }
+    </nav>
+  </div>
+  <main>
+    @if (inventory.loading()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+    <div class="content">
+      @if (inventory.error()) {
+        <div class="alert" role="alert">
+          {{ inventory.error() }}
+          <button mat-button (click)="inventory.refresh()">{{ 'Retry' | t }}</button>
+        </div>
+      }
+      @if (inventory.context()) {
+        <router-outlet />
+      } @else if (!inventory.loading()) {
+        <qrr-card [title]="'Session unavailable' | t">
+          <p>
+            {{ 'Check your Dolibarr session and service connection, then retry.' | t }}
+          </p>
+        </qrr-card>
+      }
+    </div>
+  </main>
+</div>

@@ -1,0 +1,37 @@
+<mat-form-field appearance="outline">
+  <mat-label>{{ label() | t }}</mat-label>
+  <input
+    matInput
+    [value]="query"
+    (input)="search($any($event.target).value)"
+    (focus)="search(query)"
+    [disabled]="disabled()"
+    autocomplete="off"
+    [attr.aria-label]="label() | t"
+  />
+</mat-form-field>
+@if (open()) {
+  <div class="lookup" role="list" [attr.aria-label]="label() | t">
+    @if (loading()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+    @if (error()) {
+      <p role="alert">{{ error() }}</p>
+    }
+    @for (row of rows(); track row.id) {
+      <button type="button" mat-button (click)="choose(row)">{{ row.text }}</button>
+    }
+    @if (!loading() && !rows().length && !error()) {
+      <p>{{ 'No matching records' | t }}</p>
+    }
+    <button type="button" mat-button (click)="open.set(false)">{{ 'Close' | t }}</button>
+  </div>
+}
+@if (selectedText()) {
+  <small>
+    {{ 'Selected' | t }}: {{ selectedText() }}
+    <button type="button" mat-button (click)="clear()" [disabled]="disabled()">
+      {{ 'Clear' | t }}
+    </button>
+  </small>
+}

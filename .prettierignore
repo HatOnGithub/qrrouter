@@ -1,0 +1,13 @@
+**/node_modules/**
+**/dist/**
+**/.angular/**
+**/out-tsc/**
+**/coverage/**
+**/test-results/**
+**/playwright-report/**
+**/package-lock.json
+**/bin/**
+**/obj/**
+reference/**
+artifacts/**
+dolibarr/qrrouter/spa/**

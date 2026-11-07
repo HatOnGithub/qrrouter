@@ -1,0 +1,170 @@
+@if (item(); as item) {
+  <h1>{{ item.label || item.code }}</h1>
+  <p class="subtitle">QR {{ item.code }} · {{ item.type }}</p>
+  @if (error()) {
+    <p class="alert" role="alert">{{ error() }}</p>
+  }
+  @if (notice()) {
+    <p class="alert success" role="status">{{ notice() }}</p>
+  }
+  @if (item.pending_operation || item.pending_handoff; as pending) {
+    <div class="alert">
+      <strong>{{ 'Pending native stock operation' | t }}</strong>
+      <p>{{ pending.id }} · {{ pending.kind }} · {{ pending.at | date: 'medium' }}</p>
+      <p>
+        {{
+          'Confirm the original request has finished before reconciling. Do not repeat the operation.'
+            | t
+        }}
+      </p>
+      @if (api.context()!.permissions.stock) {
+        <button mat-stroked-button [disabled]="busy()" (click)="reconcile()">
+          {{ 'Reconcile pending operation' | t }}
+        </button>
+      }
+    </div>
+  }
+  <qrr-card [title]="'Item details' | t">
+    <div class="grid">
+      <div>
+        <p>
+          <b>{{ 'Product' | t }}</b>
+          <br />
+          <a [href]="api.link('../..' + '/product/card.php', { id: item.product_id })">
+            {{ api.context()!.products[item.product_id]?.ref || '—' }}
+          </a>
+        </p>
+        <p>
+          <b>{{ 'Warehouse' | t }}</b>
+          <br />
+          {{ api.context()!.warehouses[item.warehouse_id]?.ref || '—' }} · {{ item.bin }}
+        </p>
+        <p>
+          <b>{{ 'Quantity' | t }}</b>
+          {{ item.qty ?? '?' }} ·
+          <b>{{ 'Consumed units' | t }}</b>
+          {{ item.consumed_units || 0 }}
+        </p>
+        <p>{{ item.serial }} {{ item.native_batch }}</p>
+        <p style="white-space: pre-wrap">{{ item.details }}</p>
+        @if (item.checkout) {
+          <p>
+            {{ 'On loan' | t }}:
+            {{ api.context()!.users[item.checkout.user_id] || item.checkout.user_id }}
+            <br />
+            {{ item.checkout.reason }}
+          </p>
+        }
+      </div>
+      <div>
+        <img
+          class="qr-image"
+          [src]="api.link('qr.php', { code: item.code })"
+          [alt]="'QR ' + item.code"
+        />
+        <p>
+          <a
+            mat-stroked-button
+            [href]="api.link('label.php', { code: item.code })"
+            target="_blank"
+            rel="noopener"
+          >
+            {{ 'Print label' | t }}
+          </a>
+        </p>
+      </div>
+    </div>
+    @if (api.context()!.permissions.manage) {
+      <div class="actions">
+        @if (item.type === 'unassigned') {
+          <a mat-flat-button routerLink="/register" [queryParams]="{ code: item.code }">
+            {{ 'Register item' | t }}
+          </a>
+        }
+        @if (available(item)) {
+          <a mat-stroked-button [routerLink]="['/edit', item.code]">{{ 'Edit metadata' | t }}</a>
+          <a mat-flat-button routerLink="/workflow/move" [queryParams]="{ code: item.code }">
+            {{ 'Move' | t }}
+          </a>
+          <a mat-stroked-button routerLink="/workflow/consume" [queryParams]="{ code: item.code }">
+            {{ 'Consume' | t }}
+          </a>
+          @if (api.context()!.permissions.stock) {
+            <a
+              mat-stroked-button
+              routerLink="/workflow/checkout"
+              [queryParams]="{ code: item.code }"
+            >
+              {{ 'Check out' | t }}
+            </a>
+          }
+          @if (item.type === 'box') {
+            <a
+              mat-stroked-button
+              routerLink="/workflow/correct"
+              [queryParams]="{ code: item.code }"
+            >
+              {{ 'Correct quantity' | t }}
+            </a>
+            <a
+              mat-stroked-button
+              routerLink="/workflow/transfer"
+              [queryParams]="{ code: item.code }"
+            >
+              {{ 'Transfer contents' | t }}
+            </a>
+          }
+        }
+        @if (item.checkout && api.context()!.permissions.stock) {
+          <a mat-stroked-button routerLink="/workflow/checkin" [queryParams]="{ code: item.code }">
+            {{ 'Check in' | t }}
+          </a>
+        }
+        @if ((item.consumed_units || 0) > 0 || item.status === 'consumed') {
+          <a mat-stroked-button routerLink="/workflow/return" [queryParams]="{ code: item.code }">
+            {{ 'Return' | t }}
+          </a>
+        }
+        @if (item.type !== 'unassigned') {
+          <a mat-stroked-button routerLink="/create" [queryParams]="{ copy: item.code }">
+            {{ 'Copy item' | t }}
+          </a>
+        }
+      </div>
+    }
+  </qrr-card>
+  @if (item.consumption_log?.length) {
+    <qrr-card [title]="'Consumption history' | t">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ 'Date' | t }}</th>
+            <th>{{ 'Action' | t }}</th>
+            <th>{{ 'Quantity' | t }}</th>
+            <th>{{ 'Reason' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of item.consumption_log; track $index) {
+            <tr>
+              <td>{{ row.at | date: 'medium' }}</td>
+              <td>{{ row.kind }}</td>
+              <td>{{ row.quantity }}</td>
+              <td>
+                {{ row.reason }}
+                <small>
+                  {{ row.stock_posted ? ('Native stock posted' | t) : ('QR only' | t) }}
+                </small>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </qrr-card>
+  }
+} @else {
+  <qrr-card [title]="'Item not found' | t">
+    <p>{{ 'This QR identifier is not registered in the current entity.' | t }}</p>
+    <a mat-button routerLink="/scan">{{ 'Scan QR' | t }}</a>
+  </qrr-card>
+}

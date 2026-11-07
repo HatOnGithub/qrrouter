@@ -1,0 +1,14 @@
+<h1>{{ 'Scan QR' | t }}</h1>
+<p class="subtitle">{{ 'Scan or enter an inventory identifier to open its details.' | t }}</p>
+<qrr-card [title]="'QR camera' | t">
+  <qrr-scanner [multiple]="true" (changed)="codes.set($event)" />
+  @for (code of codes(); track code) {
+    <div class="actions">
+      @if (api.context()!.state.items[code]; as item) {
+        <a mat-stroked-button [routerLink]="['/items', code]">{{ item.label || code }} →</a>
+      } @else {
+        <span>{{ code }} — {{ 'Unknown QR label' | t }}</span>
+      }
+    </div>
+  }
+</qrr-card>

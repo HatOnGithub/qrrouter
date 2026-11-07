@@ -1,0 +1,38 @@
+<div class="scanner">
+  <video #video playsinline muted [hidden]="!camera()" [attr.aria-label]="'QR camera' | t"></video>
+  <div class="actions">
+    <button type="button" mat-stroked-button (click)="start()" [disabled]="starting()">
+      {{ (camera() ? 'Restart camera' : 'Start camera') | t }}
+    </button>
+    @if (camera() || starting()) {
+      <button type="button" mat-button (click)="stop()">{{ 'Stop camera' | t }}</button>
+    }
+    <span class="muted">{{ 'Camera or hardware scanner, or enter codes manually.' | t }}</span>
+  </div>
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'QR identifiers' | t }}</mat-label>
+    <textarea
+      matInput
+      rows="2"
+      [(ngModel)]="manual"
+      (keydown.enter)="$event.preventDefault(); add()"
+      [attr.aria-label]="'QR identifiers' | t"
+    ></textarea>
+  </mat-form-field>
+  <button type="button" mat-flat-button (click)="add()">{{ 'Add codes' | t }}</button>
+  @if (error()) {
+    <p class="alert" role="alert">{{ error() }}</p>
+  }
+  <div class="codes" aria-live="polite">
+    @for (code of codes(); track code) {
+      <button
+        type="button"
+        mat-stroked-button
+        (click)="remove(code)"
+        [attr.aria-label]="('Remove' | t) + ' ' + code"
+      >
+        {{ code }} ×
+      </button>
+    }
+  </div>
+</div>

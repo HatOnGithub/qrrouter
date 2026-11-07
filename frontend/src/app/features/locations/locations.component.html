@@ -1,0 +1,135 @@
+<h1>{{ 'Bins and locations' | t }}</h1>
+<p class="subtitle">
+  {{ 'Read-only Binloc locations, QR inventory totals and native stock comparison.' | t }}
+</p>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+@if (notice()) {
+  <p class="alert success" role="status">{{ notice() | t }}</p>
+}
+<div class="stack">
+  <qrr-card [title]="'Location inventory' | t">
+    <div class="grid">
+      <mat-form-field appearance="outline">
+        <mat-label>{{ 'Warehouse' | t }}</mat-label>
+        <mat-select [(ngModel)]="warehouse" (ngModelChange)="load(true)">
+          @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+            <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      @if (data(); as data) {
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'Bin' | t }}</mat-label>
+          <mat-select [(ngModel)]="bin" (ngModelChange)="load()">
+            <mat-option value="">{{ 'No bin assigned' | t }}</mat-option>
+            @for (b of data.bins; track b) {
+              <mat-option [value]="b">{{ b }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
+    @if (busy()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+    @if (data(); as data) {
+      <table>
+        <thead>
+          <tr>
+            <th>{{ 'Tracked item' | t }}</th>
+            <th>{{ 'Product' | t }}</th>
+            <th>{{ 'Serial / ID' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of data.summary.tracked; track item.code) {
+            <tr>
+              <td>
+                <a [routerLink]="['/items', item.code]">{{ item.label || item.code }}</a>
+              </td>
+              <td>{{ item._product.ref }}</td>
+              <td>{{ item.serial }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th>{{ 'Product' | t }}</th>
+            <th>{{ 'Generic units' | t }}</th>
+            <th>{{ 'Container units' | t }}</th>
+            <th>{{ 'Unknown containers' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of data.summary.totals; track row.product_id) {
+            <tr>
+              <td>{{ row.product.ref }}</td>
+              <td>{{ row.generic }}</td>
+              <td>{{ row.box }}</td>
+              <td>{{ row.unknown_boxes }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <div class="actions">
+        <a
+          mat-stroked-button
+          [href]="api.link('bin_print.php', { warehouse_id: warehouse, bin: bin })"
+          target="_blank"
+          rel="noopener"
+        >
+          {{ 'Print bin inventory' | t }}
+        </a>
+      </div>
+      <h2>{{ 'Warehouse stock comparison' | t }}</h2>
+      <p class="muted">
+        {{
+          'QR totals are observations and may differ from native stock. This screen does not adjust stock.'
+            | t
+        }}
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>{{ 'Product' | t }}</th>
+            <th>{{ 'QR known' | t }}</th>
+            <th>{{ 'QR unknown containers' | t }}</th>
+            <th>{{ 'Native stock' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of data.qr | keyvalue; track row.key) {
+            <tr>
+              <td>{{ api.context()!.products[row.key]?.ref || row.key }}</td>
+              <td>{{ row.value.known }}</td>
+              <td>{{ row.value.unknown }}</td>
+              <td>{{ data.native[row.key]?.[warehouse] || 0 }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </qrr-card>
+  @if (levels().length && api.context()!.permissions.manage) {
+    <qrr-card [title]="'Binloc local label format' | t">
+      <p>{{ 'Display only. Full inventory location identity remains unchanged.' | t }}</p>
+      @for (level of levels(); track level.id) {
+        <div class="grid">
+          <mat-checkbox [(ngModel)]="show[level.id]">{{ level.label }}</mat-checkbox>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Separator' | t }}</mat-label>
+            <input matInput [(ngModel)]="separator[level.id]" maxlength="12" />
+          </mat-form-field>
+        </div>
+      }
+      <mat-checkbox [(ngModel)]="showWarehouse">{{ 'Show warehouse' | t }}</mat-checkbox>
+      <button action mat-flat-button [disabled]="busy()" (click)="saveFormat()">
+        {{ 'Save format' | t }}
+      </button>
+    </qrr-card>
+  }
+</div>

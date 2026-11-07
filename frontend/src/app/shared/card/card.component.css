@@ -1,0 +1,35 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+article {
+  height: 100%;
+  margin-bottom: 18px;
+}
+h2 {
+  font: inherit;
+  font-weight: bold;
+  padding: 8px 0;
+  margin: 0 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+section {
+  min-width: 0;
+  overflow: auto;
+  padding-top: 8px;
+}
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+footer:empty {
+  display: none;
+}
+footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

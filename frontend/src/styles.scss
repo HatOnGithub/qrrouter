@@ -1,0 +1,192 @@
+@use '@angular/material' as mat;
+@include mat.core();
+
+// Angular Material supplies accessible controls; Dolibarr supplies the visual theme.
+$controls: mat.m2-define-light-theme(
+  (
+    color: (
+      primary: mat.m2-define-palette(mat.$m2-gray-palette, 700),
+      accent: mat.m2-define-palette(mat.$m2-gray-palette, 600),
+    ),
+    density: -2,
+  )
+);
+qrr-root,
+.cdk-overlay-container.qrr-theme {
+  @include mat.all-component-themes($controls);
+}
+.qrr-theme {
+  --mat-form-field-container-text-font: var(--qrr-font, inherit);
+  --mat-form-field-container-text-size: var(--qrr-font-size, inherit);
+  --mat-form-field-outlined-label-text-font: var(--qrr-font, inherit);
+  --mat-form-field-outlined-label-text-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-input-text-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-disabled-input-text-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 50%,
+    transparent
+  );
+  --mat-form-field-outlined-outline-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 30%,
+    transparent
+  );
+  --mat-form-field-outlined-hover-outline-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-focus-outline-color: var(--qrr-action-bg, currentColor);
+  --mat-form-field-outlined-focus-label-text-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-container-shape: 3px;
+  --mat-select-trigger-text-font: var(--qrr-font, inherit);
+  --mat-select-enabled-trigger-text-color: var(--qrr-text, currentColor);
+  --mat-select-enabled-arrow-color: var(--qrr-text, currentColor);
+  --mat-select-panel-background-color: var(--qrr-surface, Canvas);
+  --mat-option-label-text-font: var(--qrr-font, inherit);
+  --mat-option-label-text-color: var(--qrr-text, currentColor);
+  --mat-option-selected-state-label-text-color: var(--qrr-text, currentColor);
+  --mat-option-selected-state-layer-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 8%,
+    transparent
+  );
+  --mat-button-filled-container-color: var(--qrr-action-bg, ButtonFace);
+  --mat-button-filled-label-text-color: var(--qrr-action-text, ButtonText);
+  --mat-button-filled-container-shape: 3px;
+  --mat-button-outlined-container-shape: 3px;
+  --mat-button-outlined-label-text-color: var(--qrr-text, currentColor);
+  --mat-button-outlined-outline-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 30%,
+    transparent
+  );
+  --mat-button-text-label-text-color: var(--qrr-text, currentColor);
+  --mat-button-filled-label-text-font: var(--qrr-font, inherit);
+  --mat-button-outlined-label-text-font: var(--qrr-font, inherit);
+  --mat-button-text-label-text-font: var(--qrr-font, inherit);
+  --mat-checkbox-label-text-font: var(--qrr-font, inherit);
+  --mat-checkbox-label-text-color: var(--qrr-text, currentColor);
+}
+qrr-root {
+  display: block;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+}
+qrr-root *,
+.cdk-overlay-container.qrr-theme * {
+  box-sizing: border-box;
+}
+qrr-root a {
+  color: var(--colortextlink, inherit);
+}
+qrr-root h1 {
+  font-size: 1.4em;
+  margin: 0 0 6px;
+}
+qrr-root .subtitle {
+  opacity: 0.75;
+  margin: 0 0 20px;
+}
+qrr-root .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 16px;
+}
+qrr-root .stack {
+  display: grid;
+  gap: 20px;
+}
+qrr-root .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+qrr-root .alert {
+  padding: 12px;
+  border: 1px solid currentColor;
+  border-left-width: 3px;
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+qrr-root .success {
+  border-left-width: 5px;
+}
+qrr-root mat-form-field {
+  width: 100%;
+}
+qrr-root .mat-mdc-form-field-flex {
+  background: var(--qrr-input-bg, transparent);
+  border-radius: 3px;
+}
+qrr-root .mat-mdc-unelevated-button {
+  background: var(--qrr-action-background, ButtonFace);
+}
+qrr-root table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+qrr-root th {
+  font-weight: bold;
+  white-space: nowrap;
+}
+qrr-root td,
+qrr-root th {
+  padding: 9px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  vertical-align: top;
+}
+qrr-root td small {
+  display: block;
+  opacity: 0.7;
+}
+qrr-root .table-scroll {
+  overflow: auto;
+}
+qrr-root .badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 3px;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+qrr-root .muted {
+  opacity: 0.7;
+}
+qrr-root .empty {
+  text-align: center;
+  opacity: 0.7;
+  padding: 28px;
+}
+qrr-root .number {
+  max-width: 130px;
+}
+qrr-root .qr-image {
+  background: white;
+  width: 160px;
+  height: 160px;
+  padding: 8px;
+}
+@media print {
+  .no-print,
+  #id-top,
+  #id-left,
+  .side-nav,
+  .tmenu {
+    display: none !important;
+  }
+  qrr-root {
+    background: white;
+    color: black;
+  }
+  qrr-root a {
+    color: black;
+  }
+  qrr-root td,
+  qrr-root th {
+    border-color: gray;
+  }
+}
