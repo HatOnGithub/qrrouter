@@ -1,4 +1,12 @@
 {
+  "Camera is off": "Camera staat uit",
+  "Starting camera…": "Camera starten…",
+  "Customer order": "Klantorder",
+  "Manufacturing order": "Productieorder",
+  "Latest consumption destination": "Laatste verbruiksbestemming",
+  "Destination / reference": "Bestemming / referentie",
+  "Production order": "Productieorder",
+  "Not recorded": "Niet vastgelegd",
   "Inventory": "Voorraad",
   "QR inventory": "QR-voorraad",
   "Scan QR": "QR scannen",

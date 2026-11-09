@@ -7,17 +7,32 @@
           ? 'Camera running'
           : starting()
             ? 'Starting camera…'
-            : 'Manual / hardware scanner ready'
+            : manualMode()
+              ? 'Manual / hardware scanner ready'
+              : 'Camera is off'
         ) | t
       }}
     </span>
     <span class="scan-count">{{ codes().length }} {{ 'scanned' | t }}</span>
   </div>
-  <div class="scanner-workspace" [class.camera-active]="camera()">
-    <div class="camera-preview" [hidden]="!camera()">
-      <video #video playsinline muted [attr.aria-label]="'QR camera' | t"></video>
-      <div class="viewfinder" aria-hidden="true"></div>
-      <span class="camera-caption">{{ 'Place a QR label inside the frame' | t }}</span>
+  <div class="scanner-workspace" [class.camera-mode]="!manualMode()">
+    <div class="camera-preview" [hidden]="manualMode()">
+      <video
+        #video
+        playsinline
+        muted
+        [hidden]="!camera()"
+        [attr.aria-label]="'QR camera' | t"
+      ></video>
+      @if (camera()) {
+        <div class="viewfinder" aria-hidden="true"></div>
+        <span class="camera-caption">{{ 'Place a QR label inside the frame' | t }}</span>
+      } @else {
+        <div class="camera-placeholder" [attr.aria-busy]="starting()">
+          <fa-icon [icon]="icons.camera" aria-hidden="true" />
+          <span>{{ (starting() ? 'Starting camera…' : 'Camera is off') | t }}</span>
+        </div>
+      }
     </div>
     @if (manualMode()) {
       <div class="scanner-entry">

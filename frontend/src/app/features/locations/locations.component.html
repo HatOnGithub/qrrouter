@@ -49,8 +49,16 @@
               <td>
                 <a [routerLink]="['/items', item.code]">{{ item.label || item.code }}</a>
               </td>
-              <td>{{ item._product.ref }}</td>
-              <td>{{ item.serial }}</td>
+              <td>
+                <qrr-native-link
+                  type="product"
+                  [id]="item.product_id"
+                  [label]="item._product.ref"
+                />
+              </td>
+              <td>
+                <qrr-native-link type="lot" [id]="item.product_lot_id" [label]="item.serial" />
+              </td>
             </tr>
           }
         </tbody>
@@ -67,7 +75,9 @@
         <tbody>
           @for (row of data.summary.totals; track row.product_id) {
             <tr>
-              <td>{{ row.product.ref }}</td>
+              <td>
+                <qrr-native-link type="product" [id]="row.product_id" [label]="row.product.ref" />
+              </td>
               <td>{{ row.generic }}</td>
               <td>{{ row.box }}</td>
               <td>{{ row.unknown_boxes }}</td>
@@ -105,7 +115,13 @@
         <tbody>
           @for (row of data.qr | keyvalue; track row.key) {
             <tr>
-              <td>{{ api.context()!.products[row.key]?.ref || row.key }}</td>
+              <td>
+                <qrr-native-link
+                  type="product"
+                  [id]="row.key"
+                  [label]="api.context()!.products[row.key]?.ref || row.key"
+                />
+              </td>
               <td>{{ row.value.known }}</td>
               <td>{{ row.value.unknown }}</td>
               <td>{{ data.native[row.key]?.[warehouse] || 0 }}</td>

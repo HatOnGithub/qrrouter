@@ -8,11 +8,12 @@ if (!$res) {
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
 require_once __DIR__ . '/lib/qrrouter_labels.lib.php';
-if (!qrr_read_right($user) || !qrr_products_right($user)) {
+if (!qrr_inventory_right($user)) {
     accessforbidden();
 }
 $code = qrr_input_code(GETPOST('code', 'alphanohtml'));
-$state = qrr_load_state();
+$state = qrr_browser_inventory($db)['state'];
+header('Cache-Control: no-store');
 $item = $state['items'][$code] ?? null;
 if (!$item) {
     http_response_code(404);

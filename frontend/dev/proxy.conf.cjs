@@ -3,4 +3,9 @@ module.exports = {
   '/custom/qrrouter/**': { target },
   '/__mock/**': { target },
   '/product/**': { target },
+  '/mrp/**': { target },
+  '/commande/**': { target },
+  '/expedition/**': { target },
+  '/user/**': { target },
+  '/fourn/**': { target },
 };

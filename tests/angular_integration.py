@@ -21,7 +21,7 @@ import time
 import native_fixture as native_contract
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import build_opener, HTTPCookieProcessor, urlopen
+from urllib.request import Request, build_opener, HTTPCookieProcessor, urlopen
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -109,10 +109,28 @@ $GLOBALS['conf']->global = (object) ($GLOBALS['db']->state()['constants'][(strin
     main = main.replace("$GLOBALS['user']=new class {public $id=8,$admin=1;public function hasRight(...$a){return true;}};", """
 $role=$_GET['role']??'admin';
 $GLOBALS['user']=new class($role) {
- public $id=8,$admin; private $role;
- public function __construct($role){$this->role=$role;$this->admin=$role==='admin'?1:0;}
- public function hasRight(...$a){if($this->admin)return true;if($a===['produit','lire']||$a===['qrrouter','read']||$a===['commande','lire'])return true;return $this->role==='manager'&&$a===['qrrouter','manage'];}
+ public $id=8,$admin,$socid=0,$statut=1; private $role;
+ public function __construct($role){$this->role=$role;$this->admin=in_array($role,['admin','external-admin'],true)?1:0;if(str_starts_with($role,'external'))$this->socid=77;if($role==='inactive')$this->statut=0;if($role==='anonymous')$this->id=0;}
+ public function hasRight(...$a){
+  if($this->admin)return true;
+  if($a===['qrrouter','read'])return $this->role!=='no-qr';
+  if($a===['produit','lire'])return $this->role!=='no-product';
+  if($a===['service','lire'])return true;
+  if($a===['stock','lire'])return $this->role!=='no-stock';
+  if($a===['binloc','read'])return $this->role!=='no-binloc';
+  if($a===['commande','lire'])return $this->role!=='operator';
+  if($a===['mrp','read']||$a===['expedition','lire'])return false;
+  if($a===['qrrouter','manage'])return in_array($this->role,['manager','operator','restricted'],true);
+  if($a===['stock','mouvement','creer']||$a===['produit','creer']||$a===['binloc','write'])return $this->role==='operator';
+  return false;
+ }
 };
+function isModEnabled($module){$role=$_GET['role']??'';return !(($module==='qrrouter'&&$role==='disabled')||$role==='disabled-'.$module);}
+function restrictedArea($actor,$feature,$id=0,$table='',$feature2='',$key='fk_soc',$select='rowid',$draft=0,$mode=0){
+ if($mode!==1)throw new RuntimeException('Object checks must use non-terminating mode');
+ $allowed=['commande'=>[39],'mrp'=>[19],'expedition'=>[29],'user'=>[8,9]];
+ return in_array((int)$id,$allowed[$feature]??[],true)&&!(($_GET['role']??'')==='restricted'&&$feature==='commande')?1:0;
+}
 """)
     commande = """<?php
 class Commande { public $entity=1,$ref='SO-0039',$lines=[]; public function __construct($db){} public function fetch($id){return (int)$id===39?1:-1;} public function fetch_lines(){$this->lines=[(object)['fk_product'=>3,'qty'=>3,'product_ref'=>'PART-003','product_label'=>'Fixture Part']];} }
@@ -131,6 +149,7 @@ function dolibarr_set_const($db, $name, $value, $type='chaine', $visible=0, $not
 function setEventMessages($message, $errors=null, $style='mesgs') {}
 """
     product = fixture.PRODUCT.replace("public $id,$type=0", "public $entity=1; public $id,$type=0")
+    product = product.replace('$this->id=(int)$id;', "$this->id=(int)$id;$this->entity=(int)($this->db->state()['product_entities'][$id]??1);")
     product = product.replace('public function hasbatch(){return false;}', 'public function hasbatch(){return $this->id===4;}'+native_contract.PRODUCT_METHOD)
     for target, content in {'main.inc.php': main, 'product/class/product.class.php': product,
                             'product/stock/class/entrepot.class.php': fixture.WAREHOUSE,
@@ -164,8 +183,9 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         client = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
         base = web_base + '/custom/qrrouter/'
 
-        def request(resource='bootstrap', action=None, payload=None, role='admin', csrf=None, expected=200):
+        def request(resource='bootstrap', action=None, payload=None, role='admin', csrf=None, expected=200, params=None):
             global_params = {'role': role, 'action': action} if action else {'role': role, 'resource': resource}
+            global_params.update(params or {})
             body = None if action is None else urlencode({'payload': json.dumps(payload), 'token': 'fixture-dolibarr-token', 'qrr_token': csrf or bootstrap['csrf']}).encode()
             try:
                 with client.open(base + 'api.php?' + urlencode(global_params), body, timeout=15) as response:
@@ -210,6 +230,8 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         assert 'An API key is saved.' in settings_html
         assert re.search(r'name="service_api_key"\s+value=""', settings_html)
         assert json.loads(native_path.read_text())['constants']['1'] == stored
+        settings_request({**form, 'service_url': 'http://different-service:8080', 'service_api_key': ''}, expected=400)
+        assert json.loads(native_path.read_text())['constants']['1'] == stored
         # Failed second write must not leave the first constant changed.
         failing = json.loads(native_path.read_text())
         failing['fail_setting'] = 'QRR_SERVICE_API_KEY'
@@ -244,6 +266,14 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         request(action='bulk', payload={'count': 2, 'type': 'unassigned'}, csrf='invalid', expected=409)
         assert request()['state']['revision'] == 0
         request(action='bulk', payload={'count': 1}, role='reader', expected=403)
+        forged = Request(base + 'api.php?role=reader&action=bulk', data=urlencode({
+            'payload': json.dumps({'count': 1, 'type': 'unassigned'}), 'token': 'fixture-dolibarr-token', 'qrr_token': bootstrap['csrf']
+        }).encode(), headers={'X-Qrr-Admin': '1', 'X-Qrr-Manage': '1', 'X-Qrr-Stock': '1', 'X-Qrr-Entity': '2'})
+        try:
+            client.open(forged)
+            raise AssertionError('Browser-supplied actor headers were trusted')
+        except HTTPError as error:
+            assert error.code == 403
         request(action='finish', payload={'id': 'forged', 'proof': {'seen': [1]}}, expected=400)
         assert not request(role='reader')['permissions']['manage']
         batch = request(action='bulk', payload={'type': 'unassigned', 'count': 4, 'entity_id': 999, 'warehouses': {'999': {}}})
@@ -264,9 +294,17 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         workflow('move', tracked, warehouse_id=2, patch={'qty': 999}, effects=[{'delta': 999}])
         assert native()['stock']['4']['1'] == 29 and native()['stock']['4']['2'] == 5
         workflow('consume', box, quantities={box: 3}, post_stock=True, reference_type='production', reference_id=19)
+        references = request()['consumption_references']
+        assert references['production:19']['ref'] == 'MO-0019'
+        assert references['production:19']['url'].endswith('/mrp/mo_card.php?id=19')
+        assert 'production:19' not in request(role='reader')['consumption_references']
         workflow('return', box, quantities={box: 2}, post_stock=True, warehouse_id=1)
         workflow('correct', box, quantities={box: 5})
         workflow('checkout', generic, person_id=9)
+        reader_view = request(role='reader')
+        assert reader_view['state']['items'][generic]['checkout'] == {}
+        assert '9' not in reader_view['users'] and '9' not in reader_view['state']['personal_warehouses']
+        assert 'Taylor' not in json.dumps(reader_view['users'])
         workflow('checkin', generic)
         state = request()['state']
         assert state['items'][box]['qty'] == 5 and state['items'][box]['consumed_units'] == 1
@@ -276,6 +314,73 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         before = request()['state']['revision']
         request(action='mapping', role='manager', payload={'user_id': 9, 'warehouse_id': 2}, expected=403)
         assert request()['state']['revision'] == before
+        # Authorization is enforced by direct HTTP requests, independently of Angular controls.
+        for role in ['no-qr', 'no-product', 'no-stock', 'external', 'external-admin', 'inactive', 'anonymous', 'disabled', 'disabled-stock', 'disabled-product', 'disabled-binloc', 'disabled-productbatch']:
+            request(role=role, expected=403)
+            request('products', role=role, expected=403)
+            for endpoint in ['index.php', 'label.php', 'batch_print.php', 'bin_print.php', 'qr.php', 'thumbnail.php']:
+                url = base + endpoint + '?' + urlencode({'role': role, 'code': tracked, 'batch': batch, 'warehouse_id': 1})
+                try:
+                    with client.open(url) as response:
+                        assert response.status == 403, (endpoint, role, response.status)
+                except HTTPError as error:
+                    assert error.code == 403, (endpoint, role, error.code)
+        operator = request(role='operator')
+        assert not operator['permissions']['orders'] and not any(operator['permissions']['references'].values())
+        assert set(operator['users']) <= {'8'}
+        request('orders', role='operator', expected=403)
+        request('references', role='operator', params={'type': 'production'}, expected=403)
+        request('picking', role='operator', params={'warehouse_id': 1, 'order_id': 39}, expected=403)
+        request(action='workflow', role='operator', payload={'kind': 'consume', 'codes': [generic], 'reference_type': 'salesorder', 'reference_id': 39}, expected=403)
+        assert request('orders', role='restricted') == []
+        assert request('references', role='restricted', params={'type': 'salesorder'}) == []
+        request('picking', role='restricted', params={'warehouse_id': 1, 'order_id': 39}, expected=403)
+        request(action='workflow', role='restricted', payload={'kind': 'consume', 'codes': [generic], 'reference_type': 'salesorder', 'reference_id': 39}, expected=403)
+        hidden_locations = request(role='no-binloc')
+        assert not hidden_locations['permissions']['locations']
+        assert not hidden_locations['state']['binloc_label_settings']
+        assert all(not item['bin'] and not item['bin_key'] and not item['bin_values'] for item in hidden_locations['state']['items'].values())
+        request('levels', role='no-binloc', params={'warehouse_id': 1}, expected=403)
+        request('locations', role='no-binloc', params={'warehouse_id': 1}, expected=403)
+        reader_history = request(role='reader')['state']['items'][box]['consumption_log']
+        assert all('reference_id' not in entry and 'reference_type' not in entry for entry in reader_history)
+        assert request()['state']['history'] == []
+        # Synthetic secrets and pending-operation internals must never survive browser projection.
+        state_file = data / 'qrrouter/entity-1/state.json'
+        original_state = state_file.read_bytes()
+        secret = 'PRIVATE-AUDIT-PATCH-DO-NOT-SERVE'
+        seeded = json.loads(original_state)
+        seeded['server_only'] = secret
+        seeded['items'][generic]['server_only'] = secret
+        seeded['items'][tracked]['server_only'] = secret
+        seeded['items'][generic]['pending_operation'] = {'id': 'test-pending', 'kind': 'move', 'at': '2026-01-01T00:00:00Z', 'patch': {'reason': secret}, 'effects': [{'price': secret}]}
+        seeded['history'].append({'context': {'secret': secret}})
+        try:
+            state_file.write_text(json.dumps(seeded))
+            for role in ['admin', 'reader', 'operator']:
+                view = request(role=role)
+                assert secret not in json.dumps(view)
+                assert set(view['state']['items'][generic]['pending_operation']) == {'id', 'kind', 'at'}
+                assert secret not in json.dumps(request('locations', role=role, params={'warehouse_id': 2}))
+            foreign = native(); foreign['product_entities'] = {'4': 2}; native_path.write_text(json.dumps(foreign))
+            scoped = request()
+            assert tracked not in scoped['state']['items'] and box not in scoped['state']['items']
+            assert '4' not in scoped['products']
+            assert all(tracked not in row['codes'] and box not in row['codes'] for row in scoped['state']['batches'].values())
+            assert all(row.get('code') not in [tracked, box] for row in request('picking', params={'warehouse_id': 2, 'order_id': 39}))
+            assert not request('locations', params={'warehouse_id': 2})['summary']['tracked']
+            for endpoint in ['label.php', 'qr.php', 'thumbnail.php']:
+                try:
+                    client.open(base + endpoint + '?' + urlencode({'code': tracked}))
+                    raise AssertionError('Foreign product served by ' + endpoint)
+                except HTTPError as error:
+                    assert error.code == 404
+            request(action='count', payload={'code': box, 'quantity': 5}, expected=403)
+        finally:
+            state_file.write_bytes(original_state)
+            restored = native(); restored.pop('product_entities', None); native_path.write_text(json.dumps(restored))
+        assert request()['state']['revision'] == before
+        print('Authorization PASS: native read rights, external/disabled users, object scopes, restricted references, employee privacy, field projection and direct media access.', flush=True)
         request(action='register', payload={'type': 'generic', 'codes': [blank], 'label': 'Unsafe', 'product_id': 999, 'warehouse_id': 1}, expected=409)
         assert request()['state']['items'][blank]['type'] == 'unassigned'
         with client.open(base + 'index.php') as response:
@@ -327,13 +432,27 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         request(action='create', payload={'type': 'box', 'label': 'RECOVER-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
         assert len(native()['lots']) == count_before and native()['stock']['4']['1'] == stock_before
         pending_path = data / 'qrrouter/entity-1/state.json'
+        def assert_hidden_recovery():
+            saved_native = native_path.read_bytes()
+            saved_pending = pending_path.read_bytes()
+            try:
+                hidden = native(); hidden['product_entities'] = {'4': 2}; native_path.write_text(json.dumps(hidden))
+                hidden_native = native_path.read_bytes()
+                for action in ['native-recover', 'native-cancel']:
+                    request(action=action, payload={}, expected=403)
+                    assert pending_path.read_bytes() == saved_pending
+                    assert native_path.read_bytes() == hidden_native
+            finally:
+                native_path.write_bytes(saved_native)
         pending_state = json.loads(pending_path.read_text()); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; pending_path.write_text(json.dumps(pending_state))
         changed = native(); changed.pop('fail_location'); native_path.write_text(json.dumps(changed))
+        assert_hidden_recovery()
         recovered = request(action='native-recover', payload={})
         assert request()['state']['items'][recovered]['qty'] == 3 and not request()['state'].get('pending_native')
         assert native()['stock']['4']['1'] == stock_before + 3
         # Lost service-finalization response: the same committed receipt finishes without reapplying stock.
         pending_path.write_text(json.dumps(pending_state))
+        assert_hidden_recovery()
         lots_after = len(native()['lots']); movements_after = len(native()['movements'])
         assert request(action='native-recover', payload={}) == recovered
         assert len(native()['lots']) == lots_after and len(native()['movements']) == movements_after

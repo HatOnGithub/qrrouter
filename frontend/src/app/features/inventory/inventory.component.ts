@@ -3,6 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 import { InventoryService } from '@services/inventory.service';
 import { SharedModule } from '@shared/shared.module';
 import { Item } from '@core/models/inventory';
+import { ConsumptionService } from '@services/consumption.service';
 
 @Component({
   selector: 'qrr-inventory',
@@ -13,7 +14,15 @@ import { Item } from '@core/models/inventory';
   styleUrl: './inventory.component.css',
 })
 export class InventoryComponent {
+  protected readonly statusClasses: Record<string, string> = {
+    Pending: 'badge-warning',
+    'On loan': 'badge-info',
+    Consumed: 'badge-dark',
+    Unassigned: 'badge-secondary',
+    'In stock': 'badge-success',
+  };
   protected api = inject(InventoryService);
+  protected consumption = inject(ConsumptionService);
   protected loans = inject(ActivatedRoute).snapshot.routeConfig?.path === 'loans';
   protected query = signal('');
   protected warehouse = signal(0);

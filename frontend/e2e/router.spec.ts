@@ -325,8 +325,11 @@ test('manual scanner rejects invalid input, deduplicates and handles camera deni
   );
   await open(page, 'scan?input=camera');
   await expect(page.getByRole('alert')).toHaveText('Camera denied for test');
+  await expect(page.locator('.camera-placeholder')).toHaveText('Camera is off');
+  await expect(page.locator('.camera-placeholder')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start camera', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Manual / USB entry', exact: true }).click();
+  await expect(page.locator('.camera-preview')).toBeHidden();
   await page.getByRole('textbox', { name: 'QR identifiers' }).fill('bad-code');
   await page.getByRole('button', { name: 'Add codes', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Invalid identifier');
@@ -409,6 +412,71 @@ test('move workflow confirms native transfer and refreshes authoritative state',
   expect(state.items[code].warehouse_id).toBe(2);
   expect(state.items[code].pending_operation).toBeUndefined();
 });
+
+for (const destination of [
+  { type: 'salesorder', id: 39, ref: 'SO-0039', path: '/commande/card.php?id=39' },
+  { type: 'production', id: 19, ref: 'MO-0019', path: '/mrp/mo_card.php?id=19' },
+]) {
+  test(`consumption defaults to customer orders and supports ${destination.type}`, async ({
+    page,
+  }) => {
+    const code = await blank(page);
+    const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
+    const created = await page.request.post('api.php?action=update', {
+      form: {
+        token: bootstrap.token,
+        qrr_token: bootstrap.csrf,
+        payload: JSON.stringify({
+          type: 'box',
+          code,
+          label: 'Consumption ' + code,
+          product_id: 4,
+          warehouse_id: 1,
+          qty: 3,
+        }),
+      },
+    });
+    expect(created.ok()).toBeTruthy();
+    await open(page, 'workflow/consume?code=' + code);
+    const referenceType = page.getByRole('combobox', {
+      name: 'Transaction reference',
+      exact: true,
+    });
+    const record = page.getByRole('combobox', { name: 'Select an exact record', exact: true });
+    const confirm = page.getByRole('button', { name: 'Confirm operation', exact: true });
+    await expect(referenceType).toContainText('Customer order');
+    await expect(confirm).toBeDisabled();
+    await record.fill('SO');
+    await page.getByRole('option', { name: /SO-0039/ }).click();
+    await expect(confirm).toBeEnabled();
+    if (destination.type === 'production') {
+      await choose(page, 'Transaction reference', 'Manufacturing order');
+      await expect(record).toHaveValue('');
+      await expect(confirm).toBeDisabled();
+      await expect(page.locator('qrr-lookup').getByRole('link', { name: /SO-0039/ })).toHaveCount(
+        0
+      );
+      await record.fill('MO');
+      await page.getByRole('option', { name: 'MO-0019', exact: true }).click();
+    }
+    await confirm.click();
+    await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+    const updated = await (await page.request.get('api.php?resource=bootstrap')).json();
+    const item = updated.state.items[code];
+    expect(item.qty).toBe(2);
+    expect(item.consumed_units).toBe(1);
+    expect(item.consumption_log.at(-1)).toMatchObject({
+      kind: 'consume',
+      quantity: 1,
+      reference_type: destination.type,
+      reference_id: destination.id,
+    });
+    await open(page, 'items/' + code);
+    await expect(
+      page.getByRole('link', { name: destination.ref, exact: true }).first()
+    ).toHaveAttribute('href', new RegExp(destination.path.replace('?', '\\?') + '$'));
+  });
+}
 
 test('picking preview uses native order lookup and server allocation', async ({ page }) => {
   await open(page, 'inventory');
@@ -552,13 +620,30 @@ test('camera auto-starts on scanning pages and stops when leaving them', async (
   });
   await open(page, 'scan?input=camera');
   await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
+  const content = (await page.locator('qrr-root .content').boundingBox())!;
+  const capture = (await page.locator('.scanner-page').boundingBox())!;
+  expect(Math.abs(capture.height - content.height)).toBeLessThanOrEqual(1);
+  const preview = (await page.locator('.camera-preview').boundingBox())!;
+  await page.setViewportSize({ width: 1600, height: 1200 });
+  await expect
+    .poll(async () => (await page.locator('.camera-preview').boundingBox())!.height)
+    .toBeGreaterThan(preview.height + 100);
+  expect((await page.locator('.scanner-page').boundingBox())!.width).toBe(1160);
   expect(await page.evaluate(() => (window as any).__cameraRequests)).toBe(1);
+  const runningPreview = (await page.locator('.camera-preview').boundingBox())!;
   await page.getByRole('button', { name: 'Stop camera', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start camera', exact: true })).toBeEnabled();
+  await expect(page.locator('.camera-placeholder')).toHaveText('Camera is off');
+  await expect(page.locator('.camera-placeholder')).toBeVisible();
+  await expect(page.locator('.camera-preview video')).toBeHidden();
+  const stoppedPreview = (await page.locator('.camera-preview').boundingBox())!;
+  expect(Math.abs(stoppedPreview.height - runningPreview.height)).toBeLessThanOrEqual(1);
+  expect(stoppedPreview.width).toBe(runningPreview.width);
   expect(await page.evaluate(() => (window as any).__stoppedTracks)).toBe(1);
   expect(await page.evaluate(() => (window as any).__cameraRequests)).toBe(1);
   await page.getByRole('button', { name: 'Start camera', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
+  await expect(page.locator('.camera-placeholder')).toHaveCount(0);
   await page.locator('nav').getByRole('link', { name: 'Inventory', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as any).__stoppedTracks)).toBe(2);
@@ -611,6 +696,8 @@ test('a camera granted after leaving the scanning page is released immediately',
   await expect
     .poll(() => page.evaluate(() => typeof (window as any).__grantCamera))
     .toBe('function');
+  await expect(page.locator('.camera-placeholder')).toHaveText('Starting camera…');
+  await expect(page.locator('.camera-placeholder')).toBeVisible();
   await page.locator('nav').getByRole('link', { name: 'Inventory', exact: true }).click();
   await expect(page.locator('qrr-scanner')).toHaveCount(0);
   await page.evaluate(() => (window as any).__grantCamera());
@@ -724,6 +811,7 @@ test('scan selection and camera pages fit mobile portrait without page scrolling
       'scan',
       'scan?input=camera',
       'register?input=camera',
+      'workflow/move?input=camera',
       'scan?input=manual',
       'register?input=manual',
     ]) {
@@ -731,6 +819,11 @@ test('scan selection and camera pages fit mobile portrait without page scrolling
       if (route.includes('camera')) {
         await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
         await expect(page.getByRole('textbox', { name: 'QR identifiers' })).toHaveCount(0);
+        const content = (await page.locator('qrr-root .content').boundingBox())!;
+        const capture = (await page.locator('.scanner-page').boundingBox())!;
+        expect(Math.abs(capture.height - content.height), route).toBeLessThanOrEqual(1);
+        const frame = (await page.locator('.viewfinder').boundingBox())!;
+        expect(Math.abs(frame.width - frame.height), route).toBeLessThanOrEqual(1);
       }
       if (route.includes('manual')) {
         await page

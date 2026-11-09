@@ -66,7 +66,13 @@
                 />
                 <p class="muted">
                   {{ 'Selected product' | t }}:
-                  {{ api.context()!.products[model.product_id]?.ref || model.product_id || '—' }}
+                  <qrr-native-link
+                    type="product"
+                    [id]="model.product_id"
+                    [label]="
+                      api.context()!.products[model.product_id]?.ref || model.product_id || '—'
+                    "
+                  />
                 </p>
               </div>
               <mat-form-field appearance="outline">

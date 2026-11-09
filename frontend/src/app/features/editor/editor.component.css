@@ -1,8 +1,17 @@
 @import '../../shared/scanner/capture-page.css';
 fieldset {
+  display: grid;
+  gap: var(--qrr-control-gap, 16px);
   border: 0;
   padding: 0;
   min-width: 0;
+}
+fieldset > p,
+fieldset > .actions {
+  margin: 0;
+}
+.grid > div > .muted {
+  margin: 4px 0 0;
 }
 
 .number {

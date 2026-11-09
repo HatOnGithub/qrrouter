@@ -1,3 +1,36 @@
 .inventory-summary {
-  margin-bottom: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0 0 16px;
+  font-size: 0.9em;
+}
+.inventory-summary > div {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.inventory-summary dt {
+  opacity: 0.75;
+}
+.inventory-summary dd {
+  margin: 0;
+  font-weight: 700;
+}
+.inventory-status {
+  border: 0;
+  padding: 4px 8px;
+  font-weight: 600;
+  max-width: 32ch;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.inventory-status > a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
 }

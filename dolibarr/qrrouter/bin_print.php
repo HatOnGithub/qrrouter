@@ -7,10 +7,11 @@ if (!$res) {
     die('Dolibarr main.inc.php missing');
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
-if (!qrr_read_right($user) || !qrr_products_right($user)) {
+if (!qrr_inventory_right($user) || !qrr_locations_right($user)) {
     accessforbidden();
 }
-$state = qrr_load_state();
+$state = qrr_browser_inventory($db)['state'];
+header('Cache-Control: no-store');
 $warehouses = qrr_warehouses($db);
 $wid = (int) GETPOST('warehouse_id', 'int');
 if (!isset($warehouses[$wid])) {

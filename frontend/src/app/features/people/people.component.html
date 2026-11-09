@@ -58,8 +58,20 @@
       <tbody>
         @for (mapping of api.context()!.state.personal_warehouses | keyvalue; track mapping.key) {
           <tr>
-            <td>{{ api.context()!.users[mapping.key] || mapping.key }}</td>
-            <td>{{ api.context()!.warehouses[mapping.value]?.ref || mapping.value }}</td>
+            <td>
+              <qrr-native-link
+                type="user"
+                [id]="mapping.key"
+                [label]="api.context()!.users[mapping.key] || mapping.key"
+              />
+            </td>
+            <td>
+              <qrr-native-link
+                type="warehouse"
+                [id]="mapping.value"
+                [label]="api.context()!.warehouses[mapping.value]?.ref || mapping.value"
+              />
+            </td>
           </tr>
         }
       </tbody>

@@ -17,6 +17,8 @@ export class MockError extends Error {
 const requireValue = (condition, message, status = 400) => {
   if (!condition) throw new MockError(message, status);
 };
+const pick = (value, keys) =>
+  Object.fromEntries(keys.filter(key => key in value).map(key => [key, value[key]]));
 const quantity = (value, minimum = 0) => {
   requireValue(
     Number.isSafeInteger(value) && value >= minimum && value <= 100000000,
@@ -50,7 +52,15 @@ export class MockStore {
 
   permissions() {
     const write = this.settings.scenario !== 'read-only';
-    return { manage: write, stock: write, admin: write, orders: true };
+    return {
+      manage: write,
+      stock: write,
+      admin: write,
+      orders: true,
+      locations: true,
+      users: write,
+      references: { salesorder: true, production: write, shipment: write },
+    };
   }
 
   item(code) {
@@ -91,12 +101,19 @@ export class MockStore {
     const query = (params.get('q') || '').toLowerCase();
     const matching = rows => rows.filter(row => row.text.toLowerCase().includes(query));
     if (resource === 'bootstrap') {
+      const references = this.consumptionReferences();
+      const users = this.permissions().users
+        ? data.users
+        : data.users[8]
+          ? { 8: data.users[8] }
+          : {};
       return {
-        state: data.state,
+        state: this.browserState(users, references),
         products: data.products,
         warehouses: data.warehouses,
-        users: data.users,
+        users,
         label_formats: labelFormats,
+        consumption_references: references,
         permissions: this.permissions(),
         token: 'local-mock-token',
         csrf: 'local-mock-csrf',
@@ -161,6 +178,64 @@ export class MockStore {
     throw new MockError('Unknown resource', 404);
   }
 
+  browserState(users, references) {
+    const state = structuredClone(
+      pick(this.data.state, [
+        'schema',
+        'revision',
+        'items',
+        'batches',
+        'personal_warehouses',
+        'binloc_label_settings',
+        'pending_native',
+      ])
+    );
+    state.history = [];
+    for (const [code, raw] of Object.entries(state.items)) {
+      const item = pick(raw, [
+        'code',
+        'type',
+        'label',
+        'product_id',
+        'warehouse_id',
+        'qty',
+        'serial',
+        'native_batch',
+        'product_lot_id',
+        'details',
+        'created_at',
+        'updated_at',
+        'status',
+        'consumed_units',
+        'bin',
+        'bin_key',
+        'bin_values',
+      ]);
+      for (const key of ['pending_operation', 'pending_handoff'])
+        if (raw[key]) item[key] = pick(raw[key], ['id', 'kind', 'at']);
+      if (raw.checkout)
+        item.checkout = users[raw.checkout.user_id]
+          ? pick(raw.checkout, ['user_id', 'reason', 'at', 'origin_warehouse_id'])
+          : {};
+      item.consumption_log = (raw.consumption_log || []).map(entry => {
+        const log = pick(entry, ['at', 'kind', 'quantity', 'reason', 'stock_posted']);
+        if (entry.reference_type && entry.reference_id) {
+          if (references[`${entry.reference_type}:${entry.reference_id}`])
+            Object.assign(log, pick(entry, ['reference_type', 'reference_id']));
+          else log.reason = '';
+        }
+        return log;
+      });
+      state.items[code] = item;
+    }
+    state.personal_warehouses = Object.fromEntries(
+      Object.entries(state.personal_warehouses).filter(([id]) => users[id])
+    );
+    if (state.pending_native)
+      state.pending_native = pick(state.pending_native, ['id', 'action', 'at']);
+    return state;
+  }
+
   locations(warehouse, bin) {
     const items = Object.values(this.data.state.items).filter(
       item => item.warehouse_id === warehouse && item.type !== 'unassigned'
@@ -198,6 +273,30 @@ export class MockStore {
         totals: Object.values(totals),
       },
     };
+  }
+
+  consumptionReferences() {
+    const references = {};
+    const routes = {
+      production: '/mrp/mo_card.php',
+      shipment: '/expedition/card.php',
+      salesorder: '/commande/card.php',
+    };
+    for (const item of Object.values(this.data.state.items)) {
+      for (const entry of item.consumption_log || []) {
+        const type = entry.reference_type;
+        if (!this.permissions().manage && type !== 'salesorder') continue;
+        const record = this.data.references[type]?.find(row => row.id === entry.reference_id);
+        if (record && routes[type])
+          references[`${type}:${record.id}`] = {
+            type,
+            id: record.id,
+            ref: record.text,
+            url: `${routes[type]}?id=${record.id}`,
+          };
+      }
+    }
+    return references;
   }
 
   fields(payload, code, existing) {
@@ -473,6 +572,8 @@ export class MockStore {
         quantity: units,
         reason: payload.reason || '',
         stock_posted: !!item.product_lot_id || !!payload.post_stock,
+        reference_type: payload.reference_type || '',
+        reference_id: Number(payload.reference_id || 0),
       });
     }
   }

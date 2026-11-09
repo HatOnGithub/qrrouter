@@ -1,14 +1,30 @@
 export type ItemType = 'unassigned' | 'tracked' | 'generic' | 'box';
 export interface Loan {
-  user_id: number;
-  reason: string;
-  at: string;
-  origin_warehouse_id: number;
+  user_id?: number;
+  reason?: string;
+  at?: string;
+  origin_warehouse_id?: number;
 }
 export interface Pending {
   id: string;
   kind: string;
   at: string;
+}
+export interface ConsumptionEntry {
+  at: string;
+  kind: string;
+  quantity: number;
+  reason: string;
+  stock_posted: boolean;
+  reference_type?: string;
+  reference_id?: number;
+  inventorycode?: string;
+}
+export interface ConsumptionReference {
+  type: string;
+  id: number;
+  ref: string;
+  url: string;
 }
 export interface Item {
   code: string;
@@ -31,13 +47,7 @@ export interface Item {
   checkout?: Loan;
   pending_operation?: Pending;
   pending_handoff?: Pending;
-  consumption_log?: {
-    at: string;
-    kind: string;
-    quantity: number;
-    reason: string;
-    stock_posted: boolean;
-  }[];
+  consumption_log?: ConsumptionEntry[];
 }
 export interface Batch {
   created_at: string;
@@ -79,12 +89,21 @@ export interface Level {
   options: { id: number; value: string }[];
 }
 export interface Bootstrap {
+  consumption_references?: Record<string, ConsumptionReference>;
   label_formats: { id: string; width: number; height: number; level: number }[];
   state: InventoryState;
   warehouses: Record<string, Warehouse>;
   users: Record<string, string>;
   products: Record<string, Product>;
-  permissions: { manage: boolean; stock: boolean; admin: boolean; orders: boolean };
+  permissions: {
+    manage: boolean;
+    stock: boolean;
+    admin: boolean;
+    orders: boolean;
+    locations?: boolean;
+    users?: boolean;
+    references?: { salesorder: boolean; production: boolean; shipment: boolean };
+  };
   csrf: string;
   token: string;
   locale: string;

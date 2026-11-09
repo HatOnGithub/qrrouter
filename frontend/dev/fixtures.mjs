@@ -161,7 +161,15 @@ export function createFixture(scenario = 'populated') {
     status: 'consumed',
     consumed_units: 1,
     consumption_log: [
-      { at, kind: 'consume', quantity: 1, reason: 'Repair job', stock_posted: true },
+      {
+        at,
+        kind: 'consume',
+        quantity: 1,
+        reason: 'Repair job',
+        stock_posted: true,
+        reference_type: 'production',
+        reference_id: 19,
+      },
     ],
   });
   if (scenario !== 'no-employees') {

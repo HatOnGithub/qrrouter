@@ -8,11 +8,12 @@ if (!$res) {
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
 require_once __DIR__ . '/lib/qrrouter_labels.lib.php';
-if (!qrr_read_right($user) || !qrr_products_right($user)) {
+if (!qrr_inventory_right($user)) {
     accessforbidden();
 }
 $batch = strtoupper(trim((string) GETPOST('batch', 'alphanohtml')));
-$state = qrr_load_state();
+$state = qrr_browser_inventory($db)['state'];
+header('Cache-Control: no-store');
 $row = $state['batches'][$batch] ?? null;
 $onlyUnassigned = (int) GETPOST('unassigned', 'int') === 1;
 if (!$row) {

@@ -14,9 +14,14 @@ export class DolibarrThemeService {
     const button = document.createElement('button');
     button.className = 'butAction';
     const input = document.createElement('input');
+    input.type = 'text';
     input.className = 'flat';
-    sample.append(button, input);
-    document.body.append(sample);
+    const success = document.createElement('span');
+    success.className = 'ok';
+    const error = document.createElement('span');
+    error.className = 'error';
+    sample.append(button, input, success, error);
+    (host.parentElement || document.body).append(sample);
     const nativeButton = getComputedStyle(button);
     const nativeInput = getComputedStyle(input);
     const text = getComputedStyle(host).color;
@@ -46,6 +51,9 @@ export class DolibarrThemeService {
       '--qrr-font': getComputedStyle(host).fontFamily,
       '--qrr-font-size': getComputedStyle(host).fontSize,
       '--qrr-input-bg': nativeInput.backgroundColor,
+      '--qrr-input-background': nativeInput.background,
+      '--qrr-success-color': getComputedStyle(success).color,
+      '--qrr-error-color': getComputedStyle(error).color,
     };
     sample.remove();
     for (const target of [host, this.overlay.getContainerElement()]) {

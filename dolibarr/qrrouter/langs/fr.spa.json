@@ -1,4 +1,12 @@
 {
+  "Camera is off": "Caméra désactivée",
+  "Starting camera…": "Démarrage de la caméra…",
+  "Customer order": "Commande client",
+  "Manufacturing order": "Ordre de fabrication",
+  "Latest consumption destination": "Dernière destination de consommation",
+  "Destination / reference": "Destination / référence",
+  "Production order": "Ordre de fabrication",
+  "Not recorded": "Non renseigné",
   "Inventory": "Stock",
   "QR inventory": "Stock QR",
   "Scan QR": "Scanner un QR",

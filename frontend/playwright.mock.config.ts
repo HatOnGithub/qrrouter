@@ -10,6 +10,7 @@ export default defineConfig({
     headless: true,
     viewport: { width: 1440, height: 1000 },
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   webServer: {
     command: 'node dev/start-mock.mjs --port 4300',
@@ -19,6 +20,10 @@ export default defineConfig({
     timeout: 60000,
   },
   outputDir: 'test-results/mock',
-  reporter: 'list',
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report/mock', open: 'never' }],
+    ['junit', { outputFile: 'test-results/mock/results.xml' }],
+  ],
   timeout: 20000,
 });

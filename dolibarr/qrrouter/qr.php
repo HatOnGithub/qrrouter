@@ -7,11 +7,11 @@ if (!$res) {
     die('Missing Dolibarr main.inc.php');
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
-if (!qrr_read_right($user)) {
+if (!qrr_inventory_right($user)) {
     accessforbidden();
 }
 $code = qrr_input_code(GETPOST('code', 'alphanohtml'));
-$state = qrr_load_state();
+$state = qrr_browser_inventory($db)['state'];
 if (!qrr_code_valid($code) || !isset($state['items'][$code])) {
     http_response_code(404);
     exit('Invalid QR');
@@ -32,7 +32,7 @@ try {
         throw new RuntimeException('QR renderer unavailable; install php-gd');
     }
     header('Content-Type: image/png');
-    header('Cache-Control: private, max-age=180');
+    header('Cache-Control: no-store');
     header('X-Content-Type-Options: nosniff');
     echo $data;
 } catch (Throwable $e) {

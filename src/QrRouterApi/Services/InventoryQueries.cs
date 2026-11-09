@@ -49,8 +49,34 @@ public static class InventoryQueries
         data["products"]?[pid.ToString()].Copy()
         ?? Object(("ref", pid > 0 ? $"Product #{pid}" : "Unassigned"), ("label", label));
 
-    public static JsonNode Execute(JsonObject state, string action, JsonObject data) =>
-        action switch
+    public static JsonNode Execute(JsonObject state, string action, JsonObject data)
+    {
+        // The trusted adapter supplies the object visibility established by Dolibarr.
+        if (data["visible_codes"] is JsonArray codes)
+        {
+            var visible = codes
+                .Select(code => code!.GetValue<string>())
+                .ToHashSet(StringComparer.Ordinal);
+            state = (JsonObject)state.DeepClone();
+            var items = state.Map("items");
+            foreach (
+                var code in items
+                    .Select(pair => pair.Key)
+                    .Where(code => !visible.Contains(code))
+                    .ToArray()
+            )
+                items.Remove(code);
+            foreach (
+                var batch in state.Map("batches").Select(pair => pair.Value).OfType<JsonObject>()
+            )
+                batch["codes"] = new JsonArray(
+                    (batch["codes"] as JsonArray ?? [])
+                        .Where(code => visible.Contains(code!.GetValue<string>()))
+                        .Select(code => code!.DeepClone())
+                        .ToArray()
+                );
+        }
+        return action switch
         {
             "query-bin-summary" => BinSummary(state, data),
             "query-warehouse-summary" => WarehouseSummary(state, data),
@@ -67,6 +93,7 @@ public static class InventoryQueries
             "query-pick" => Pick(state, data),
             _ => throw new ArgumentException("Unknown read model"),
         };
+    }
 
     private static JsonNode BinSummary(JsonObject state, JsonObject data)
     {

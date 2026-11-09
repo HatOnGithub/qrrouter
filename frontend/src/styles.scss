@@ -14,8 +14,12 @@ $controls: mat.m2-define-light-theme(
 qrr-root,
 .cdk-overlay-container.qrr-theme {
   @include mat.all-component-themes($controls);
+  @include mat.form-field-density(-4);
 }
 .qrr-theme {
+  --qrr-control-gap: 16px;
+  --qrr-button-padding: 12px;
+  --qrr-control-radius: 8px;
   --mat-form-field-container-text-font: var(--qrr-font, inherit);
   --mat-form-field-container-text-size: var(--qrr-font-size, inherit);
   --mat-form-field-outlined-label-text-font: var(--qrr-font, inherit);
@@ -34,7 +38,7 @@ qrr-root,
   --mat-form-field-outlined-hover-outline-color: var(--qrr-text, currentColor);
   --mat-form-field-outlined-focus-outline-color: var(--qrr-action-bg, currentColor);
   --mat-form-field-outlined-focus-label-text-color: var(--qrr-text, currentColor);
-  --mat-form-field-outlined-container-shape: 3px;
+  --mat-form-field-outlined-container-shape: var(--qrr-control-radius);
   --mat-select-trigger-text-font: var(--qrr-font, inherit);
   --mat-select-enabled-trigger-text-color: var(--qrr-text, currentColor);
   --mat-select-enabled-arrow-color: var(--qrr-text, currentColor);
@@ -49,9 +53,14 @@ qrr-root,
     transparent
   );
   --mat-button-filled-container-color: var(--qrr-action-bg, ButtonFace);
+  --mat-button-filled-horizontal-padding: var(--qrr-button-padding);
+  --mat-button-outlined-horizontal-padding: calc(var(--qrr-button-padding) - 1px);
+  --mat-button-text-horizontal-padding: var(--qrr-button-padding);
+  --mat-button-text-with-icon-horizontal-padding: var(--qrr-button-padding);
   --mat-button-filled-label-text-color: var(--qrr-action-text, ButtonText);
-  --mat-button-filled-container-shape: 3px;
-  --mat-button-outlined-container-shape: 3px;
+  --mat-button-filled-container-shape: var(--qrr-control-radius);
+  --mat-button-outlined-container-shape: var(--qrr-control-radius);
+  --mat-button-text-container-shape: var(--qrr-control-radius);
   --mat-button-outlined-label-text-color: var(--qrr-text, currentColor);
   --mat-button-outlined-outline-color: color-mix(
     in srgb,
@@ -92,13 +101,13 @@ qrr-root {
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-    gap: 16px;
+    gap: var(--qrr-control-gap);
   }
   .actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     margin: 16px 0;
   }
   .alert {
@@ -115,9 +124,28 @@ qrr-root {
     width: 100%;
   }
   // Material internals and overlays cannot be styled through component encapsulation.
-  .mat-mdc-form-field-flex {
-    background: var(--qrr-input-bg, transparent);
-    border-radius: 3px;
+  .mat-mdc-text-field-wrapper {
+    background: var(--qrr-input-background, var(--qrr-input-bg, transparent));
+    border-radius: var(--qrr-control-radius);
+  }
+  .mat-mdc-form-field-flex,
+  .mat-mdc-text-field-wrapper .mat-mdc-input-element {
+    background: transparent;
+    box-shadow: none;
+  }
+  .mat-mdc-form-field-infix {
+    display: flex;
+    align-items: center;
+  }
+  // The field supplies the spacing; native input styles must not add a second inset.
+  .mat-mdc-text-field-wrapper .mat-mdc-input-element {
+    margin: 0;
+    padding: 0;
+    line-height: inherit;
+  }
+  .mat-mdc-text-field-wrapper input.mat-mdc-input-element {
+    height: auto;
+    min-height: 0;
   }
   .mat-mdc-unelevated-button {
     background: var(--qrr-action-background, ButtonFace);
@@ -137,7 +165,7 @@ qrr-root {
   th {
     padding: 9px;
     border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-    vertical-align: top;
+    vertical-align: middle;
   }
   td small {
     display: block;

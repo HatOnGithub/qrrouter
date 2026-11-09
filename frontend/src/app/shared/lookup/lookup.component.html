@@ -32,7 +32,8 @@
 }
 @if (selectedText()) {
   <small>
-    {{ 'Selected' | t }}: {{ selectedText() }}
+    {{ 'Selected' | t }}:
+    <qrr-native-link [type]="objectType()" [id]="selectedId()" [label]="selectedText()" />
     <button type="button" mat-button (click)="clear()" [disabled]="disabled()">
       <fa-icon [icon]="clearIcon" aria-hidden="true" />
       {{ 'Clear' | t }}

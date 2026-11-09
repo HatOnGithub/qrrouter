@@ -119,7 +119,9 @@ function qrr_native_evidence($db, $op) {
         "'";
     $res = $db->query($sql);
     if (!$res) {
-        throw new RuntimeException('Cannot verify native stock movements: ' . $db->lasterror());
+        throw new RuntimeException(
+            qrr_native_error('Cannot verify native stock movements', $db->lasterror()),
+        );
     }
     $expected = $op['effects'];
     $seen = array_fill(0, count($expected), 0);
@@ -273,8 +275,10 @@ function qrr_native_apply($db, $user, $entry, $op) {
             }
             if ($result < 0) {
                 throw new RuntimeException(
-                    'Native stock change failed: ' .
-                        ($product->error ?: implode('; ', (array) $product->errors)),
+                    qrr_native_error(
+                        'Native stock change failed',
+                        $product->error ?: implode('; ', (array) $product->errors),
+                    ),
                 );
             }
         }
@@ -324,7 +328,7 @@ function qrr_run_inventory_action($db, $user, $code, $kind, $args, $warehouses) 
         qrr_native_apply($db, $user, $entry, $op);
     } catch (Throwable $e) {
         throw new RuntimeException(
-            $e->getMessage() . ' Pending operation retained. Reconcile before retrying.',
+            qrr_public_error($e) . ' Pending operation retained. Reconcile before retrying.',
         );
     }
     qrr_finish_inventory_action($db, $user, $code, $op);
@@ -360,6 +364,9 @@ function qrr_check_reference($db, $user, $type, $id) {
     if ($id < 1) {
         throw new RuntimeException('Select an exact shipment or order');
     }
+    if (!qrr_reference_visible($user, $type, $id)) {
+        throw new DomainException('Transaction is inaccessible');
+    }
     if ($type === 'salesorder' && !qrr_orders_right($user)) {
         throw new RuntimeException('Missing sales order permission');
     }
@@ -382,4 +389,57 @@ function qrr_check_reference($db, $user, $type, $id) {
         throw new RuntimeException('Transaction not found in this entity');
     }
     $db->free($rs);
+}
+
+/** Resolve saved consumption references only within the current entity and user's read rights. */
+function qrr_consumption_references($db, $user, $items) {
+    global $conf;
+    $routes = [
+        'shipment' => '/expedition/card.php',
+        'production' => '/mrp/mo_card.php',
+        'salesorder' => '/commande/card.php',
+    ];
+    $groups = [];
+    foreach ($items as $item) {
+        foreach ($item['consumption_log'] ?? [] as $entry) {
+            $type = (string) ($entry['reference_type'] ?? '');
+            $id = (int) ($entry['reference_id'] ?? 0);
+            if (isset($routes[$type]) && $id > 0) {
+                $groups[$type][$id] = $id;
+            }
+        }
+    }
+    $references = [];
+    foreach ($groups as $type => $ids) {
+        $allowed = qrr_reference_right($user, $type);
+        if (!$allowed) {
+            continue;
+        }
+        $sql =
+            'SELECT rowid,ref FROM ' .
+            MAIN_DB_PREFIX .
+            qrr_reference_schema($type) .
+            ' WHERE entity=' .
+            (int) $conf->entity .
+            ' AND rowid IN (' .
+            implode(',', $ids) .
+            ')';
+        $result = $db->query($sql);
+        if (!$result) {
+            continue;
+        }
+        while ($row = $db->fetch_object($result)) {
+            $id = (int) $row->rowid;
+            if (isset($ids[$id]) && qrr_reference_visible($user, $type, $id)) {
+                $references[$type . ':' . $id] = [
+                    'type' => $type,
+                    'id' => $id,
+                    'ref' => (string) $row->ref,
+                    'url' => dol_buildpath($routes[$type], 1) . '?id=' . $id,
+                ];
+            }
+        }
+        $db->free($result);
+    }
+    return $references;
 }

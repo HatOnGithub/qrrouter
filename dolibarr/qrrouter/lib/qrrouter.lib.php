@@ -202,20 +202,21 @@ function qrr_item_identity_html($item, $linked = true) {
 }
 
 function qrr_read_right($user) {
-    return !empty($user->admin) ||
-        $user->hasRight('qrrouter', 'read') ||
-        $user->hasRight('qrrouter', 'manage');
+    return qrr_internal_user($user) &&
+        qrr_module_enabled() &&
+        (!empty($user->admin) ||
+            $user->hasRight('qrrouter', 'read') ||
+            $user->hasRight('qrrouter', 'manage'));
 }
 function qrr_write_right($user) {
-    return !empty($user->admin) || $user->hasRight('qrrouter', 'manage');
+    return qrr_read_right($user) && (!empty($user->admin) || $user->hasRight('qrrouter', 'manage'));
 }
 function qrr_products_right($user) {
-    return !empty($user->admin) ||
-        $user->hasRight('produit', 'lire') ||
-        $user->hasRight('service', 'lire');
+    return qrr_internal_user($user) && (!empty($user->admin) || $user->hasRight('produit', 'lire'));
 }
 function qrr_orders_right($user) {
-    return !empty($user->admin) || $user->hasRight('commande', 'lire');
+    return qrr_internal_user($user) &&
+        (!empty($user->admin) || $user->hasRight('commande', 'lire'));
 }
 function qrr_token() {
     if (empty($_SESSION['qrr_token'])) {
@@ -311,6 +312,13 @@ function qrr_product($db, $id) {
     if ($p->fetch((int) $id) <= 0) {
         return null;
     }
+    if (
+        (int) $p->type !== 0 ||
+        !isset($p->entity) ||
+        !in_array((int) $p->entity, array_map('intval', explode(',', getEntity('product'))), true)
+    ) {
+        return null;
+    }
     return $p;
 }
 function qrr_warehouses($db) {
@@ -323,7 +331,7 @@ function qrr_warehouses($db) {
         ') ORDER BY ref';
     $res = $db->query($sql);
     if (!$res) {
-        throw new RuntimeException('Unable to read Dolibarr warehouses: ' . $db->lasterror());
+        throw new RuntimeException('Unable to read Dolibarr warehouses');
     }
     while ($r = $db->fetch_object($res)) {
         $warehouses[(int) $r->rowid] = ['ref' => (string) $r->ref, 'label' => (string) $r->lieu];
@@ -430,6 +438,7 @@ function qrr_scan_url($code) {
     return dol_buildpath('/qrrouter/index.php', 2) . '#/items/' . rawurlencode($code);
 }
 function qrr_personal_users($db) {
+    global $user, $conf;
     // Dolibarr 21 uses getEntity('user') to handle multicompany visibility.
     $out = [];
     $sql =
@@ -437,15 +446,28 @@ function qrr_personal_users($db) {
         MAIN_DB_PREFIX .
         'user u WHERE u.statut=1 AND u.entity IN (' .
         getEntity('user') .
-        ') ORDER BY u.lastname,u.firstname,u.login';
+        ') AND (u.fk_soc IS NULL OR u.fk_soc=0)';
+    if (!qrr_users_read_all($user)) {
+        $sql .= ' AND u.rowid=' . (int) $user->id;
+    }
+    $sql .= ' ORDER BY u.lastname,u.firstname,u.login';
     $res = $db->query($sql);
     if (!$res) {
-        throw new RuntimeException('Cannot read active Dolibarr users: ' . $db->lasterror());
+        throw new RuntimeException('Cannot read active Dolibarr users');
     }
     while ($u = $db->fetch_object($res)) {
+        if (!qrr_user_visible($user, (int) $u->rowid)) {
+            continue;
+        }
         $name = trim(trim((string) $u->firstname) . ' ' . trim((string) $u->lastname));
+        $loginVisible =
+            empty($conf->global->MAIN_ENABLE_LOGINS_PRIVACY) || (int) $u->rowid === (int) $user->id;
         $out[(int) $u->rowid] =
-            ($name !== '' ? $name : (string) $u->login) . ' (' . $u->login . ')';
+            ($name !== ''
+                ? $name
+                : ($loginVisible
+                    ? (string) $u->login
+                    : 'User #' . (int) $u->rowid)) . ($loginVisible ? ' (' . $u->login . ')' : '');
     }
     $db->free($res);
     return $out;
@@ -503,8 +525,10 @@ function qrr_ensure_personal_warehouse($db, $actingUser, $personId, $people) {
         $existing = (int) $warehouse->create($actingUser);
         if ($existing <= 0) {
             throw new RuntimeException(
-                'Could not create personal warehouse: ' .
-                    ($warehouse->error ?: implode('; ', (array) $warehouse->errors)),
+                qrr_native_error(
+                    'Could not create personal warehouse',
+                    $warehouse->error ?: implode('; ', (array) $warehouse->errors),
+                ),
             );
         }
     }
@@ -598,6 +622,7 @@ require_once __DIR__ . '/qrrouter_binloc.lib.php';
 require_once __DIR__ . '/qrrouter_native.lib.php';
 require_once __DIR__ . '/qrrouter_checkout.lib.php';
 require_once __DIR__ . '/qrrouter_workflows.lib.php';
+require_once __DIR__ . '/qrrouter_security.lib.php';
 function qrr_boot() {
     $res = 0;
     if (!$res && file_exists(__DIR__ . '/../../../main.inc.php')) {

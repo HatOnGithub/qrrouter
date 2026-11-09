@@ -1,21 +1,31 @@
 .scanner-page {
-  --scanner-blue: #0754ae;
-  --scanner-green: #218c39;
   max-width: 1160px;
   margin-inline: auto;
 }
+:host:has(qrr-capture) {
+  display: block;
+  height: 100%;
+}
+.scanner-page:has(qrr-capture) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.scanner-page:has(qrr-capture) > :not(.capture-card) {
+  flex-shrink: 0;
+}
 .scanner-page h1 {
-  color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+  color: var(--qrr-text, inherit);
   font-size: 1.5em;
 }
 .scanner-primary {
   min-height: 52px;
   width: 100%;
-  padding-inline: 22px;
-  background: var(--scanner-green);
-  color: #fff;
+  padding-inline: var(--qrr-button-padding, 12px);
+  background: var(--qrr-action-background, ButtonFace);
+  color: var(--qrr-action-text, ButtonText);
   font-weight: 700;
-  --mat-button-filled-label-text-color: #fff;
+  --mat-button-filled-label-text-color: var(--qrr-action-text, ButtonText);
 }
 .scanner-primary:disabled {
   background: color-mix(in srgb, currentColor 10%, transparent);

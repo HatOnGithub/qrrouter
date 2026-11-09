@@ -1,0 +1,156 @@
+/* Development shell only; never loaded by the production module. */
+#mock-camera-toggle {
+  padding: 7px 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.mock-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.mock-workspace.camera-controls-open {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.mock-main {
+  min-width: 0;
+}
+.mock-camera-panel {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  border-left: 1px solid var(--mock-border);
+  background: var(--mock-surface);
+  color: var(--mock-text);
+  overflow: hidden;
+}
+.mock-camera-panel[hidden] {
+  display: none;
+}
+.mock-camera-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--mock-border);
+}
+.mock-camera-header h2 {
+  margin: 0;
+  font-size: 1.15em;
+}
+.mock-camera-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.mock-camera-panel p {
+  margin: 0;
+  line-height: 1.5;
+}
+.mock-camera-panel label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: bold;
+}
+.mock-camera-hint {
+  opacity: 0.75;
+  font-size: 0.9em;
+}
+.mock-camera-panel :is(button, select, textarea) {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--mock-border);
+  border-radius: 8px;
+  background: var(--mock-input);
+  color: var(--mock-text);
+  font: inherit;
+}
+.mock-camera-panel button {
+  cursor: pointer;
+}
+.mock-camera-panel button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.mock-camera-panel textarea {
+  width: 100%;
+  resize: vertical;
+}
+.mock-camera-panel input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--mock-action);
+}
+.mock-camera-form {
+  display: grid;
+  gap: 12px;
+}
+.mock-camera-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.mock-camera-row select {
+  flex: 1;
+  width: 0;
+  min-width: 160px;
+}
+#mock-camera-preview {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #303b3f;
+}
+#mock-camera-error {
+  padding: 10px;
+  border: 1px solid currentColor;
+}
+@media (max-width: 850px) {
+  .mock-workspace.camera-controls-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mock-camera-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    height: 100dvh;
+    border: 0;
+  }
+  .mock-camera-header,
+  .mock-camera-body {
+    padding: 12px;
+  }
+  .mock-camera-panel button {
+    min-height: 44px;
+  }
+  body.mock-camera-open {
+    overflow: hidden;
+  }
+}
+@media print {
+  .mock-camera-panel {
+    display: none;
+  }
+  .mock-workspace.camera-controls-open {
+    display: block;
+  }
+}

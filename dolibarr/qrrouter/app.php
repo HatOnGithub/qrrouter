@@ -9,7 +9,7 @@ if (!$res) {
     exit('Dolibarr bootstrap unavailable');
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
-if (!qrr_read_right($user) || !qrr_products_right($user)) {
+if (!qrr_inventory_right($user)) {
     accessforbidden();
 }
 header('Cache-Control: no-store');

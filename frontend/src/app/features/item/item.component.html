@@ -38,7 +38,12 @@
         <p>
           <b>{{ 'Warehouse' | t }}</b>
           <br />
-          {{ api.context()!.warehouses[item.warehouse_id]?.ref || '—' }} · {{ item.bin }}
+          <qrr-native-link
+            type="warehouse"
+            [id]="item.warehouse_id"
+            [label]="api.context()!.warehouses[item.warehouse_id]?.ref || '—'"
+          />
+          · {{ item.bin }}
         </p>
         <p>
           <b>{{ 'Quantity' | t }}</b>
@@ -60,10 +65,31 @@
           <p>{{ item.serial }} {{ item.native_batch }}</p>
         }
         <p class="item-details">{{ item.details }}</p>
+        @if ((item.consumed_units || 0) > 0 || item.status === 'consumed') {
+          @let destination = consumption.latest(item);
+          <p>
+            <b>{{ 'Latest consumption destination' | t }}</b>
+            <br />
+            @if (consumption.reference(destination); as reference) {
+              <a [href]="reference.url">{{ consumption.destination(destination) }}</a>
+              @if (destination?.reason) {
+                <small>{{ destination.reason }}</small>
+              }
+            } @else {
+              {{ consumption.destination(destination) }}
+            }
+          </p>
+        }
         @if (item.checkout) {
           <p>
             {{ 'On loan' | t }}:
-            {{ api.context()!.users[item.checkout.user_id] || item.checkout.user_id }}
+            @if (item.checkout.user_id; as borrower) {
+              <qrr-native-link
+                type="user"
+                [id]="borrower"
+                [label]="api.context()!.users[borrower] || borrower"
+              />
+            }
             <br />
             {{ item.checkout.reason }}
           </p>
@@ -175,6 +201,7 @@
             <th>{{ 'Date' | t }}</th>
             <th>{{ 'Action' | t }}</th>
             <th>{{ 'Quantity' | t }}</th>
+            <th>{{ 'Destination / reference' | t }}</th>
             <th>{{ 'Reason' | t }}</th>
           </tr>
         </thead>
@@ -184,6 +211,13 @@
               <td>{{ row.at | date: 'medium' }}</td>
               <td>{{ row.kind }}</td>
               <td>{{ row.quantity }}</td>
+              <td>
+                @if (consumption.reference(row); as reference) {
+                  <a [href]="reference.url">{{ reference.ref }}</a>
+                } @else {
+                  {{ consumption.destination(row) }}
+                }
+              </td>
               <td>
                 {{ row.reason }}
                 <small>

@@ -7,11 +7,11 @@ if (!$res) {
     die('Missing Dolibarr main.inc.php');
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
-if (!qrr_read_right($user)) {
+if (!qrr_inventory_right($user)) {
     accessforbidden();
 }
 $code = qrr_input_code(GETPOST('code', 'alphanohtml'));
-if (!qrr_code_valid($code) || !isset(qrr_load_state()['items'][$code])) {
+if (!qrr_code_valid($code) || !isset(qrr_browser_inventory($db)['state']['items'][$code])) {
     http_response_code(404);
     exit();
 }
@@ -22,6 +22,6 @@ if (!is_file($file)) {
 }
 header('Content-Type: image/jpeg');
 header('X-Content-Type-Options: nosniff');
-header('Cache-Control: private, max-age=60');
+header('Cache-Control: no-store');
 header('Content-Length: ' . filesize($file));
 readfile($file);

@@ -1,5 +1,5 @@
 <?php
-/** Standalone QR Router — Dolibarr 21.0.2. */
+/** Standalone QR Router — Dolibarr 21 and newer. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
@@ -15,6 +15,8 @@ class modQrrouter extends DolibarrModules {
         $this->description =
             'QR item registration, scan-many warehouse workflows, native stock transfers, consumption, returns and Binloc integration.';
         $this->version = '3.4.0';
+        $this->phpmin = [8, 0];
+        $this->need_dolibarr_version = [21, 0, 2];
         $this->const_name = 'MAIN_MODULE_QRROUTER';
         $this->picto = 'barcode';
         $this->langfiles = ['qrrouter@qrrouter'];
@@ -49,7 +51,7 @@ class modQrrouter extends DolibarrModules {
                 'perms' =>
                     '$user->admin || $user->rights->qrrouter->read || $user->rights->qrrouter->manage',
                 'target' => '',
-                'user' => 2,
+                'user' => 0,
             ],
         ];
     }

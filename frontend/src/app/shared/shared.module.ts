@@ -11,6 +11,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { CardComponent } from './card/card.component';
 import { TranslatePipe } from './translate.pipe';
+import { NativeLinkComponent } from './native-link/native-link.component';
 
 const modules = [
   CommonModule,
@@ -25,6 +26,7 @@ const modules = [
   FontAwesomeModule,
   CardComponent,
   TranslatePipe,
+  NativeLinkComponent,
 ];
 @NgModule({ imports: modules, exports: modules })
 export class SharedModule {}

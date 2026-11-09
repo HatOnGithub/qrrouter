@@ -1,5 +1,5 @@
 <?php
-/** Native lot/serial identity, stock and Binloc persistence (Dolibarr 21 / Binloc 2.19). */
+/** Native lot/serial identity, stock and Binloc persistence (Dolibarr 21+ / Binloc 2.19+). */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
@@ -10,7 +10,15 @@ function qrr_native_location($db) {
         throw new RuntimeException('Binloc 2.19 or newer is required for lot/serial locations');
     }
     require_once $path;
-    return new BinlocProductLocation($db);
+    $location = new BinlocProductLocation($db);
+    foreach (['fetchAnyByLot', 'setRawValues', 'createOrUpdate'] as $method) {
+        if (!is_callable([$location, $method])) {
+            throw new RuntimeException(
+                'Installed Binloc lacks the required lot/serial APIs. Install a compatible Binloc 2.19.1 or newer.',
+            );
+        }
+    }
+    return $location;
 }
 
 function qrr_native_rights($user) {
@@ -55,7 +63,9 @@ function qrr_native_serial_exists($db, $productId, $serial) {
     $lot = new Productlot($db);
     $found = $lot->fetch(0, (int) $productId, $serial);
     if ($found < 0) {
-        throw new RuntimeException('Cannot check Dolibarr serial availability: ' . $lot->error);
+        throw new RuntimeException(
+            qrr_native_error('Cannot check Dolibarr serial availability', $lot->error),
+        );
     }
     return $found > 0;
 }
@@ -76,7 +86,9 @@ function qrr_native_generate_serial($db, $productId, $label) {
         $lot = new Productlot($db);
         $found = $lot->fetch(0, (int) $productId, $serial);
         if ($found < 0) {
-            throw new RuntimeException('Cannot check Dolibarr serial availability: ' . $lot->error);
+            throw new RuntimeException(
+                qrr_native_error('Cannot check Dolibarr serial availability', $lot->error),
+            );
         }
         if ($found === 0) {
             return $serial;
@@ -110,14 +122,18 @@ function qrr_native_lot($db, $item, $create = false) {
         ? $lot->fetch((int) $item['product_lot_id'])
         : $lot->fetch(0, (int) $product->id, (string) $item['native_batch']);
     if ($result < 0) {
-        throw new RuntimeException('Cannot read Dolibarr lot/serial: ' . $lot->error);
+        throw new RuntimeException(
+            qrr_native_error('Cannot read Dolibarr lot/serial', $lot->error),
+        );
     }
     if ($result === 0 && $create && empty($item['product_lot_id'])) {
         $lot->entity = (int) $conf->entity;
         $lot->fk_product = (int) $product->id;
         $lot->batch = (string) $item['native_batch'];
         if ($lot->create($user) <= 0) {
-            throw new RuntimeException('Cannot create Dolibarr lot/serial: ' . $lot->error);
+            throw new RuntimeException(
+                qrr_native_error('Cannot create Dolibarr lot/serial', $lot->error),
+            );
         }
     } elseif ($result === 0) {
         throw new RuntimeException('Linked Dolibarr lot/serial no longer exists');
@@ -209,6 +225,9 @@ function qrr_native_observations($db, $state) {
         if ($warehouses === null) {
             $warehouses = qrr_warehouses($db);
         }
+        if (!qrr_item_visible($db, $item, $warehouses)) {
+            continue;
+        }
         [, $lot] = qrr_native_lot($db, $item);
         $item['native_batch'] = (string) $lot->batch;
         $stocks = qrr_native_lot_warehouses($db, $item);
@@ -286,7 +305,9 @@ function qrr_native_save_location($db, $user, $item, $lotId) {
     $levels = qrr_binloc_levels($db, $wid);
     qrr_binloc_parse_levels($levels, $values);
     if ($location->setRawValues($levels, $values) < 0 || $location->createOrUpdate($user) <= 0) {
-        throw new RuntimeException('Cannot save Binloc assignment: ' . $location->error);
+        throw new RuntimeException(
+            qrr_native_error('Cannot save Binloc assignment', $location->error),
+        );
     }
 }
 
@@ -315,6 +336,7 @@ function qrr_native_receipt($db, $id) {
 function qrr_native_complete($db, $user, $pending) {
     global $conf;
     qrr_native_rights($user);
+    qrr_require_native_visible($db, $pending);
     $id = $pending['id'];
     $bindings = qrr_native_receipt($db, $id);
     if (!empty($bindings['cancelled'])) {
@@ -427,7 +449,7 @@ function qrr_native_complete($db, $user, $pending) {
                     );
                     if ($result < 0) {
                         throw new RuntimeException(
-                            'Native lot stock change failed: ' . $product->error,
+                            qrr_native_error('Native lot stock change failed', $product->error),
                         );
                     }
                 }
@@ -456,7 +478,7 @@ function qrr_native_complete($db, $user, $pending) {
         } catch (Throwable $error) {
             $db->rollback();
             throw new RuntimeException(
-                $error->getMessage() .
+                qrr_public_error($error) .
                     ' Pending synchronization retained; use Recover synchronization.',
             );
         }
@@ -502,6 +524,7 @@ function qrr_native_command($db, $user, $action, $fields) {
 function qrr_native_cancel($db, $user, $pending) {
     global $conf;
     qrr_native_rights($user);
+    qrr_require_native_visible($db, $pending);
     $id = $pending['id'];
     $receipt = qrr_native_receipt($db, $id);
     if ($receipt !== null && empty($receipt['cancelled'])) {

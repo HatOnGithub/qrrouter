@@ -96,7 +96,8 @@ export class WorkflowComponent implements OnDestroy {
         this.reason = '';
         this.postStock = true;
         this.referenceId = 0;
-        this.referenceType = '';
+        this.referenceType =
+          this.kind() === 'consume' && this.api.context()!.permissions.orders ? 'salesorder' : '';
         if (!this.api.context()!.permissions.stock) this.postStock = false;
         if (code) this.prepare();
       }

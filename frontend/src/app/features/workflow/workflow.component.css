@@ -5,9 +5,9 @@
   gap: 12px 28px;
   padding: 16px;
   margin-bottom: 20px;
-  border: 1px solid color-mix(in srgb, var(--scanner-green) 65%, currentColor);
+  border: 1px solid color-mix(in srgb, var(--qrr-text, currentColor) 25%, transparent);
   border-radius: 5px;
-  background: color-mix(in srgb, var(--scanner-green) 7%, transparent);
+  background: color-mix(in srgb, var(--qrr-text, currentColor) 7%, transparent);
 }
 .scanner-steps {
   display: flex;
@@ -35,12 +35,18 @@
   font-weight: 700;
 }
 .scanner-steps .current b {
-  color: #fff;
-  background: var(--scanner-blue);
-  border-color: var(--scanner-blue);
+  color: var(--qrr-action-text, ButtonText);
+  background: var(--qrr-action-background, ButtonFace);
+  border-color: var(--qrr-action-bg, currentColor);
 }
-.workflow-fields {
-  margin-top: 24px;
+form {
+  display: grid;
+  gap: var(--qrr-control-gap, 16px);
+}
+form > .actions,
+form > .alert,
+form > .muted {
+  margin: 0;
 }
 .number {
   width: 100px;
@@ -48,7 +54,7 @@
 }
 .quantity-control {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 .quantity-control > button {
@@ -65,10 +71,10 @@
   font-size: 0.9em;
 }
 .quantity-difference strong {
-  color: #218c39;
+  color: var(--qrr-success-color, currentColor);
 }
 .quantity-difference.negative strong {
-  color: #c23a35;
+  color: var(--qrr-error-color, currentColor);
 }
 .review-product > td {
   padding-block: 16px;
@@ -86,6 +92,7 @@
   }
   .review-product {
     display: grid;
+    align-items: center;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     padding-block: 14px;
     gap: 14px;
@@ -121,9 +128,6 @@
     flex: 1;
     width: auto;
     min-width: 0;
-  }
-  .workflow-fields {
-    margin-top: 18px;
   }
 }
 

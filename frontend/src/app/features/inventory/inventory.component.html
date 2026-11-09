@@ -1,19 +1,23 @@
 <h1>{{ (loans ? 'Loans' : 'Inventory') | t }}</h1>
 <p class="subtitle">{{ 'Track individual items, generic units and counted containers.' | t }}</p>
-<div class="grid inventory-summary">
-  <qrr-card [title]="'QR labels' | t">
-    <strong>{{ stats().labels }}</strong>
-  </qrr-card>
-  <qrr-card [title]="'Unassigned' | t">
-    <strong>{{ stats().unassigned }}</strong>
-  </qrr-card>
-  <qrr-card [title]="'On loan' | t">
-    <strong>{{ stats().loans }}</strong>
-  </qrr-card>
-  <qrr-card [title]="'Pending operations' | t">
-    <strong>{{ stats().pending }}</strong>
-  </qrr-card>
-</div>
+<dl class="inventory-summary">
+  <div>
+    <dt>{{ 'QR labels' | t }}</dt>
+    <dd>{{ stats().labels }}</dd>
+  </div>
+  <div>
+    <dt>{{ 'Unassigned' | t }}</dt>
+    <dd>{{ stats().unassigned }}</dd>
+  </div>
+  <div>
+    <dt>{{ 'On loan' | t }}</dt>
+    <dd>{{ stats().loans }}</dd>
+  </div>
+  <div>
+    <dt>{{ 'Pending operations' | t }}</dt>
+    <dd>{{ stats().pending }}</dd>
+  </div>
+</dl>
 <qrr-card [title]="(loans ? 'Loaned items' : 'All items') | t">
   <div class="grid no-print">
     <mat-form-field appearance="outline">
@@ -59,21 +63,43 @@
               <small>{{ item.code }} · {{ item.type }}</small>
             </td>
             <td>
-              {{ api.context()!.products[item.product_id]?.ref || '—' }}
-              <small>{{ item.serial }}</small>
+              <qrr-native-link
+                type="product"
+                [id]="item.product_id"
+                [label]="api.context()!.products[item.product_id]?.ref || '—'"
+              />
+              <small>
+                <qrr-native-link type="lot" [id]="item.product_lot_id" [label]="item.serial" />
+              </small>
             </td>
             <td>
-              {{ api.context()!.warehouses[item.warehouse_id]?.ref || '—' }}
+              <qrr-native-link
+                type="warehouse"
+                [id]="item.warehouse_id"
+                [label]="api.context()!.warehouses[item.warehouse_id]?.ref || '—'"
+              />
               <small>{{ item.bin }}</small>
             </td>
             <td>{{ item.qty ?? '?' }}</td>
             <td>
-              <span class="badge">{{ status(item) | t }}</span>
-              @if (item.checkout) {
-                <small>
-                  {{ api.context()!.users[item.checkout.user_id] || item.checkout.user_id }}
-                </small>
-              }
+              <span class="badge inventory-status" [ngClass]="statusClasses[status(item)]">
+                {{ status(item) | t }}
+                @if (item.checkout?.user_id; as borrower) {
+                  ·
+                  <qrr-native-link
+                    type="user"
+                    [id]="borrower"
+                    [label]="api.context()!.users[borrower] || borrower"
+                  />
+                } @else if (status(item) === 'Consumed') {
+                  ·
+                  @if (consumption.reference(consumption.latest(item)); as reference) {
+                    <a [href]="reference.url">{{ reference.ref }}</a>
+                  } @else {
+                    {{ consumption.destination(consumption.latest(item)) }}
+                  }
+                }
+              </span>
             </td>
           </tr>
         } @empty {
@@ -84,7 +110,7 @@
       </tbody>
     </table>
   </div>
-  <div action>
+  <div class="actions" action>
     @if (api.context()!.permissions.manage) {
       <a mat-flat-button routerLink="/create">{{ 'Create QR item' | t }}</a>
       <a mat-stroked-button routerLink="/register">{{ 'Register items' | t }}</a>

@@ -5,7 +5,8 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
 }
 
 function qrr_stock_write_right($user) {
-    return qrr_write_right($user) &&
+    return qrr_inventory_right($user) &&
+        qrr_write_right($user) &&
         (!empty($user->admin) || $user->hasRight('stock', 'mouvement', 'creer'));
 }
 function qrr_native_batch($db, $product, $item, $warehouseId, $qty) {
@@ -26,7 +27,9 @@ function qrr_native_batch($db, $product, $item, $warehouseId, $qty) {
     $sql .= " AND b.batch='" . $db->escape($batch) . "'";
     $r = $db->query($sql);
     if (!$r) {
-        throw new RuntimeException('Cannot check native batch stock: ' . $db->lasterror());
+        throw new RuntimeException(
+            qrr_native_error('Cannot check native batch stock', $db->lasterror()),
+        );
     }
     $obj = $db->fetch_object($r);
     if (!$obj || (float) $obj->qty + 0.00001 < $qty) {
@@ -96,7 +99,7 @@ function qrr_transfer_evidence_complete($e) {
 function qrr_transfer_evidence_none($e) {
     return $e['out'] === 0 && $e['in'] === 0 && $e['extra'] === 0;
 }
-/** Execute the same native Product::correct_stock[_batch] transfer pattern as Dolibarr 21. */
+/** Execute the native Product::correct_stock[_batch] transfer pattern. */
 function qrr_do_native_transfer($db, $user, $item, $pending) {
     if (!qrr_stock_write_right($user)) {
         throw new RuntimeException('Stock movement permission required');
@@ -158,8 +161,10 @@ function qrr_do_native_transfer($db, $user, $item, $pending) {
             );
             if ($r1 < 0) {
                 throw new RuntimeException(
-                    'Native stock decrease failed: ' .
-                        ($product->error ?: implode('; ', (array) $product->errors)),
+                    qrr_native_error(
+                        'Native stock decrease failed',
+                        $product->error ?: implode('; ', (array) $product->errors),
+                    ),
                 );
             }
             $r2 = $product->correct_stock_batch(
@@ -178,16 +183,20 @@ function qrr_do_native_transfer($db, $user, $item, $pending) {
             $r1 = $product->correct_stock($user, $from, $qty, 1, $label, $price, $inventorycode);
             if ($r1 < 0) {
                 throw new RuntimeException(
-                    'Native stock decrease failed: ' .
-                        ($product->error ?: implode('; ', (array) $product->errors)),
+                    qrr_native_error(
+                        'Native stock decrease failed',
+                        $product->error ?: implode('; ', (array) $product->errors),
+                    ),
                 );
             }
             $r2 = $product->correct_stock($user, $to, $qty, 0, $label, $price, $inventorycode);
         }
         if ($r2 < 0) {
             throw new RuntimeException(
-                'Native stock increase failed: ' .
-                    ($product->error ?: implode('; ', (array) $product->errors)),
+                qrr_native_error(
+                    'Native stock increase failed',
+                    $product->error ?: implode('; ', (array) $product->errors),
+                ),
             );
         }
         if (!empty($item['product_lot_id'])) {

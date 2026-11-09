@@ -42,7 +42,8 @@ export class LocationFieldsComponent {
     const request = ++this.sequence;
     this.levels.set([]);
     this.error.set('');
-    if (!wid) return;
+    this.loading.set(false);
+    if (!wid || this.api.context()?.permissions.locations === false) return;
     this.loading.set(true);
     try {
       const levels = await this.api.levels(wid);

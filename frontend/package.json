@@ -15,6 +15,7 @@
     "build:dev": "ng build --configuration development",
     "e2e": "playwright test",
     "e2e:mock": "playwright test --config playwright.mock.config.ts",
+    "typecheck:e2e:mock": "tsc --project dev/e2e/tsconfig.json",
     "format": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --plugin @prettier/plugin-php --write . ../dolibarr/qrrouter ../compose.yaml ../compose.dolibarr.yaml ../.prettierrc.json ../.csharpierrc.json ../dotnet-tools.json",
     "format:check": "prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --plugin @prettier/plugin-php --check . ../dolibarr/qrrouter ../compose.yaml ../compose.dolibarr.yaml ../.prettierrc.json ../.csharpierrc.json ../dotnet-tools.json"
   },

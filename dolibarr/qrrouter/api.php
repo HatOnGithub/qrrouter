@@ -39,6 +39,9 @@ function qrr_api_fields($data, $existing = null) {
             : ($type === 'unassigned'
                 ? 0
                 : 1);
+    if (!qrr_locations_right($user) && (!empty($data['levels']) || !empty($data['keep_legacy']))) {
+        throw new DomainException('Missing Binloc read permission');
+    }
     $choice = qrr_binloc_choice(
         $db,
         $wid,
@@ -46,6 +49,9 @@ function qrr_api_fields($data, $existing = null) {
         $existing,
         !empty($data['keep_legacy']),
     );
+    if (!qrr_locations_right($user) && $existing && $wid === (int) $existing['warehouse_id']) {
+        $choice = array_intersect_key($existing, array_flip(['bin', 'bin_key', 'bin_values']));
+    }
     $label = trim(strip_tags((string) ($data['label'] ?? '')));
     $serial = trim(strip_tags((string) ($data['serial'] ?? '')));
     if ($type === 'tracked' && $serial === '') {
@@ -105,22 +111,30 @@ function qrr_api_translations() {
 function qrr_api_get($resource) {
     global $db, $user, $langs;
     if ($resource === 'bootstrap') {
-        $state = qrr_load_state();
-        $products = qrr_products_index($db, array_column($state['items'], 'product_id'));
+        $inventory = qrr_browser_inventory($db);
+        $state = $inventory['state'];
         foreach (['items', 'batches', 'personal_warehouses', 'binloc_label_settings'] as $map) {
             $state[$map] = (object) ($state[$map] ?? []);
         }
         return [
             'state' => $state,
+            'consumption_references' => (object) $inventory['consumption_references'],
             'label_formats' => qrr_label_profiles(),
-            'warehouses' => (object) qrr_warehouses($db),
-            'users' => (object) (qrr_write_right($user) ? qrr_personal_users($db) : []),
-            'products' => (object) $products,
+            'warehouses' => (object) $inventory['warehouses'],
+            'users' => (object) $inventory['users'],
+            'products' => (object) $inventory['products'],
             'permissions' => [
                 'manage' => qrr_write_right($user),
                 'stock' => qrr_stock_write_right($user),
                 'admin' => !empty($user->admin),
                 'orders' => qrr_orders_right($user),
+                'locations' => qrr_locations_right($user),
+                'users' => qrr_users_read_all($user),
+                'references' => [
+                    'salesorder' => qrr_reference_right($user, 'salesorder'),
+                    'production' => qrr_reference_right($user, 'production'),
+                    'shipment' => qrr_reference_right($user, 'shipment'),
+                ],
             ],
             'csrf' => qrr_token(),
             'token' => newToken(),
@@ -151,6 +165,7 @@ function qrr_api_get($resource) {
         return ['exists' => $exists, 'associated' => $associated];
     }
     if ($resource === 'levels') {
+        qrr_api_permit(qrr_locations_right($user));
         $wid = (int) GETPOST('warehouse_id', 'int');
         $warehouses = qrr_warehouses($db);
         if (!isset($warehouses[$wid])) {
@@ -216,14 +231,7 @@ function qrr_api_get($resource) {
         qrr_api_permit(qrr_write_right($user));
         $type = (string) GETPOST('type', 'alphanohtml');
         $schema = qrr_reference_schema($type);
-        qrr_api_permit(
-            !empty($user->admin) ||
-                ($type === 'salesorder'
-                    ? qrr_orders_right($user)
-                    : ($type === 'production'
-                        ? $user->hasRight('mrp', 'read')
-                        : $user->hasRight('expedition', 'lire'))),
-        );
+        qrr_api_permit(qrr_reference_right($user, $type));
         $sql =
             'SELECT rowid,ref FROM ' .
             MAIN_DB_PREFIX .
@@ -235,13 +243,14 @@ function qrr_api_get($resource) {
         }
         $sql .= ' ORDER BY rowid DESC LIMIT 100';
     } elseif ($resource === 'locations') {
+        qrr_api_permit(qrr_locations_right($user));
         $wid = (int) GETPOST('warehouse_id', 'int');
         $warehouses = qrr_warehouses($db);
         if (!isset($warehouses[$wid])) {
             throw new InvalidArgumentException('Unknown warehouse');
         }
         $bin = (string) GETPOST('bin', 'alphanohtml');
-        $state = qrr_load_state();
+        $state = qrr_browser_inventory($db)['state'];
         $products = qrr_products_index($db, array_column($state['items'], 'product_id'));
         return [
             'bins' => qrr_known_bins($state['items'], $wid),
@@ -257,7 +266,7 @@ function qrr_api_get($resource) {
             throw new InvalidArgumentException('Unknown warehouse');
         }
         $order = qrr_order_lines($db, (int) GETPOST('order_id', 'int'));
-        $state = qrr_load_state();
+        $state = qrr_browser_inventory($db)['state'];
         $products = qrr_products_index($db, array_column($order['lines'], 'product_id'));
         return qrr_pick_proposal($order['lines'], $state['items'], $wid, $products);
     } else {
@@ -269,6 +278,16 @@ function qrr_api_get($resource) {
     }
     $out = [];
     while ($row = $db->fetch_object($rs)) {
+        if (
+            ($resource === 'orders' || $resource === 'references') &&
+            !qrr_reference_visible(
+                $user,
+                $resource === 'orders' ? 'salesorder' : $type,
+                (int) $row->rowid,
+            )
+        ) {
+            continue;
+        }
         $out[] = [
             'id' => (int) $row->rowid,
             'text' =>
@@ -306,6 +325,7 @@ function qrr_api_post($action, $data) {
         $existing = null;
         if ($action === 'update') {
             $existing = qrr_load_state()['items'][$code] ?? null;
+            qrr_require_item_visible($db, $existing);
         }
         $fields = qrr_api_fields($data, $existing);
         if ($action === 'update') {
@@ -316,6 +336,10 @@ function qrr_api_post($action, $data) {
         }
         if ($action === 'register') {
             $codes = qrr_workflow_codes($data['codes'] ?? []);
+            $current = qrr_load_state()['items'];
+            foreach ($codes as $selected) {
+                qrr_require_item_visible($db, $current[$selected] ?? null);
+            }
             $posted = [
                 'label' => $fields['label'],
                 'product_id' => $fields['product_id'],
@@ -359,6 +383,7 @@ function qrr_api_post($action, $data) {
             'reason' => (string) ($data['reason'] ?? ''),
         ];
         $item = qrr_load_state()['items'][$fields['code']] ?? null;
+        qrr_require_item_visible($db, $item);
         return !empty($item['product_lot_id'])
             ? qrr_native_command($db, $user, 'count', $fields)
             : qrr_command('count', $fields);
@@ -369,6 +394,9 @@ function qrr_api_post($action, $data) {
             'to' => qrr_input_code($data['to'] ?? ''),
             'quantity' => qrr_api_int($data, 'quantity'),
         ];
+        $current = qrr_load_state()['items'];
+        qrr_require_item_visible($db, $current[$fields['from']] ?? null);
+        qrr_require_item_visible($db, $current[$fields['to']] ?? null);
         return qrr_native_command($db, $user, 'box-transfer', $fields);
     }
     if ($action === 'mapping') {
@@ -381,6 +409,7 @@ function qrr_api_post($action, $data) {
         ]);
     }
     if ($action === 'label-settings') {
+        qrr_api_permit(qrr_locations_right($user));
         $wid = qrr_api_int($data, 'warehouse_id');
         $warehouses = qrr_warehouses($db);
         if (!isset($warehouses[$wid])) {
@@ -400,6 +429,7 @@ function qrr_api_post($action, $data) {
         qrr_api_permit(qrr_stock_write_right($user));
         $code = qrr_input_code($data['code'] ?? '');
         $entry = qrr_load_state()['items'][$code] ?? [];
+        qrr_require_item_visible($db, $entry);
         if (!empty($entry['pending_handoff'])) {
             return qrr_reconcile_handoff($db, $user, $code, $entry['pending_handoff']);
         }
@@ -424,6 +454,9 @@ function qrr_api_post($action, $data) {
     }
     $person = qrr_api_int($data, 'person_id');
     $wid = qrr_api_int($data, 'warehouse_id');
+    if (!qrr_locations_right($user) && !empty($data['levels'])) {
+        throw new DomainException('Missing Binloc read permission');
+    }
     $choice = qrr_binloc_choice($db, $wid, $data['levels'] ?? []);
     $ref = (string) ($data['reference_type'] ?? '');
     $refId = qrr_api_int($data, 'reference_id');
@@ -442,6 +475,7 @@ function qrr_api_post($action, $data) {
             if (!$item) {
                 throw new RuntimeException('Unknown QR label');
             }
+            qrr_require_item_visible($db, $item);
             if ($kind === 'checkout' || $kind === 'checkin') {
                 qrr_api_permit(qrr_stock_write_right($user));
                 $borrower =
@@ -480,13 +514,13 @@ function qrr_api_post($action, $data) {
             }
             $results[] = ['code' => $code, 'ok' => true, 'message' => 'Completed'];
         } catch (Throwable $e) {
-            $results[] = ['code' => $code, 'ok' => false, 'message' => $e->getMessage()];
+            $results[] = ['code' => $code, 'ok' => false, 'message' => qrr_public_error($e)];
         }
     }
     return $results;
 }
 try {
-    qrr_api_permit(qrr_read_right($user) && qrr_products_right($user));
+    qrr_api_permit(qrr_inventory_right($user));
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $response = qrr_api_get((string) GETPOST('resource', 'alphanohtml'));
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -516,5 +550,5 @@ try {
                     : 409),
         );
     }
-    echo json_encode(['message' => $e->getMessage()], JSON_HEX_TAG | JSON_HEX_AMP);
+    echo json_encode(['message' => qrr_public_error($e)], JSON_HEX_TAG | JSON_HEX_AMP);
 }

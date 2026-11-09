@@ -9,6 +9,8 @@ public sealed class ApiKeyMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, IOptions<AppSettings> options)
     {
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.XContentTypeOptions = "nosniff";
         if (context.Request.Path == "/health")
         {
             await next(context);

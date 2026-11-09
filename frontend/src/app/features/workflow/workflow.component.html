@@ -73,7 +73,7 @@
         </button>
       </qrr-card>
     } @else if (!review()) {
-      <qrr-card [title]="'Scan items' | t">
+      <qrr-card class="capture-card" [title]="'Scan items' | t">
         <qrr-capture [initial]="codes()" (changed)="codes.set($event)" />
         <button
           action
@@ -116,7 +116,14 @@
                     <td [attr.data-label]="'Item / QR' | t">
                       <strong>{{ row.item?.label || row.code }}</strong>
                       @if (row.item?.native_batch) {
-                        <small>{{ 'Dolibarr lot/serial' | t }}: {{ row.item.native_batch }}</small>
+                        <small>
+                          {{ 'Dolibarr lot/serial' | t }}:
+                          <qrr-native-link
+                            type="lot"
+                            [id]="row.item.product_lot_id"
+                            [label]="row.item.native_batch"
+                          />
+                        </small>
                       }
                       <small>
                         {{ row.code }}
@@ -129,7 +136,11 @@
                       }
                     </td>
                     <td [attr.data-label]="'Location' | t">
-                      {{ api.context()!.warehouses[row.item?.warehouse_id || 0]?.ref || '—' }}
+                      <qrr-native-link
+                        type="warehouse"
+                        [id]="row.item?.warehouse_id"
+                        [label]="api.context()!.warehouses[row.item?.warehouse_id || 0]?.ref || '—'"
+                      />
                       <small>{{ row.item?.bin }}</small>
                     </td>
                     <td [attr.data-label]="'Available quantity' | t">
@@ -252,10 +263,16 @@
                   [(ngModel)]="referenceType"
                   (ngModelChange)="referenceId = 0"
                 >
+                  @if (api.context()!.permissions.orders) {
+                    <mat-option value="salesorder">{{ 'Customer order' | t }}</mat-option>
+                  }
+                  @if (api.context()!.permissions.references?.production) {
+                    <mat-option value="production">{{ 'Manufacturing order' | t }}</mat-option>
+                  }
+                  @if (api.context()!.permissions.references?.shipment) {
+                    <mat-option value="shipment">{{ 'Shipment' | t }}</mat-option>
+                  }
                   <mat-option value="">{{ 'None' | t }}</mat-option>
-                  <mat-option value="shipment">{{ 'Shipment' | t }}</mat-option>
-                  <mat-option value="production">{{ 'Manufacturing order' | t }}</mat-option>
-                  <mat-option value="salesorder">{{ 'Sales order' | t }}</mat-option>
                 </mat-select>
               </mat-form-field>
               @if (referenceType) {

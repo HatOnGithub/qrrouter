@@ -8,6 +8,7 @@ import { ScannerComponent } from './scanner.component';
   selector: 'qrr-capture',
   standalone: true,
   imports: [ScannerComponent],
+  styleUrl: './capture.component.css',
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <qrr-scanner

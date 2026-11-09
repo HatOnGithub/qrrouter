@@ -38,7 +38,15 @@
       </button>
     </div>
     @if (rows().length) {
-      <h2>{{ orderName }} · {{ api.context()!.warehouses[warehouse]?.ref }}</h2>
+      <h2>
+        <qrr-native-link type="salesorder" [id]="order" [label]="orderName" />
+        ·
+        <qrr-native-link
+          type="warehouse"
+          [id]="warehouse"
+          [label]="api.context()!.warehouses[warehouse]?.ref"
+        />
+      </h2>
       <table>
         <thead>
           <tr>
@@ -54,9 +62,15 @@
             <tr>
               <td><fa-icon [icon]="icons.unchecked" aria-hidden="true" /></td>
               <td>{{ row.bin }}</td>
-              <td>{{ row.product.ref }}</td>
               <td>
-                {{ row.label || row.code }}
+                <qrr-native-link
+                  type="product"
+                  [id]="api.context()!.state.items[row.code]?.product_id"
+                  [label]="row.product.ref"
+                />
+              </td>
+              <td>
+                <a [routerLink]="['/items', row.code]">{{ row.label || row.code }}</a>
                 <small>{{ row.code }}</small>
               </td>
               <td>{{ row.take }}</td>

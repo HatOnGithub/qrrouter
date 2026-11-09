@@ -298,6 +298,20 @@ try
         "Checkin restores original bin"
     );
     var unknownBox = Cmd("create", Fields("box", null))!.GetValue<string>();
+    if (!OperatingSystem.IsWindows())
+    {
+        var entityDirectory = Path.Combine(directory, "entity-1");
+        Check(
+            File.GetUnixFileMode(entityDirectory)
+                == (UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute),
+            "Entity directories are owner-only"
+        );
+        Check(
+            File.GetUnixFileMode(Path.Combine(entityDirectory, "state.json"))
+                == (UnixFileMode.UserRead | UnixFileMode.UserWrite),
+            "Persisted inventory is owner-only"
+        );
+    }
     var summary = (JsonObject)
         service.Execute(
             admin with
@@ -321,6 +335,22 @@ try
     );
     var bins = (JsonArray)Cmd("query-known-bins", Object(("warehouse_id", 1)))!;
     Check(bins.Count == 1 && bins[0]!.GetValue<string>() == "A-2", "Known bin deduplication");
+    var restrictedSummary = (JsonObject)
+        Cmd(
+            "query-bin-summary",
+            Object(("warehouse_id", 1), ("bin", "A-2"), ("visible_codes", Array.Empty<string>()))
+        )!;
+    Check(
+        ((JsonArray)restrictedSummary["tracked"]!).Count == 0
+            && ((JsonArray)restrictedSummary["totals"]!).Count == 0,
+        "Read models cannot reintroduce items excluded by the native adapter"
+    );
+    var restrictedBins = (JsonArray)
+        Cmd(
+            "query-known-bins",
+            Object(("warehouse_id", 1), ("visible_codes", Array.Empty<string>()))
+        )!;
+    Check(restrictedBins.Count == 0, "Known bins respect native object visibility");
     var pick = (JsonArray)
         Cmd(
             "query-pick",

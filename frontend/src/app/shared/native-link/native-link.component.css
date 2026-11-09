@@ -1,0 +1,8 @@
+:host {
+  display: inline;
+}
+:host-context(.inventory-status) a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

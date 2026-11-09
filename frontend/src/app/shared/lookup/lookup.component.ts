@@ -1,4 +1,13 @@
-import { Component, input, output, signal, inject, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  input,
+  output,
+  signal,
+  inject,
+  ChangeDetectionStrategy,
+  OnChanges,
+  SimpleChanges,
+} from '@angular/core';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { Lookup } from '@core/models/inventory';
@@ -13,7 +22,7 @@ import { faXmark } from '@fortawesome/free-solid-svg-icons';
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lookup.component.css',
 })
-export class LookupComponent {
+export class LookupComponent implements OnChanges {
   protected readonly clearIcon = faXmark;
   private api = inject(InventoryService);
   readonly resource = input('products');
@@ -24,9 +33,16 @@ export class LookupComponent {
   readonly rows = signal<Lookup[]>([]);
   readonly loading = signal(false);
   readonly selectedText = signal('');
+  protected selectedId = signal(0);
   readonly error = signal('');
   protected query = '';
   private sequence = 0;
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (['resource', 'type'].some(key => changes[key] && !changes[key].firstChange)) {
+      this.clear();
+    }
+  }
 
   protected browse(): void {
     // Material restores input focus after selection; keep that selection intact.
@@ -36,6 +52,7 @@ export class LookupComponent {
   async search(query: string): Promise<void> {
     this.query = query;
     this.selectedText.set('');
+    this.selectedId.set(0);
     this.selected.emit(null);
     const request = ++this.sequence;
     this.rows.set([]);
@@ -55,6 +72,7 @@ export class LookupComponent {
     ++this.sequence;
     this.query = row.text;
     this.selectedText.set(row.text);
+    this.selectedId.set(row.id);
     this.selected.emit(row);
   }
 
@@ -62,10 +80,17 @@ export class LookupComponent {
     return typeof value === 'string' ? value : value?.text || '';
   }
 
+  protected objectType(): string {
+    if (this.resource() === 'products') return 'product';
+    if (this.resource() === 'orders') return 'salesorder';
+    return this.resource() === 'references' ? this.type() : '';
+  }
+
   clear(): void {
     ++this.sequence;
     this.query = '';
     this.selectedText.set('');
+    this.selectedId.set(0);
     this.selected.emit(null);
     this.rows.set([]);
     this.loading.set(false);

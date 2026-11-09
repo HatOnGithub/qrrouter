@@ -14,6 +14,8 @@ h2 {
   border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
 }
 section {
+  display: grid;
+  gap: var(--qrr-control-gap, 16px);
   min-width: 0;
   overflow: auto;
   padding-top: 8px;
@@ -22,7 +24,7 @@ footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-top: 12px;
 }
 footer:empty {
@@ -40,13 +42,37 @@ footer > div {
   border: 0;
 }
 :host-context(.scanner-page) h2 {
-  color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+  color: var(--qrr-text, inherit);
   border: 0;
   padding: 0 0 4px;
   font-size: 1.1em;
 }
 :host-context(.scanner-page) footer {
   display: block;
+}
+:host(.capture-card) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+:host(.capture-card) article {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0;
+}
+:host(.capture-card) section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: visible;
+}
+:host(.capture-card) h2,
+:host(.capture-card) footer {
+  flex-shrink: 0;
 }
 @media (max-width: 700px) {
   :host-context(.scanner-page) article {

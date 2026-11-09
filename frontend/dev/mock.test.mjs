@@ -39,6 +39,7 @@ test('bootstrap matches the current frontend contract and contains valid sample 
   const bootstrap = await read('bootstrap');
   assert.ok(bootstrap.label_formats.some(format => format.id === 'dymo-25x54'));
   assert.ok(bootstrap.permissions.admin);
+  assert.equal(bootstrap.consumption_references['production:19'].ref, 'MO-0019');
   assert.ok(Object.values(bootstrap.state.items).some(item => item.product_lot_id));
   assert.ok(Object.values(bootstrap.state.items).some(item => item.qty === null));
   assert.ok(Object.values(bootstrap.state.items).every(item => validCode(item.code)));
@@ -172,6 +173,26 @@ test('bad tokens, malformed requests and unsupported endpoints fail without muta
   assert.equal(malformed.status, 400);
   assert.equal((await fetch(base + '/not-a-real-api')).status, 404);
   assert.equal((await read('bootstrap')).state.revision, 0);
+});
+
+test('camera controls list current fixtures and generate bounded custom QR payloads', async () => {
+  const catalog = await (await fetch(base + '/__mock/camera/items')).json();
+  assert.ok(catalog.items.some(item => item.label === 'Workshop drill' && validCode(item.code)));
+  const text = 'https://example.test/custom/qrrouter/scan.php?code=' + catalog.items[0].code;
+  const response = await fetch(base + '/__mock/camera/qr?' + new URLSearchParams({ text }));
+  assert.equal(response.status, 200);
+  assert.ok(response.headers.get('content-type').startsWith('image/svg+xml'));
+  assert.ok((await response.text()).includes('<svg'));
+  for (const text of ['', 'x'.repeat(1025), 'é'.repeat(513)]) {
+    assert.equal(
+      (await fetch(base + '/__mock/camera/qr?' + new URLSearchParams({ text }))).status,
+      400
+    );
+  }
+  store.reset({ scenario: 'unavailable' });
+  assert.ok((await (await fetch(base + '/__mock/camera/items')).json()).items.length);
+  store.reset({ scenario: 'empty' });
+  assert.deepEqual((await (await fetch(base + '/__mock/camera/items')).json()).items, []);
 });
 
 test('QR images and printable previews stay local and escape labels', async () => {

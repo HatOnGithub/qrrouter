@@ -5,8 +5,8 @@
 }
 @if (api.context()!.permissions.manage) {
   <qrr-card [title]="'Create printable batch' | t">
-    <form (ngSubmit)="create()" #form="ngForm">
-      <mat-form-field class="number" appearance="outline">
+    <form class="batch-form" (ngSubmit)="create()" #form="ngForm">
+      <mat-form-field class="number" appearance="outline" subscriptSizing="dynamic">
         <mat-label>{{ 'Number of QR codes (1–200)' | t }}</mat-label>
         <input
           matInput

@@ -59,7 +59,10 @@
       {{ 'Warehouse operations' | t }}
     </a>
     @if (!reviewing()) {
-      <qrr-card [title]="(inputMode() === 'manual' ? 'Manual / USB entry' : 'QR camera') | t">
+      <qrr-card
+        class="capture-card"
+        [title]="(inputMode() === 'manual' ? 'Manual / USB entry' : 'QR camera') | t"
+      >
         <qrr-capture
           [initial]="codes()"
           [multiple]="true"
@@ -112,18 +115,35 @@
             @if (api.context()!.state.items[code]; as item) {
               <div class="product-identity">
                 <strong>{{ item.label || code }}</strong>
-                <span>{{ api.context()!.products[item.product_id]?.ref || code }}</span>
+                <span>
+                  <qrr-native-link
+                    type="product"
+                    [id]="item.product_id"
+                    [label]="api.context()!.products[item.product_id]?.ref || code"
+                  />
+                </span>
                 <small>{{ 'QR' | t }} {{ code }}</small>
               </div>
               <dl class="scan-product-facts">
                 <div>
                   <dt>{{ 'Dolibarr lot/serial' | t }}</dt>
-                  <dd>{{ item.native_batch || '—' }}</dd>
+                  <dd>
+                    <qrr-native-link
+                      type="lot"
+                      [id]="item.product_lot_id"
+                      [label]="item.native_batch || '—'"
+                    />
+                  </dd>
                 </div>
                 <div>
                   <dt>{{ 'Location' | t }}</dt>
                   <dd>
-                    {{ api.context()!.warehouses[item.warehouse_id]?.ref || '—' }} {{ item.bin }}
+                    <qrr-native-link
+                      type="warehouse"
+                      [id]="item.warehouse_id"
+                      [label]="api.context()!.warehouses[item.warehouse_id]?.ref || '—'"
+                    />
+                    {{ item.bin }}
                   </dd>
                 </div>
                 <div>

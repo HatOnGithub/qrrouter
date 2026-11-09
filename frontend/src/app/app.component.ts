@@ -90,6 +90,7 @@ export class AppComponent {
     const p = this.inventory.context()?.permissions;
     if (path === '/people') return !!p?.admin;
     if (path === '/picking') return !!p?.orders;
+    if (path === '/locations') return p?.locations !== false;
     if (['/inventory', '/scan', '/locations', '/loans'].includes(path)) return true;
     if (path.includes('checkout') || path.includes('checkin')) return !!p?.stock;
     return !!p?.manage;

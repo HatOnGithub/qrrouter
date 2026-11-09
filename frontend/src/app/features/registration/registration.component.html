@@ -1,7 +1,7 @@
 <section class="scanner-page">
   <h1>{{ 'Register items' | t }}</h1>
   @if (api.context()!.permissions.manage) {
-    <qrr-card [title]="'Select labels' | t">
+    <qrr-card class="capture-card" [title]="'Select labels' | t">
       <qrr-capture
         [initial]="codes()"
         (changed)="codes.set($event); thumbnail = ''"

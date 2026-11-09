@@ -1,18 +1,25 @@
 :host {
-  display: block;
-  --scanner-blue: #0754ae;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 .scanner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   min-width: 0;
 }
 .scanner-status {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: color-mix(in srgb, var(--scanner-blue) 6%, transparent);
+  background: color-mix(in srgb, var(--qrr-text, currentColor) 6%, transparent);
   border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   font-size: 0.9em;
 }
@@ -26,7 +33,7 @@
   opacity: 0.5;
 }
 .camera-state.live .camera-state-icon {
-  color: #239b42;
+  color: var(--qrr-success-color, currentColor);
   opacity: 1;
 }
 .scan-count {
@@ -35,33 +42,60 @@
 }
 .scanner-workspace {
   display: grid;
+  flex-shrink: 0;
   min-width: 0;
 }
-.scanner-workspace.camera-active {
+.scanner-workspace.camera-mode {
+  flex: 1;
+  min-height: 72px;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(72px, 1fr);
 }
 .camera-preview {
   position: relative;
-  min-height: 235px;
-  background: #111820;
+  min-height: 72px;
+  container-type: size;
+  background: var(--qrr-surface, Canvas);
   overflow: hidden;
 }
-.camera-preview[hidden] {
+.camera-preview[hidden],
+video[hidden] {
   display: none;
 }
 video {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  max-height: 320px;
-  object-fit: contain;
+  object-fit: cover;
+  object-position: center;
+}
+.camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+  color: var(--qrr-text, currentColor);
+  background: color-mix(in srgb, var(--qrr-text, currentColor) 6%, var(--qrr-surface, Canvas));
+}
+.camera-placeholder fa-icon {
+  font-size: 2em;
+  opacity: 0.55;
 }
 .viewfinder {
   position: absolute;
-  top: 15%;
-  left: 25%;
-  width: 50%;
-  height: 60%;
+  top: calc(50% - 18px);
+  left: 50%;
+  width: min(70cqw, calc(100cqh - 52px), 240px);
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
   border: 2px solid #fff;
   border-radius: 8px;
   pointer-events: none;
@@ -77,6 +111,23 @@ video {
   color: #fff;
   font-size: 0.85em;
 }
+@container (max-height: 120px) {
+  .camera-placeholder {
+    flex-direction: row;
+    gap: 8px;
+    padding: 8px;
+  }
+  .camera-placeholder fa-icon {
+    font-size: 1.2em;
+  }
+  .viewfinder {
+    top: 50%;
+    width: min(70cqw, calc(100cqh - 16px), 240px);
+  }
+  .camera-caption {
+    display: none;
+  }
+}
 .scanner-entry {
   min-width: 0;
   padding: 20px;
@@ -84,7 +135,7 @@ video {
 h3 {
   font-size: 1.05em;
   margin: 0 0 8px;
-  color: color-mix(in srgb, var(--scanner-blue) 80%, currentColor);
+  color: var(--qrr-text, inherit);
 }
 .entry-hint {
   margin: 0 0 18px;
@@ -99,22 +150,25 @@ textarea {
   width: 100%;
   min-height: 48px;
   margin-top: 14px;
-  background: var(--scanner-blue);
-  color: #fff;
-  --mat-button-filled-container-color: var(--scanner-blue);
-  --mat-button-filled-label-text-color: #fff;
+  background: var(--qrr-action-background, ButtonFace);
+  color: var(--qrr-action-text, ButtonText);
+  --mat-button-filled-container-color: var(--qrr-action-bg, ButtonFace);
+  --mat-button-filled-label-text-color: var(--qrr-action-text, ButtonText);
 }
 .camera-actions {
   display: flex;
+  flex-shrink: 0;
   flex-wrap: wrap;
   gap: 8px;
   padding: 0 16px 14px;
+  margin-top: auto;
 }
 .camera-actions button {
   min-height: 44px;
 }
 .codes {
   display: flex;
+  flex-shrink: 0;
   flex-wrap: wrap;
   gap: 8px;
   padding: 0 16px;
@@ -129,18 +183,12 @@ textarea {
   font-family: ui-monospace, monospace;
 }
 .alert {
+  flex-shrink: 0;
   margin: 0 16px 16px;
 }
 @media (max-width: 700px) {
-  .scanner-workspace.camera-active {
+  .scanner-workspace.camera-mode {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .camera-preview {
-    min-height: 0;
-    height: clamp(72px, calc(var(--qrr-available-height, 100dvh) - 390px), 230px);
-  }
-  video {
-    max-height: 230px;
   }
   .scanner-entry {
     padding: 10px 0;

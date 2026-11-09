@@ -127,6 +127,28 @@ export function createMockServer(store = new MockStore()) {
         send(response, 200, { mock: true, ready: true });
         return;
       }
+      if (url.pathname === '/__mock/camera/items' && method === 'GET') {
+        send(response, 200, {
+          items: Object.values(store.data.state.items).map(({ code, label, type }) => ({
+            code,
+            label,
+            type,
+          })),
+        });
+        return;
+      }
+      if (url.pathname === '/__mock/camera/qr' && method === 'GET') {
+        const text = url.searchParams.get('text') || '';
+        if (!text.trim() || Buffer.byteLength(text, 'utf8') > 1024)
+          throw new MockError('QR content must contain between 1 and 1024 UTF-8 bytes.');
+        send(
+          response,
+          200,
+          await QRCode.toString(text, { type: 'svg', margin: 4, width: 512 }),
+          'image/svg+xml'
+        );
+        return;
+      }
       if (url.pathname === '/__mock/print.css' && method === 'GET') {
         send(response, 200, printCss, 'text/css; charset=utf-8');
         return;
@@ -205,6 +227,50 @@ export function createMockServer(store = new MockStore()) {
       if (method === 'GET' && url.pathname === '/custom/qrrouter/index.php') {
         response.writeHead(302, { Location: appLink() });
         response.end();
+        return;
+      }
+      const referenceType = {
+        '/mrp/mo_card.php': 'production',
+        '/expedition/card.php': 'shipment',
+        '/commande/card.php': 'salesorder',
+      }[url.pathname];
+      if (method === 'GET' && referenceType) {
+        const record = store.data.references[referenceType]?.find(
+          row => row.id === Number(url.searchParams.get('id'))
+        );
+        if (!record || (!store.permissions().manage && referenceType !== 'salesorder'))
+          throw new MockError('Native reference inaccessible', 404);
+        send(
+          response,
+          200,
+          page(record.text, '<p>Native Dolibarr reference preview in the local mock.</p>'),
+          'text/html; charset=utf-8'
+        );
+        return;
+      }
+      if (
+        method === 'GET' &&
+        [
+          '/user/card.php',
+          '/product/stock/card.php',
+          '/product/stock/productlot_card.php',
+        ].includes(url.pathname)
+      ) {
+        const id = Number(url.searchParams.get('id'));
+        const title =
+          url.pathname === '/user/card.php'
+            ? store.data.users[id]
+            : url.pathname === '/product/stock/card.php'
+              ? store.data.warehouses[id]?.ref
+              : Object.values(store.data.state.items).find(item => item.product_lot_id === id)
+                  ?.native_batch;
+        if (!title) throw new MockError('Native object not found', 404);
+        send(
+          response,
+          200,
+          page(title, '<p>Native Dolibarr object preview in the local mock.</p>'),
+          'text/html; charset=utf-8'
+        );
         return;
       }
       throw new MockError('Unknown mock endpoint', 404);

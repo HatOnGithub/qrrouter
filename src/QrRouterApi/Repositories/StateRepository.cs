@@ -27,16 +27,35 @@ public sealed class StateRepository(IOptions<AppSettings> settings) : IStateRepo
         Json.Require(entity > 0, "Invalid entity");
         var path = Path.Combine(directory, $"entity-{entity}");
         Directory.CreateDirectory(path);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(
+                path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+            );
         for (var retry = 0; ; retry++)
         {
             try
             {
-                return new FileStream(
+                var stream = new FileStream(
                     Path.Combine(path, "state.lock"),
                     FileMode.OpenOrCreate,
                     FileAccess.ReadWrite,
                     FileShare.None
                 );
+                try
+                {
+                    if (!OperatingSystem.IsWindows())
+                        File.SetUnixFileMode(
+                            Path.Combine(path, "state.lock"),
+                            UnixFileMode.UserRead | UnixFileMode.UserWrite
+                        );
+                    return stream;
+                }
+                catch
+                {
+                    stream.Dispose();
+                    throw;
+                }
             }
             catch (IOException) when (retry < 200)
             {
@@ -59,6 +78,8 @@ public sealed class StateRepository(IOptions<AppSettings> settings) : IStateRepo
                 ["personal_warehouses"] = new JsonObject(),
                 ["batches"] = new JsonObject(),
             };
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(PathFor(entity), UnixFileMode.UserRead | UnixFileMode.UserWrite);
         var state =
             JsonNode.Parse(File.ReadAllText(PathFor(entity))) as JsonObject
             ?? throw new InvalidDataException("Invalid inventory state");
@@ -123,6 +144,8 @@ public sealed class StateRepository(IOptions<AppSettings> settings) : IStateRepo
                 )
             )
             {
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 JsonSerializer.Serialize(stream, state, Options);
                 stream.Flush(true);
             }

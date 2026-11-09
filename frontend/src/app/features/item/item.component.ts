@@ -3,6 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { available } from '@core/models/inventory';
+import { ConsumptionService } from '@services/consumption.service';
 import {
   faArrowRightFromBracket,
   faArrowRightToBracket,
@@ -44,6 +45,7 @@ export class ItemComponent {
     transfer: faRightLeft,
   };
   protected api = inject(InventoryService);
+  protected consumption = inject(ConsumptionService);
   private route = inject(ActivatedRoute);
   protected code = signal(this.route.snapshot.paramMap.get('code') || '');
   protected item = computed(() => this.api.context()?.state.items[this.code()]);

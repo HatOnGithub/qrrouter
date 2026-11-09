@@ -8,7 +8,7 @@ if (!$res) {
     http_response_code(503);
     exit('Dolibarr bootstrap unavailable');
 }
-if (empty($user->admin)) {
+if (empty($user->admin) || empty($user->id) || !empty($user->socid)) {
     accessforbidden();
 }
 require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $url = (string) GETPOST('service_url', 'alphanohtml');
     // Read the password without HTML filtering: it is never rendered or logged.
     $key = (string) GETPOST('service_api_key', 'none');
+    $preserveKey = $key === '';
     if ($key === '') {
         $key = (string) ($conf->global->QRR_SERVICE_API_KEY ?? '');
     }
@@ -35,6 +36,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $settings = qrr_validate_service_settings($url, $key);
         $previousUrl = $conf->global->QRR_SERVICE_URL ?? '';
         $previousKey = $conf->global->QRR_SERVICE_API_KEY ?? '';
+        if ($preserveKey && $settings['url'] !== rtrim(trim((string) $previousUrl), '/')) {
+            throw new InvalidArgumentException(
+                'Re-enter the service API key when changing the service URL.',
+            );
+        }
         $db->begin();
         // Constants ending in _KEY receive Dolibarr's native secret encryption.
         if (
@@ -116,7 +122,7 @@ qrr_page_header('QR Router setup');
                     <p class="opacitymedium"><?php print qrr_h(
                         qrr_t(
                             $hasKey
-                                ? 'An API key is saved. Leave this field empty to keep it.'
+                                ? 'An API key is saved. Leave this field empty to keep it when the service URL is unchanged.'
                                 : 'Enter the same API key configured on the business service.',
                         ),
                     ); ?></p>
