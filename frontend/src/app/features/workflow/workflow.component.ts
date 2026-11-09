@@ -1,7 +1,7 @@
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
-import { ScannerComponent } from '@shared/scanner/scanner.component';
+import { CaptureComponent } from '@shared/scanner/capture.component';
 import { LookupComponent } from '@shared/lookup/lookup.component';
 import { LocationFieldsComponent } from '@shared/location-fields/location-fields.component';
 import { InventoryService } from '@services/inventory.service';
@@ -11,7 +11,7 @@ import { Subscription, combineLatest } from 'rxjs';
 @Component({
   selector: 'qrr-workflow',
   standalone: true,
-  imports: [SharedModule, ScannerComponent, LookupComponent, LocationFieldsComponent],
+  imports: [SharedModule, CaptureComponent, LookupComponent, LocationFieldsComponent],
   templateUrl: './workflow.component.html',
   styleUrl: './workflow.component.css',
 })

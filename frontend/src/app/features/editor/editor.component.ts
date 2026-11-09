@@ -1,7 +1,6 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
-import { ScannerComponent } from '@shared/scanner/scanner.component';
 import { LookupComponent } from '@shared/lookup/lookup.component';
 import { LocationFieldsComponent } from '@shared/location-fields/location-fields.component';
 import { InventoryService } from '@services/inventory.service';
@@ -10,7 +9,7 @@ import { ItemType } from '@core/models/inventory';
 @Component({
   selector: 'qrr-editor',
   standalone: true,
-  imports: [SharedModule, ScannerComponent, LookupComponent, LocationFieldsComponent],
+  imports: [SharedModule, LookupComponent, LocationFieldsComponent],
   templateUrl: './editor.component.html',
   styleUrl: './editor.component.css',
 })
@@ -19,17 +18,22 @@ export class EditorComponent {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   protected editing = this.route.snapshot.routeConfig?.path === 'edit/:code';
-  protected registering = this.route.snapshot.routeConfig?.path === 'register';
+  protected registering = this.route.snapshot.routeConfig?.path === 'register/details';
   protected code = this.route.snapshot.paramMap.get('code') || '';
   protected codes = signal<string[]>(
-    this.route.snapshot.queryParamMap.get('code')
-      ? [this.route.snapshot.queryParamMap.get('code')!]
-      : []
+    this.route.snapshot.queryParamMap.get('codes')
+      ? this.route.snapshot.queryParamMap.get('codes')!.split(',').filter(Boolean)
+      : this.route.snapshot.queryParamMap.get('code')
+        ? [this.route.snapshot.queryParamMap.get('code')!]
+        : []
   );
   protected thumbnail = '';
   protected busy = signal(false);
   protected error = signal('');
   protected notice = signal('');
+  protected serialWarning = signal('');
+  private serialRequest = 0;
+  private serialTimer?: ReturnType<typeof setTimeout>;
   protected count = 1;
   protected model: {
     type: ItemType;
@@ -58,6 +62,11 @@ export class EditorComponent {
   protected original = this.editing ? this.api.context()!.state.items[this.code] : undefined;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      clearTimeout(this.serialTimer);
+      ++this.serialRequest;
+    });
+    this.thumbnail = history.state?.thumbnail || '';
     const mode = this.route.snapshot.queryParamMap.get('mode');
     if (this.registering && mode) {
       this.model.type = mode === 'unique' ? 'tracked' : mode === 'box' ? 'box' : 'generic';
@@ -82,6 +91,22 @@ export class EditorComponent {
       if (!this.editing && source.type === 'box') this.model.qty = null;
       this.initialLevels = { ...source.bin_values };
     }
+    if (this.registering && history.state?.draft) {
+      this.model = { ...history.state.draft };
+      this.initialLevels = { ...this.model.levels };
+    }
+  }
+
+  protected changeSelection(): void {
+    void this.router.navigate(['/register'], {
+      queryParams: {
+        codes: this.codes().join(','),
+        mode:
+          this.model.type === 'tracked' ? 'unique' : this.model.type === 'box' ? 'box' : 'generic',
+        input: this.route.snapshot.queryParamMap.get('input') || 'camera',
+      },
+      state: { thumbnail: this.thumbnail, draft: this.model },
+    });
   }
 
   protected typeChanged(type: ItemType): void {
@@ -104,9 +129,40 @@ export class EditorComponent {
     this.model.keep_legacy = false;
   }
 
-  protected codesChanged(codes: string[]): void {
-    this.thumbnail = '';
-    this.codes.set(codes);
+  protected checkSerial(): void {
+    clearTimeout(this.serialTimer);
+    const request = ++this.serialRequest;
+    this.serialWarning.set('');
+    const serial = this.model.serial.trim();
+    const product = this.model.product_id;
+    if (
+      !serial ||
+      !product ||
+      (this.editing && this.original?.product_lot_id) ||
+      this.model.type !== 'tracked'
+    )
+      return;
+    this.serialTimer = setTimeout(async () => {
+      try {
+        const result = await this.api.read<{ exists: boolean; associated: boolean }>(
+          'serial-check',
+          {
+            product_id: product,
+            serial,
+          }
+        );
+        if (request === this.serialRequest)
+          this.serialWarning.set(
+            result.associated
+              ? 'This serial number is already associated with a QR item.'
+              : result.exists
+                ? 'This serial number already exists in Dolibarr and can be assigned without adding stock.'
+                : ''
+          );
+      } catch (error) {
+        if (request === this.serialRequest) this.serialWarning.set(this.api.message(error));
+      }
+    }, 300);
   }
 
   protected async save(): Promise<void> {

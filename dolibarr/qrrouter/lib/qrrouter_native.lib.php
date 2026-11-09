@@ -46,6 +46,45 @@ function qrr_native_location_matches($db, $lotId, $productId, $target) {
     return $actual === $expected;
 }
 
+/** Generate a native serial before staging, so recovery reuses the same identity. */
+function qrr_native_serial_exists($db, $productId, $serial) {
+    require_once DOL_DOCUMENT_ROOT . '/product/stock/class/productlot.class.php';
+    if (!qrr_product($db, (int) $productId)) {
+        throw new InvalidArgumentException('Unknown product');
+    }
+    $lot = new Productlot($db);
+    $found = $lot->fetch(0, (int) $productId, $serial);
+    if ($found < 0) {
+        throw new RuntimeException('Cannot check Dolibarr serial availability: ' . $lot->error);
+    }
+    return $found > 0;
+}
+
+function qrr_native_generate_serial($db, $productId, $label) {
+    require_once DOL_DOCUMENT_ROOT . '/product/stock/class/productlot.class.php';
+    $product = qrr_product($db, (int) $productId);
+    if (!$product) {
+        throw new InvalidArgumentException('Unknown product');
+    }
+    $prefix = trim(
+        preg_replace('/[^A-Z0-9]+/', '-', strtoupper($product->ref . '-' . $label)),
+        '-',
+    );
+    $prefix = rtrim(substr($prefix, 0, 60), '-');
+    for ($attempt = 0; $attempt < 10; $attempt++) {
+        $serial = ($prefix !== '' ? $prefix : 'SN') . '-' . strtoupper(bin2hex(random_bytes(12)));
+        $lot = new Productlot($db);
+        $found = $lot->fetch(0, (int) $productId, $serial);
+        if ($found < 0) {
+            throw new RuntimeException('Cannot check Dolibarr serial availability: ' . $lot->error);
+        }
+        if ($found === 0) {
+            return $serial;
+        }
+    }
+    throw new RuntimeException('Cannot generate an unused Dolibarr serial number');
+}
+
 function qrr_native_lot($db, $item, $create = false) {
     global $conf, $user;
     require_once DOL_DOCUMENT_ROOT . '/product/stock/class/productlot.class.php';
@@ -359,12 +398,15 @@ function qrr_native_complete($db, $user, $pending) {
                         'Native lot quantity changed; resolve the pending synchronization',
                     );
                 }
-                if ($pending['action'] === 'register' && $current !== $target) {
+                $linkExisting =
+                    ($pending['action'] === 'register' && empty($pending['receive_new_serial'])) ||
+                    !empty($pending['link_existing']);
+                if ($linkExisting && $current !== $target) {
                     throw new RuntimeException(
                         'Registration requires matching existing native lot stock; receive or correct stock in Dolibarr first',
                     );
                 }
-                if (!$before && $current !== 0 && $pending['action'] !== 'register') {
+                if (!$before && $current !== 0 && !$linkExisting) {
                     throw new RuntimeException(
                         'Lot/serial already has stock. Use Register items to link existing inventory',
                     );
@@ -424,6 +466,18 @@ function qrr_native_complete($db, $user, $pending) {
 
 function qrr_native_command($db, $user, $action, $fields) {
     qrr_native_rights($user);
+    $linkExisting =
+        (in_array($action, ['create', 'register'], true) ||
+            ($action === 'update' &&
+                empty(qrr_load_state()['items'][$fields['code']]['product_lot_id']))) &&
+        ($fields['type'] ?? '') === 'tracked' &&
+        qrr_native_serial_exists($db, $fields['product_id'], $fields['serial']);
+    if ($linkExisting) {
+        $fields['qty'] = qrr_native_lot_qty($db, $fields, (int) $fields['warehouse_id']);
+        if ($fields['qty'] > 1) {
+            throw new RuntimeException('A tracked serial must have at most one unit');
+        }
+    }
     if (in_array($fields['type'] ?? '', ['tracked', 'box'], true)) {
         $product = qrr_product($db, $fields['product_id']);
         if (!$product || !$product->hasbatch()) {
@@ -435,7 +489,13 @@ function qrr_native_command($db, $user, $action, $fields) {
             throw new InvalidArgumentException('Enter a known quantity for the native lot');
         }
     }
-    $pending = qrr_command('native-stage', ['action' => $action, 'fields' => (object) $fields]);
+    $pending = qrr_command('native-stage', [
+        'action' => $action,
+        'fields' => (object) $fields,
+        'link_existing' => $linkExisting,
+        'receive_new_serial' =>
+            $action === 'register' && ($fields['type'] ?? '') === 'tracked' && !$linkExisting,
+    ]);
     return qrr_native_complete($db, $user, $pending);
 }
 

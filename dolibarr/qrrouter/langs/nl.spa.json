@@ -92,5 +92,12 @@
   "Operation": "Handeling",
   "Decrease quantity": "Hoeveelheid verlagen",
   "Increase quantity": "Hoeveelheid verhogen",
-  "Difference": "Verschil"
+  "Difference": "Verschil",
+  "Leave blank to generate a new Dolibarr serial number.": "Laat leeg om een nieuw Dolibarr-serienummer te genereren.",
+  "Manual / USB entry": "Handmatige / USB-invoer",
+  "Assign details": "Details toewijzen",
+  "Change selection": "Selectie wijzigen",
+  "Select labels": "Labels selecteren",
+  "This serial number is already associated with a QR item.": "Dit serienummer is al gekoppeld aan een QR-item.",
+  "This serial number already exists in Dolibarr and can be assigned without adding stock.": "Dit serienummer bestaat al in Dolibarr en kan worden gekoppeld zonder voorraad toe te voegen."
 }

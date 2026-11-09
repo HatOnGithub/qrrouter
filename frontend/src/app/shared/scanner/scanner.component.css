@@ -3,9 +3,7 @@
   --scanner-blue: #0754ae;
 }
 .scanner {
-  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-  border-radius: 6px;
-  overflow: hidden;
+  min-width: 0;
 }
 .scanner-status {
   display: flex;
@@ -43,7 +41,7 @@
   min-width: 0;
 }
 .scanner-workspace.camera-active {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 .camera-preview {
   position: relative;
@@ -123,6 +121,8 @@ textarea {
   flex-wrap: wrap;
   gap: 8px;
   padding: 0 16px;
+  max-height: 96px;
+  overflow-y: auto;
 }
 .codes:has(button) {
   padding-bottom: 16px;
@@ -139,12 +139,36 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
   .camera-preview {
-    min-height: 180px;
+    min-height: 0;
+    height: clamp(72px, calc(var(--qrr-available-height, 100dvh) - 390px), 230px);
   }
   video {
     max-height: 230px;
   }
   .scanner-entry {
-    padding: 16px;
+    padding: 10px 0;
+  }
+  .scanner-entry h3,
+  .entry-hint {
+    display: none;
+  }
+  .add-codes {
+    margin-top: 8px;
+  }
+  .scanner-status {
+    padding: 8px 0;
+  }
+  .camera-actions {
+    padding: 8px 0;
+    gap: 4px;
+  }
+  .codes {
+    padding-inline: 0;
+    max-height: 52px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .codes button {
+    flex-shrink: 0;
   }
 }

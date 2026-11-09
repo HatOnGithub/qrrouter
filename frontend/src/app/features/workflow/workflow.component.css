@@ -1,3 +1,44 @@
+@import '../../shared/scanner/capture-page.css';
+.scanner-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid color-mix(in srgb, var(--scanner-green) 65%, currentColor);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--scanner-green) 7%, transparent);
+}
+.scanner-steps {
+  display: flex;
+  gap: 12px 24px;
+  margin: 0 0 20px;
+  flex-wrap: wrap;
+}
+.scanner-steps span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+.scanner-steps b {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+}
+.scanner-steps .current {
+  opacity: 1;
+  font-weight: 700;
+}
+.scanner-steps .current b {
+  color: #fff;
+  background: var(--scanner-blue);
+  border-color: var(--scanner-blue);
+}
 .workflow-fields {
   margin-top: 24px;
 }
@@ -83,5 +124,24 @@
   }
   .workflow-fields {
     margin-top: 18px;
+  }
+}
+
+@media (max-width: 700px) {
+  .scanner-steps {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .scanner-steps span {
+    font-size: 0.8em;
+    gap: 4px;
+  }
+  .scanner-steps b {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .scanner-page:has(qrr-capture) .scanner-steps span:not(.current) {
+    display: none;
   }
 }

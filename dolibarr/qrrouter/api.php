@@ -48,6 +48,13 @@ function qrr_api_fields($data, $existing = null) {
     );
     $label = trim(strip_tags((string) ($data['label'] ?? '')));
     $serial = trim(strip_tags((string) ($data['serial'] ?? '')));
+    if ($type === 'tracked' && $serial === '') {
+        if (!empty($existing['product_lot_id'])) {
+            $serial = (string) $existing['serial'];
+        } else {
+            $serial = qrr_native_generate_serial($db, $pid, $label);
+        }
+    }
     $nativeBatch = $type === 'box' ? $label : ($type === 'tracked' ? $serial : '');
     if (
         in_array($type, ['box', 'tracked'], true) &&
@@ -120,6 +127,28 @@ function qrr_api_get($resource) {
             'locale' => (string) ($langs->defaultlang ?? 'en_US'),
             'translations' => qrr_api_translations(),
         ];
+    }
+    if ($resource === 'serial-check') {
+        qrr_api_permit(qrr_write_right($user));
+        $serial = trim((string) GETPOST('serial', 'alphanohtml'));
+        if ($serial === '' || strlen($serial) > 100) {
+            throw new InvalidArgumentException('Enter a serial number of at most 100 bytes');
+        }
+        $pid = (int) GETPOST('product_id', 'int');
+        $exists = qrr_native_serial_exists($db, $pid, $serial);
+        $associated = false;
+        if ($exists) {
+            foreach (qrr_load_state()['items'] as $item) {
+                if (
+                    (int) $item['product_id'] === $pid &&
+                    strcasecmp((string) ($item['native_batch'] ?? ''), $serial) === 0
+                ) {
+                    $associated = true;
+                    break;
+                }
+            }
+        }
+        return ['exists' => $exists, 'associated' => $associated];
     }
     if ($resource === 'levels') {
         $wid = (int) GETPOST('warehouse_id', 'int');

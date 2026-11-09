@@ -158,6 +158,25 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             _ => throw new ArgumentException("Invalid native command"),
         };
         var changes = new JsonObject();
+        if (data.B("link_existing"))
+        {
+            Require(
+                action is "create" or "update" or "register" && fields.S("type") == "tracked",
+                "Invalid existing serial link"
+            );
+            Require(fields.I("qty") is 0 or 1, "A tracked serial must have at most one unit");
+            var linkedCode =
+                action == "create" ? result!.GetValue<string>()
+                : action == "register" ? fields["codes"]![0]!.GetValue<string>()
+                : fields.S("code");
+            Require(
+                state.Map("items")[linkedCode]?.I("product_lot_id") is null or 0,
+                "Serial already linked"
+            );
+            var linked = Item(candidate, linkedCode);
+            linked["qty"] = fields.I("qty");
+            linked["status"] = fields.I("qty") == 0 ? "consumed" : "in_stock";
+        }
         var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pair in candidate.Map("items"))
         {
@@ -189,6 +208,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             ("id", "QRR-N-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(10))),
             ("at", Now),
             ("action", action),
+            ("link_existing", data.B("link_existing")),
+            ("receive_new_serial", data.B("receive_new_serial")),
             ("changes", changes),
             ("result", result.Copy()),
             ("items", candidate["items"].Copy()),

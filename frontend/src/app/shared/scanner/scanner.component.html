@@ -19,35 +19,42 @@
       <div class="viewfinder" aria-hidden="true"></div>
       <span class="camera-caption">{{ 'Place a QR label inside the frame' | t }}</span>
     </div>
-    <div class="scanner-entry">
-      <h3>{{ 'Scan or enter a code' | t }}</h3>
-      <p class="entry-hint">
-        {{ 'Use your camera, a USB scanner, or enter QR identifiers below.' | t }}
-      </p>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>{{ 'QR identifiers' | t }}</mat-label>
-        <textarea
-          matInput
-          rows="2"
-          [(ngModel)]="manual"
-          (keydown.enter)="$event.preventDefault(); add()"
-          [attr.aria-label]="'QR identifiers' | t"
-          autocomplete="off"
-          autocapitalize="characters"
-          spellcheck="false"
-        ></textarea>
-      </mat-form-field>
-      <button class="add-codes" type="button" mat-flat-button (click)="add()">
-        {{ 'Add codes' | t }}
-      </button>
-    </div>
+    @if (manualMode()) {
+      <div class="scanner-entry">
+        <h3>{{ 'Manual / USB entry' | t }}</h3>
+        <p class="entry-hint">
+          {{ 'Use your camera, a USB scanner, or enter QR identifiers below.' | t }}
+        </p>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>{{ 'QR identifiers' | t }}</mat-label>
+          <textarea
+            matInput
+            rows="2"
+            [(ngModel)]="manual"
+            (keydown.enter)="$event.preventDefault(); add()"
+            [attr.aria-label]="'QR identifiers' | t"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+          ></textarea>
+        </mat-form-field>
+        <button class="add-codes" type="button" mat-flat-button (click)="add()">
+          {{ 'Add codes' | t }}
+        </button>
+      </div>
+    }
   </div>
   <div class="camera-actions">
-    <button type="button" mat-stroked-button (click)="start()" [disabled]="starting()">
-      {{ (camera() ? 'Restart camera' : 'Start camera') | t }}
+    <button type="button" mat-stroked-button (click)="switchInput()">
+      {{ (manualMode() ? 'QR camera' : 'Manual / USB entry') | t }}
     </button>
-    @if (camera() || starting()) {
-      <button type="button" mat-button (click)="stop()">{{ 'Stop camera' | t }}</button>
+    @if (!manualMode()) {
+      <button type="button" mat-stroked-button (click)="start()" [disabled]="starting()">
+        {{ (camera() ? 'Restart camera' : 'Start camera') | t }}
+      </button>
+      @if (camera() || starting()) {
+        <button type="button" mat-button (click)="stop()">{{ 'Stop camera' | t }}</button>
+      }
     }
   </div>
   @if (error()) {

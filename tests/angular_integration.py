@@ -345,7 +345,41 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         assert not request()['state'].get('pending_native')
         assert native()['stock']['4']['1'] == stock_before + 3
         changed = native(); changed.pop('fail_location'); native_path.write_text(json.dumps(changed))
-        print('Native integration PASS: named serials, box lots, Binloc writes, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
+        generated_serials = []
+        for index in range(2):
+            generated_code = request(action='create', payload={'type': 'tracked', 'label': 'Automatic serial', 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'F'}})
+            generated_item = request()['state']['items'][generated_code]
+            generated_serials.append(generated_item['serial'])
+            assert generated_item['serial'].startswith('PART-003-AUTOMATIC-SERIAL-') and len(generated_item['serial']) <= 100
+            assert generated_item['native_batch'] == generated_item['serial'] != generated_code
+            assert native()['lots'][str(generated_item['product_lot_id'])]['batch'] == generated_item['serial']
+            assert native()['locations'][str(generated_item['product_lot_id'])]['values']['1']['value'] == 'F'
+        assert len(set(generated_serials)) == 2
+        # Existing unassociated serials attach without receiving stock, including empty lots.
+        for qty in [0, 1]:
+            changed = native()
+            lot_id = max(map(int, changed['lots'])) + 1
+            serial = 'UNLINKED-SERIAL-' + str(qty)
+            changed['lots'][str(lot_id)] = {'fk_product': 4, 'batch': serial, 'entity': 1}
+            changed['batches']['4']['1'][serial] = qty
+            changed['stock']['4']['1'] += qty
+            native_path.write_text(json.dumps(changed))
+            stock_before_link = native()['stock']['4']['1']
+            movements_before_link = len(native()['movements'])
+            linked_code = request(action='create', payload={'type': 'tracked', 'label': 'Link existing', 'serial': serial, 'product_id': 4, 'warehouse_id': 1})
+            linked_item = request()['state']['items'][linked_code]
+            assert linked_item['product_lot_id'] == lot_id and linked_item['qty'] == qty
+            assert native()['stock']['4']['1'] == stock_before_link
+            assert len(native()['movements']) == movements_before_link
+            request(action='create', payload={'type': 'tracked', 'label': 'Duplicate link', 'serial': serial, 'product_id': 4, 'warehouse_id': 1}, expected=409)
+            assert not request()['state'].get('pending_native')
+        request(action='update', payload={'code': generated_code, 'type': 'tracked', 'label': 'Updated name', 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'F'}})
+        assert request()['state']['items'][generated_code]['serial'] == generated_serials[-1]
+        request(action='register', payload={'type': 'tracked', 'codes': [blank], 'label': 'Generated registration', 'product_id': 4, 'warehouse_id': 1})
+        registered_auto = request()['state']['items'][blank]
+        assert registered_auto['serial'].startswith('PART-003-GENERATED-REGISTRATION-')
+        assert registered_auto['product_lot_id'] > 0 and registered_auto['qty'] == 1
+        print('Native integration PASS: automatic and named serials, box lots, Binloc writes, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
         print('Gateway integration PASS: native workflows, real C# state, CSRF, permissions, trusted facts, product/order lookups, Angular hosting and no API-key exposure.', flush=True)
         if args.browser:
             env = dict(os.environ, QRR_E2E_URL=base, QRR_E2E_ITEM=tracked, QRR_E2E_BOX=box)

@@ -1,5 +1,6 @@
 import {
   Component,
+  computed,
   ElementRef,
   OnDestroy,
   afterNextRender,
@@ -24,6 +25,10 @@ import { TranslationService } from '@services/translation.service';
 })
 export class ScannerComponent implements OnDestroy {
   private translations = inject(TranslationService);
+  readonly entryMode = input<'camera' | 'manual'>('camera');
+  readonly modeChanged = output<'camera' | 'manual'>();
+  protected manualMode = computed(() => this.entryMode() === 'manual');
+  private ready = signal(false);
   private video = viewChild<ElementRef<HTMLVideoElement>>('video');
   readonly multiple = input(true);
   readonly initial = input<string[]>([]);
@@ -41,7 +46,21 @@ export class ScannerComponent implements OnDestroy {
 
   constructor() {
     effect(() => this.codes.set([...this.initial()]));
-    afterNextRender(() => void this.start());
+    effect(() => {
+      const ready = this.ready();
+      const manual = this.manualMode();
+      if (ready) {
+        if (manual) {
+          this.stop();
+          this.error.set('');
+        } else void this.start();
+      }
+    });
+    afterNextRender(() => this.ready.set(true));
+  }
+
+  protected switchInput(): void {
+    this.modeChanged.emit(this.manualMode() ? 'camera' : 'manual');
   }
 
   protected add(raw = this.manual): void {

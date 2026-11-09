@@ -182,16 +182,13 @@ test('scanner workstation shows product context and touch quantity controls on m
     });
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await open(page, 'scan');
-  await expect(page.getByRole('navigation', { name: 'Warehouse operations' })).toBeVisible();
+  await open(page, 'scan?input=camera');
+  await page.getByRole('button', { name: 'Manual / USB entry', exact: true }).click();
   await page.getByRole('textbox', { name: 'QR identifiers' }).fill(code);
   await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await page.getByRole('link', { name: 'Review selected items', exact: true }).click();
   await expect(page.locator('.scanned-product')).toContainText('Fixture box');
   await expect(page.locator('.scan-product-facts')).toContainText('Dolibarr lot/serial');
-  await expect(page.getByRole('button', { name: 'Add codes', exact: true })).toHaveCSS(
-    'min-height',
-    '48px'
-  );
   expect(
     await page.locator('qrr-root .content').evaluate(el => el.scrollWidth <= el.clientWidth)
   ).toBe(true);
@@ -326,9 +323,10 @@ test('manual scanner rejects invalid input, deduplicates and handles camera deni
       value: { getUserMedia: () => Promise.reject(new Error('Camera denied for test')) },
     })
   );
-  await open(page, 'scan');
+  await open(page, 'scan?input=camera');
   await expect(page.getByRole('alert')).toHaveText('Camera denied for test');
   await expect(page.getByRole('button', { name: 'Start camera', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Manual / USB entry', exact: true }).click();
   await page.getByRole('textbox', { name: 'QR identifiers' }).fill('bad-code');
   await page.getByRole('button', { name: 'Add codes', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Invalid identifier');
@@ -337,7 +335,7 @@ test('manual scanner rejects invalid input, deduplicates and handles camera deni
   await page.getByRole('textbox', { name: 'QR identifiers' }).fill(code + '\n' + code);
   await page.getByRole('button', { name: 'Add codes', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Remove ' + code, exact: true })).toHaveCount(1);
-  await page.getByRole('button', { name: 'Start camera', exact: true }).click();
+  await page.getByRole('button', { name: 'QR camera', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Camera denied for test');
   await expect(page.getByRole('button', { name: 'Start camera', exact: true })).toBeEnabled();
 });
@@ -346,10 +344,21 @@ test('register a container using the product lookup and native warehouse selecti
   page,
 }) => {
   const code = await blank(page);
-  await open(page, 'register?code=' + code + '&mode=box');
+  await open(page, 'register?code=' + code + '&mode=box&input=manual');
+  await expect(
+    page.getByRole('textbox', { name: 'Box name / Dolibarr lot', exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Assign details', exact: true }).click();
+  await expect(page).toHaveURL(/register\/details/);
   await page
     .getByRole('textbox', { name: 'Box name / Dolibarr lot', exact: true })
     .fill('Browser container');
+  await page.getByRole('button', { name: 'Change selection', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Remove ' + code, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Assign details', exact: true }).click();
+  await expect(
+    page.getByRole('textbox', { name: 'Box name / Dolibarr lot', exact: true })
+  ).toHaveValue('Browser container');
   await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Fixture');
   await page.getByRole('option', { name: 'SERIAL-004 — Tracked Part', exact: true }).click();
   await choose(page, 'Warehouse', 'MAIN');
@@ -436,11 +445,15 @@ test('box transfer is available from navigation and updates both container quant
     });
     expect(response.ok()).toBeTruthy();
   }
-  await open(page, 'inventory');
+  await open(page, 'scan');
+  await expect(
+    page.locator('.module-navigation').getByRole('link', { name: 'Move items', exact: true })
+  ).toHaveCount(0);
   await page
     .locator('nav')
     .getByRole('link', { name: 'Transfer contents between containers', exact: true })
     .click();
+  await page.getByRole('button', { name: 'Manual / USB entry', exact: true }).click();
   await page.getByRole('textbox', { name: 'QR identifiers' }).fill(source + '\n' + destination);
   await page.getByRole('button', { name: 'Add codes', exact: true }).click();
   await page.getByRole('button', { name: 'Review selected items', exact: true }).click();
@@ -537,7 +550,7 @@ test('camera auto-starts on scanning pages and stops when leaving them', async (
       },
     });
   });
-  await open(page, 'scan');
+  await open(page, 'scan?input=camera');
   await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as any).__cameraRequests)).toBe(1);
   await page.getByRole('button', { name: 'Stop camera', exact: true }).click();
@@ -556,7 +569,14 @@ test('camera auto-starts on scanning pages and stops when leaving them', async (
     'Check out items',
     'Check in items',
   ]) {
-    await page.locator('nav').getByRole('link', { name: label, exact: true }).click();
+    await page
+      .locator('.module-navigation')
+      .getByRole('link', { name: 'Scan QR', exact: true })
+      .click();
+    await page
+      .getByRole('navigation', { name: 'Warehouse operations' })
+      .getByRole('link', { name: new RegExp('^' + label) })
+      .click();
     await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
     await page.locator('nav').getByRole('link', { name: 'Inventory', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible();
@@ -587,7 +607,7 @@ test('a camera granted after leaving the scanning page is released immediately',
       },
     });
   });
-  await open(page, 'scan');
+  await open(page, 'scan?input=camera');
   await expect
     .poll(() => page.evaluate(() => typeof (window as any).__grantCamera))
     .toBe('function');
@@ -677,4 +697,89 @@ test('navigation decodes repeated HTML entities from the translation response', 
   await expect(page.locator('nav').getByText('&amp;', { exact: false })).toHaveCount(0);
   await expect(page.locator('nav img')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__entityExecuted)).toBeUndefined();
+});
+
+test('scan selection and camera pages fit mobile portrait without page scrolling', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 320;
+          canvas.height = 240;
+          return canvas.captureStream();
+        },
+      },
+    });
+  });
+  for (const size of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(size);
+    for (const route of [
+      'scan',
+      'scan?input=camera',
+      'register?input=camera',
+      'scan?input=manual',
+      'register?input=manual',
+    ]) {
+      await open(page, route);
+      if (route.includes('camera')) {
+        await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
+        await expect(page.getByRole('textbox', { name: 'QR identifiers' })).toHaveCount(0);
+      }
+      if (route.includes('manual')) {
+        await page
+          .getByRole('textbox', { name: 'QR identifiers' })
+          .fill(process.env['QRR_E2E_ITEM']!);
+        await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+        await expect(
+          page.getByRole('button', { name: 'Remove ' + process.env['QRR_E2E_ITEM'], exact: true })
+        ).toBeVisible();
+      }
+      expect(
+        await page.locator('qrr-root .content').evaluate(el => ({
+          fitsWidth: el.scrollWidth <= el.clientWidth,
+          fitsHeight: el.scrollHeight <= el.clientHeight + 1,
+        }))
+      ).toEqual({ fitsWidth: true, fitsHeight: true });
+    }
+  }
+});
+
+test('entered existing serial warns before save and automatic serial uses entered context', async ({
+  page,
+}) => {
+  await open(page, 'create');
+  await choose(page, 'QR type', 'Tracked Individual');
+  await page
+    .getByRole('textbox', { name: 'Item name / label', exact: true })
+    .fill('Auto browser tool');
+  await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Tracked');
+  await page.getByRole('option', { name: /SERIAL-004.*Tracked Part/ }).click();
+  await choose(page, 'Warehouse', 'MAIN');
+  await page
+    .getByRole('textbox', { name: 'Dolibarr serial number', exact: true })
+    .fill('USER-SERIAL-01');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'already associated with a QR item' })
+  ).toBeVisible();
+  await page.getByRole('textbox', { name: 'Dolibarr serial number', exact: true }).fill('');
+  await expect(
+    page.getByText('This serial number is already associated with a QR item.', {
+      exact: true,
+    })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Auto browser tool', exact: true })).toBeVisible();
+  const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
+  const item = Object.values(state.items).find(
+    (item: any) => item.label === 'Auto browser tool'
+  ) as any;
+  expect(item.serial).toMatch(/^PART-003-AUTO-BROWSER-TOOL-[A-F0-9]{24}$/);
+  expect(item.serial).not.toBe(item.code);
 });

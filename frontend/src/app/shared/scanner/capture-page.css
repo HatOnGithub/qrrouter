@@ -1,0 +1,34 @@
+.scanner-page {
+  --scanner-blue: #0754ae;
+  --scanner-green: #218c39;
+  max-width: 1160px;
+  margin-inline: auto;
+}
+.scanner-page h1 {
+  color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+  font-size: 1.5em;
+}
+.scanner-primary {
+  min-height: 52px;
+  width: 100%;
+  padding-inline: 22px;
+  background: var(--scanner-green);
+  color: #fff;
+  font-weight: 700;
+  --mat-button-filled-label-text-color: #fff;
+}
+.scanner-primary:disabled {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  opacity: 0.5;
+}
+@media (max-width: 700px) {
+  .scanner-page:has(qrr-capture) > .subtitle,
+  .scanner-page:has(qrr-capture) > .scanner-context {
+    display: none;
+  }
+  .scanner-page h1 {
+    font-size: 1.15em;
+    margin: 0 0 8px;
+  }
+}

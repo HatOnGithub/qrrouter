@@ -33,3 +33,31 @@ footer > div {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+:host-context(.scanner-page) article {
+  height: auto;
+  padding: 12px 0;
+  border: 0;
+}
+:host-context(.scanner-page) h2 {
+  color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+  border: 0;
+  padding: 0 0 4px;
+  font-size: 1.1em;
+}
+:host-context(.scanner-page) footer {
+  display: block;
+}
+@media (max-width: 700px) {
+  :host-context(.scanner-page) article {
+    margin-bottom: 4px;
+    padding: 4px 0;
+  }
+  :host-context(.scanner-page) section {
+    padding-top: 0;
+    overflow: visible;
+  }
+  :host-context(.scanner-page) h2 {
+    margin-bottom: 6px;
+  }
+}

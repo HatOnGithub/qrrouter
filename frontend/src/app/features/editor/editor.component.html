@@ -3,7 +3,7 @@
   <p class="subtitle">
     {{
       (registering
-        ? 'Registration links existing Dolibarr lot stock without increasing it.'
+        ? 'Assign product details and location. New serials receive one unit; existing serial stock is preserved.'
         : 'Creating a serial or box creates a Dolibarr lot and receives the entered quantity into stock.'
       ) | t
     }}
@@ -37,15 +37,10 @@
             </mat-select>
           </mat-form-field>
           @if (registering) {
-            <qrr-scanner
-              [multiple]="model.type === 'generic'"
-              [initial]="codes()"
-              (changed)="codesChanged($event)"
-              (thumbnail)="thumbnail = $event"
-            />
-            @if (codes().length) {
-              <p>{{ 'Selected' | t }}: {{ codes().join(', ') }}</p>
-            }
+            <p>{{ 'Selected' | t }}: {{ codes().join(', ') }}</p>
+            <button type="button" mat-button (click)="changeSelection()">
+              {{ 'Change selection' | t }}
+            </button>
           }
           @if (model.type !== 'unassigned') {
             <div class="grid">
@@ -65,7 +60,7 @@
               <div>
                 <qrr-lookup
                   [label]="'Dolibarr product'"
-                  (selected)="model.product_id = $event?.id || 0"
+                  (selected)="model.product_id = $event?.id || 0; checkSerial()"
                   [disabled]="editing && !!original?.product_id"
                 />
                 <p class="muted">
@@ -123,11 +118,19 @@
                     matInput
                     name="serial"
                     [(ngModel)]="model.serial"
+                    (ngModelChange)="checkSerial()"
                     maxlength="100"
-                    required
                     [readonly]="editing && !!original?.product_lot_id"
                   />
+                  @if (!editing) {
+                    <mat-hint>
+                      {{ 'Leave blank to generate a new Dolibarr serial number.' | t }}
+                    </mat-hint>
+                  }
                 </mat-form-field>
+                @if (serialWarning()) {
+                  <p class="alert" role="status">{{ serialWarning() | t }}</p>
+                }
               </div>
               <mat-form-field appearance="outline">
                 <mat-label>{{ 'Tracked-item details' | t }}</mat-label>

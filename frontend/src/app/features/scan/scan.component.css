@@ -1,0 +1,121 @@
+@import '../../shared/scanner/capture-page.css';
+.scanner-operations {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.scanner-operations a {
+  display: flex;
+  flex-direction: column;
+  gap: 6px 10px;
+  align-content: center;
+  justify-content: center;
+  min-height: 88px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-top: 3px solid var(--scanner-blue);
+  border-radius: 5px;
+  text-decoration: none;
+  color: inherit;
+}
+.scanner-operations a:hover {
+  background: color-mix(in srgb, var(--scanner-blue) 7%, transparent);
+}
+.scanner-operations a:focus-visible {
+  outline: 2px solid var(--scanner-blue);
+  outline-offset: 3px;
+}
+.scanner-operations a > span {
+  grid-row: span 2;
+  font-size: 1.9em;
+  color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+}
+.scanner-operations small {
+  opacity: 0.7;
+}
+.scanned-product {
+  padding: 16px 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+.scanned-product:last-child {
+  border-bottom: 0;
+}
+.product-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.product-identity strong {
+  font-size: 1.2em;
+}
+.product-identity small {
+  opacity: 0.65;
+  font-family: ui-monospace, monospace;
+}
+.scan-product-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+.scan-product-facts dt {
+  opacity: 0.7;
+  font-size: 0.9em;
+  margin-bottom: 6px;
+}
+.scan-product-facts dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.scanned-product a {
+  min-height: 44px;
+}
+@media (max-width: 700px) {
+  .scan-home > .subtitle {
+    display: none;
+  }
+  .scanner-operations {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 0;
+  }
+  .scanner-operations a {
+    padding: 8px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .scanner-operations small,
+  .scanner-operations a > span {
+    display: none;
+  }
+  .scanned-product {
+    padding: 0;
+  }
+  .product-identity {
+    gap: 2px;
+  }
+  .product-identity strong {
+    font-size: 1em;
+  }
+  .scan-product-facts {
+    margin: 6px 0;
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .scan-product-facts > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .scan-product-facts dt {
+    margin-bottom: 0;
+  }
+  .scan-product-facts dd {
+    text-align: right;
+  }
+}

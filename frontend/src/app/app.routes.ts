@@ -25,8 +25,13 @@ export const routes: Routes = [
     loadComponent: () => import('@features/editor/editor.component').then(m => m.EditorComponent),
   },
   {
-    path: 'register',
+    path: 'register/details',
     loadComponent: () => import('@features/editor/editor.component').then(m => m.EditorComponent),
+  },
+  {
+    path: 'register',
+    loadComponent: () =>
+      import('@features/registration/registration.component').then(m => m.RegistrationComponent),
   },
   {
     path: 'create',
