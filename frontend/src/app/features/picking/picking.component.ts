@@ -1,16 +1,20 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { SharedModule } from '@shared/shared.module';
 import { LookupComponent } from '@shared/lookup/lookup.component';
 import { InventoryService } from '@services/inventory.service';
 import { PickRow } from '@core/models/inventory';
+import { faListCheck, faPrint } from '@fortawesome/free-solid-svg-icons';
+import { faSquare } from '@fortawesome/free-regular-svg-icons';
 
 @Component({
   selector: 'qrr-picking',
   standalone: true,
   imports: [SharedModule, LookupComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './picking.component.html',
 })
 export class PickingComponent {
+  protected readonly icons = { preview: faListCheck, print: faPrint, unchecked: faSquare };
   protected api = inject(InventoryService);
   protected warehouse = 0;
   protected order = 0;

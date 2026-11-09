@@ -20,6 +20,7 @@
         />
       </mat-form-field>
       <button mat-flat-button type="submit" [disabled]="busy() || form.invalid">
+        <fa-icon [icon]="icons.create" aria-hidden="true" />
         {{ 'Create batch' | t }}
       </button>
     </form>
@@ -70,6 +71,7 @@
               target="_blank"
               rel="noopener"
             >
+              <fa-icon [icon]="icons.print" aria-hidden="true" />
               {{ 'Print' | t }}
             </a>
           </td>

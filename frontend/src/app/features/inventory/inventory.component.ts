@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { InventoryService } from '@services/inventory.service';
 import { SharedModule } from '@shared/shared.module';
@@ -9,6 +9,7 @@ import { Item } from '@core/models/inventory';
   standalone: true,
   imports: [SharedModule],
   templateUrl: './inventory.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inventory.component.css',
 })
 export class InventoryComponent {

@@ -29,9 +29,11 @@
     </div>
     <div class="actions no-print">
       <button mat-flat-button (click)="preview()" [disabled]="busy() || !warehouse || !order">
+        <fa-icon [icon]="icons.preview" aria-hidden="true" />
         {{ 'Generate preview' | t }}
       </button>
       <button mat-stroked-button (click)="print()" [disabled]="!rows().length">
+        <fa-icon [icon]="icons.print" aria-hidden="true" />
         {{ 'Print / Save as PDF' | t }}
       </button>
     </div>
@@ -50,7 +52,7 @@
         <tbody>
           @for (row of rows(); track $index) {
             <tr>
-              <td>□</td>
+              <td><fa-icon [icon]="icons.unchecked" aria-hidden="true" /></td>
               <td>{{ row.bin }}</td>
               <td>{{ row.product.ref }}</td>
               <td>

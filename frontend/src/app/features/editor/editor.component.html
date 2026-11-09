@@ -39,6 +39,7 @@
           @if (registering) {
             <p>{{ 'Selected' | t }}: {{ codes().join(', ') }}</p>
             <button type="button" mat-button (click)="changeSelection()">
+              <fa-icon [icon]="icons.back" aria-hidden="true" />
               {{ 'Change selection' | t }}
             </button>
           }
@@ -74,7 +75,7 @@
                   name="warehouse"
                   [ngModel]="model.warehouse_id"
                   (ngModelChange)="warehouseChanged($event)"
-                  [disabled]="editing && !!original?.product_id && !!original?.warehouse_id"
+                  [disabled]="editing && !!original?.product_id && !!original.warehouse_id"
                   required
                 >
                   <mat-option [value]="0">—</mat-option>
@@ -174,9 +175,13 @@
               mat-flat-button
               [disabled]="busy() || form.invalid || (registering && !codes().length)"
             >
+              <fa-icon [icon]="icons.save" aria-hidden="true" />
               {{ (busy() ? 'Saving…' : 'Save') | t }}
             </button>
-            <a mat-button routerLink="/inventory">{{ 'Cancel' | t }}</a>
+            <a mat-button routerLink="/inventory">
+              <fa-icon [icon]="icons.cancel" aria-hidden="true" />
+              {{ 'Cancel' | t }}
+            </a>
           </div>
         </fieldset>
       </form>

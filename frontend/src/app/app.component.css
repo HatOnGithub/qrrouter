@@ -39,6 +39,9 @@ nav {
   margin-bottom: 20px;
 }
 nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 9px 0;
   text-decoration: none;
   border-bottom: 2px solid transparent;

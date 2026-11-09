@@ -1,4 +1,11 @@
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { CaptureComponent } from '@shared/scanner/capture.component';
@@ -7,15 +14,32 @@ import { LocationFieldsComponent } from '@shared/location-fields/location-fields
 import { InventoryService } from '@services/inventory.service';
 import { Item, OperationResult } from '@core/models/inventory';
 import { Subscription, combineLatest } from 'rxjs';
+import {
+  faArrowLeft,
+  faArrowRight,
+  faCheck,
+  faMinus,
+  faPlus,
+  faRotateRight,
+} from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-workflow',
   standalone: true,
   imports: [SharedModule, CaptureComponent, LookupComponent, LocationFieldsComponent],
   templateUrl: './workflow.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './workflow.component.css',
 })
 export class WorkflowComponent implements OnDestroy {
+  protected readonly icons = {
+    back: faArrowLeft,
+    review: faArrowRight,
+    confirm: faCheck,
+    decrease: faMinus,
+    increase: faPlus,
+    restart: faRotateRight,
+  };
   protected api = inject(InventoryService);
   private route = inject(ActivatedRoute);
   protected kind = signal('move');

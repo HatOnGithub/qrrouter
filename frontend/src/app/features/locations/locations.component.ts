@@ -1,8 +1,9 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { BinSummary, Level } from '@core/models/inventory';
+import { faFloppyDisk, faPrint } from '@fortawesome/free-solid-svg-icons';
 
 interface LocationData {
   bins: string[];
@@ -15,9 +16,11 @@ interface LocationData {
   standalone: true,
   imports: [SharedModule],
   templateUrl: './locations.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './locations.component.css',
 })
 export class LocationsComponent {
+  protected readonly icons = { save: faFloppyDisk, print: faPrint };
   protected api = inject(InventoryService);
   protected warehouse = 0;
   protected bin = '';

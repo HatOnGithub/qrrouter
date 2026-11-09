@@ -82,6 +82,7 @@
           target="_blank"
           rel="noopener"
         >
+          <fa-icon [icon]="icons.print" aria-hidden="true" />
           {{ 'Print bin inventory' | t }}
         </a>
       </div>
@@ -128,6 +129,7 @@
       }
       <mat-checkbox [(ngModel)]="showWarehouse">{{ 'Show warehouse' | t }}</mat-checkbox>
       <button action mat-flat-button [disabled]="busy()" (click)="saveFormat()">
+        <fa-icon [icon]="icons.save" aria-hidden="true" />
         {{ 'Save format' | t }}
       </button>
     </qrr-card>

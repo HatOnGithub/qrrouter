@@ -1,19 +1,22 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { LookupComponent } from '@shared/lookup/lookup.component';
 import { LocationFieldsComponent } from '@shared/location-fields/location-fields.component';
 import { InventoryService } from '@services/inventory.service';
 import { ItemType } from '@core/models/inventory';
+import { faArrowLeft, faFloppyDisk, faXmark } from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-editor',
   standalone: true,
   imports: [SharedModule, LookupComponent, LocationFieldsComponent],
   templateUrl: './editor.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './editor.component.css',
 })
 export class EditorComponent {
+  protected readonly icons = { back: faArrowLeft, save: faFloppyDisk, cancel: faXmark };
   protected api = inject(InventoryService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);

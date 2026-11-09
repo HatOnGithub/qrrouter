@@ -1,14 +1,17 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
+import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-people',
   standalone: true,
   imports: [SharedModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './people.component.html',
 })
 export class PeopleComponent {
+  protected readonly saveIcon = faFloppyDisk;
   protected api = inject(InventoryService);
   protected person = 0;
   protected warehouse = 0;

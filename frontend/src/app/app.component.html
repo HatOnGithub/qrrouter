@@ -4,6 +4,7 @@
     <div>
       <small>{{ 'Revision' | t }} {{ inventory.context()?.state?.revision ?? '—' }}</small>
       <button mat-stroked-button (click)="inventory.refresh()" [disabled]="inventory.loading()">
+        <fa-icon [icon]="icons.refresh" aria-hidden="true" />
         {{ 'Refresh' | t }}
       </button>
     </div>
@@ -13,7 +14,8 @@
       (click)="menuOpen.set(!menuOpen())"
       [attr.aria-expanded]="menuOpen()"
     >
-      ☰ {{ 'Menu' | t }}
+      <fa-icon [icon]="icons.menu" aria-hidden="true" />
+      {{ 'Menu' | t }}
     </button>
   </header>
   <div class="module-navigation no-print" [class.open]="menuOpen()">
@@ -21,6 +23,7 @@
       @for (link of links; track link.path) {
         @if (allowed(link.path)) {
           <a [routerLink]="link.path" routerLinkActive="active" (click)="menuOpen.set(false)">
+            <fa-icon [icon]="link.icon" aria-hidden="true" />
             {{ link.label | t }}
           </a>
         }
@@ -35,7 +38,10 @@
       @if (inventory.error()) {
         <div class="alert" role="alert">
           {{ inventory.error() }}
-          <button mat-button (click)="inventory.refresh()">{{ 'Retry' | t }}</button>
+          <button mat-button (click)="inventory.refresh()">
+            <fa-icon [icon]="icons.refresh" aria-hidden="true" />
+            {{ 'Retry' | t }}
+          </button>
         </div>
       }
       @if (inventory.context()) {
@@ -49,9 +55,11 @@
             </p>
             @if (inventory.context()!.permissions.stock) {
               <button mat-button (click)="recoverNative()" [disabled]="recovering()">
+                <fa-icon [icon]="icons.refresh" aria-hidden="true" />
                 {{ 'Recover synchronization' | t }}
               </button>
               <button mat-button (click)="recoverNative(true)" [disabled]="recovering()">
+                <fa-icon [icon]="icons.cancel" aria-hidden="true" />
                 {{ 'Cancel uncommitted synchronization' | t }}
               </button>
             }

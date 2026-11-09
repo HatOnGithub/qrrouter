@@ -741,12 +741,15 @@ test('scan selection and camera pages fit mobile portrait without page scrolling
           page.getByRole('button', { name: 'Remove ' + process.env['QRR_E2E_ITEM'], exact: true })
         ).toBeVisible();
       }
-      expect(
-        await page.locator('qrr-root .content').evaluate(el => ({
-          fitsWidth: el.scrollWidth <= el.clientWidth,
-          fitsHeight: el.scrollHeight <= el.clientHeight + 1,
-        }))
-      ).toEqual({ fitsWidth: true, fitsHeight: true });
+      const bounds = await page.locator('qrr-root .content').evaluate(el => ({
+        width: el.clientWidth,
+        scrollWidth: el.scrollWidth,
+        height: el.clientHeight,
+        scrollHeight: el.scrollHeight,
+      }));
+      const context = `${route} at ${size.width} × ${size.height}`;
+      expect(bounds.scrollWidth, context).toBeLessThanOrEqual(bounds.width);
+      expect(bounds.scrollHeight, context).toBeLessThanOrEqual(bounds.height + 1);
     }
   }
 });

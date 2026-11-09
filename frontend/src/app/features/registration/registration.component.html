@@ -14,6 +14,7 @@
         [disabled]="!codes().length"
         (click)="continue()"
       >
+        <fa-icon [icon]="continueIcon" aria-hidden="true" />
         {{ 'Assign details' | t }}
       </button>
     </qrr-card>

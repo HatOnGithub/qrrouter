@@ -1,14 +1,35 @@
-import { Component, DestroyRef, ElementRef, afterNextRender, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterNextRender,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { DolibarrThemeService } from '@services/dolibarr-theme.service';
+import {
+  faArrowsRotate,
+  faBan,
+  faBars,
+  faBoxesStacked,
+  faClipboardList,
+  faQrcode,
+  faRightLeft,
+  faTags,
+  faUserGear,
+  faWarehouse,
+} from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-root',
   standalone: true,
   imports: [SharedModule, RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.component.css',
 })
 export class AppComponent {
@@ -16,6 +37,7 @@ export class AppComponent {
   protected menuOpen = signal(false);
   protected recovering = signal(false);
   protected recoveryError = signal('');
+  protected readonly icons = { refresh: faArrowsRotate, cancel: faBan, menu: faBars };
 
   protected async recoverNative(cancel = false): Promise<void> {
     this.recovering.set(true);
@@ -30,13 +52,13 @@ export class AppComponent {
     }
   }
   protected links = [
-    { path: '/inventory', label: 'Inventory', icon: '▦' },
-    { path: '/scan', label: 'Scan QR', icon: '⌗' },
-    { path: '/labels', label: 'Print QR labels', icon: '▤' },
-    { path: '/locations', label: 'Bins and locations', icon: '▧' },
-    { path: '/loans', label: 'Loans', icon: '⇄' },
-    { path: '/picking', label: 'Picking', icon: '☷' },
-    { path: '/people', label: 'Personal warehouses', icon: '♙' },
+    { path: '/inventory', label: 'Inventory', icon: faBoxesStacked },
+    { path: '/scan', label: 'Scan QR', icon: faQrcode },
+    { path: '/labels', label: 'Print QR labels', icon: faTags },
+    { path: '/locations', label: 'Bins and locations', icon: faWarehouse },
+    { path: '/loans', label: 'Loans', icon: faRightLeft },
+    { path: '/picking', label: 'Picking', icon: faClipboardList },
+    { path: '/people', label: 'Personal warehouses', icon: faUserGear },
   ];
 
   constructor() {

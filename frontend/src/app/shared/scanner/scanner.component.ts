@@ -10,20 +10,40 @@ import {
   output,
   signal,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import jsQR from 'jsqr';
 import { SharedModule } from '@shared/shared.module';
 import { normalizeCode, validCode } from './codes';
 import { TranslationService } from '@services/translation.service';
+import {
+  faCamera,
+  faCircle,
+  faKeyboard,
+  faPlus,
+  faRotateRight,
+  faStop,
+  faXmark,
+} from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-scanner',
   standalone: true,
   imports: [SharedModule],
   templateUrl: './scanner.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './scanner.component.css',
 })
 export class ScannerComponent implements OnDestroy {
+  protected readonly icons = {
+    camera: faCamera,
+    status: faCircle,
+    manual: faKeyboard,
+    add: faPlus,
+    restart: faRotateRight,
+    stop: faStop,
+    remove: faXmark,
+  };
   private translations = inject(TranslationService);
   readonly entryMode = input<'camera' | 'manual'>('camera');
   readonly modeChanged = output<'camera' | 'manual'>();

@@ -1,15 +1,18 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
+import { faPlus, faPrint } from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-labels',
   standalone: true,
   imports: [SharedModule],
   templateUrl: './labels.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './labels.component.css',
 })
 export class LabelsComponent {
+  protected readonly icons = { create: faPlus, print: faPrint };
   protected api = inject(InventoryService);
   protected count = 20;
   protected format = 'dymo-25x54';

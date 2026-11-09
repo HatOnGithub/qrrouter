@@ -1,4 +1,12 @@
-import { Component, effect, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { SharedModule } from '@shared/shared.module';
 import { Level } from '@core/models/inventory';
 import { InventoryService } from '@services/inventory.service';
@@ -7,6 +15,7 @@ import { InventoryService } from '@services/inventory.service';
   selector: 'qrr-location-fields',
   standalone: true,
   imports: [SharedModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './location-fields.component.html',
 })
 export class LocationFieldsComponent {

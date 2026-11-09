@@ -32,13 +32,29 @@
                 { "type": "anyComponentStyle", "maximumWarning": "8kb", "maximumError": "12kb" }
               ]
             },
-            "development": { "optimization": false, "sourceMap": true, "extractLicenses": false }
+            "development": { "optimization": false, "sourceMap": true, "extractLicenses": false },
+            "mock": {
+              "optimization": false,
+              "sourceMap": true,
+              "extractLicenses": false,
+              "index": "dev/index.html",
+              "styles": ["src/styles.scss", "dev/dolibarr-host.css"],
+              "assets": [{ "glob": "controls.js", "input": "dev", "output": "mock" }],
+              "outputPath": { "base": "dist/mock", "browser": "browser" }
+            }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "buildTarget": "qrrouter:build:development" }
+          "options": { "buildTarget": "qrrouter:build:development" },
+          "configurations": {
+            "mock": {
+              "buildTarget": "qrrouter:build:mock",
+              "proxyConfig": "dev/proxy.conf.cjs",
+              "host": "127.0.0.1"
+            }
+          }
         }
       }
     }

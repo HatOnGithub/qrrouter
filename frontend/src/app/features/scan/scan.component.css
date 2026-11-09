@@ -26,9 +26,8 @@
   outline: 2px solid var(--scanner-blue);
   outline-offset: 3px;
 }
-.scanner-operations a > span {
-  grid-row: span 2;
-  font-size: 1.9em;
+.scanner-operations a > fa-icon {
+  font-size: 1.5em;
   color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
 }
 .scanner-operations small {
@@ -86,12 +85,16 @@
     padding: 8px;
     min-height: 60px;
     display: flex;
+    flex-direction: row;
     align-items: center;
     gap: 6px;
+    font-size: 0.9em;
   }
-  .scanner-operations small,
-  .scanner-operations a > span {
+  .scanner-operations small {
     display: none;
+  }
+  .scanner-operations a > fa-icon {
+    font-size: 1.1em;
   }
   .scanned-product {
     padding: 0;

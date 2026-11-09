@@ -44,6 +44,7 @@
         {{ 'Return employee loans and reconcile pending transfers before changing mappings.' | t }}
       </p>
       <button mat-flat-button [disabled]="busy() || form.invalid || !person">
+        <fa-icon [icon]="saveIcon" aria-hidden="true" />
         {{ 'Save mapping' | t }}
       </button>
     </form>

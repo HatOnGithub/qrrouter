@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, output } from '@angular/core';
+import { Component, computed, inject, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ScannerComponent } from './scanner.component';
@@ -8,6 +8,7 @@ import { ScannerComponent } from './scanner.component';
   selector: 'qrr-capture',
   standalone: true,
   imports: [ScannerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <qrr-scanner
       [multiple]="multiple()"

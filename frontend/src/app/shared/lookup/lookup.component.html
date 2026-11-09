@@ -34,6 +34,7 @@
   <small>
     {{ 'Selected' | t }}: {{ selectedText() }}
     <button type="button" mat-button (click)="clear()" [disabled]="disabled()">
+      <fa-icon [icon]="clearIcon" aria-hidden="true" />
       {{ 'Clear' | t }}
     </button>
   </small>

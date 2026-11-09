@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { CardComponent } from './card/card.component';
 import { TranslatePipe } from './translate.pipe';
 
@@ -21,6 +22,7 @@ const modules = [
   MatSelectModule,
   MatCheckboxModule,
   MatProgressBarModule,
+  FontAwesomeModule,
   CardComponent,
   TranslatePipe,
 ];

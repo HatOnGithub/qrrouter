@@ -1,17 +1,20 @@
-import { Component, input, output, signal, inject } from '@angular/core';
+import { Component, input, output, signal, inject, ChangeDetectionStrategy } from '@angular/core';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { Lookup } from '@core/models/inventory';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { faXmark } from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-lookup',
   standalone: true,
   imports: [SharedModule, MatAutocompleteModule],
   templateUrl: './lookup.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lookup.component.css',
 })
 export class LookupComponent {
+  protected readonly clearIcon = faXmark;
   private api = inject(InventoryService);
   readonly resource = input('products');
   readonly type = input('');

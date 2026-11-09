@@ -68,6 +68,7 @@
           }}
         </p>
         <button action class="scanner-primary" mat-flat-button (click)="restart()">
+          <fa-icon [icon]="icons.restart" aria-hidden="true" />
           {{ 'Start another round' | t }}
         </button>
       </qrr-card>
@@ -81,6 +82,7 @@
           (click)="prepare()"
           [disabled]="!codes().length"
         >
+          <fa-icon [icon]="icons.review" aria-hidden="true" />
           {{ 'Review selected items' | t }}
         </button>
       </qrr-card>
@@ -114,7 +116,7 @@
                     <td [attr.data-label]="'Item / QR' | t">
                       <strong>{{ row.item?.label || row.code }}</strong>
                       @if (row.item?.native_batch) {
-                        <small>{{ 'Dolibarr lot/serial' | t }}: {{ row.item?.native_batch }}</small>
+                        <small>{{ 'Dolibarr lot/serial' | t }}: {{ row.item.native_batch }}</small>
                       }
                       <small>
                         {{ row.code }}
@@ -153,7 +155,7 @@
                               quantities[row.code] <= (kind() === 'correct' ? 0 : 1)
                             "
                           >
-                            −
+                            <fa-icon [icon]="icons.decrease" aria-hidden="true" />
                           </button>
                           <mat-form-field
                             class="number"
@@ -184,18 +186,18 @@
                               quantities[row.code] >= 100000000
                             "
                           >
-                            +
+                            <fa-icon [icon]="icons.increase" aria-hidden="true" />
                           </button>
                         </div>
-                        @if (kind() === 'correct' && row.item?.qty !== null) {
+                        @if (kind() === 'correct' && row.item && row.item.qty !== null) {
                           <div
                             class="quantity-difference"
-                            [class.negative]="quantities[row.code] < (row.item?.qty || 0)"
+                            [class.negative]="quantities[row.code] < (row.item.qty || 0)"
                           >
                             <span>{{ 'Difference' | t }}</span>
                             <strong>
-                              {{ quantities[row.code] - (row.item?.qty || 0) > 0 ? '+' : ''
-                              }}{{ quantities[row.code] - (row.item?.qty || 0) }}
+                              {{ quantities[row.code] - (row.item.qty || 0) > 0 ? '+' : ''
+                              }}{{ quantities[row.code] - (row.item.qty || 0) }}
                             </strong>
                           </div>
                         }
@@ -306,9 +308,11 @@
                 ((kind() === 'move' || kind() === 'return') && !warehouse)
               "
             >
+              <fa-icon [icon]="icons.confirm" aria-hidden="true" />
               {{ (busy() ? 'Working…' : 'Confirm operation') | t }}
             </button>
             <button type="button" mat-button (click)="review.set(false)" [disabled]="busy()">
+              <fa-icon [icon]="icons.back" aria-hidden="true" />
               {{ 'Back to scanning' | t }}
             </button>
           </div>

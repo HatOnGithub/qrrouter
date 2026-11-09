@@ -1,8 +1,9 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { CaptureComponent } from '@shared/scanner/capture.component';
 import { InventoryService } from '@services/inventory.service';
+import { faArrowRight } from '@fortawesome/free-solid-svg-icons';
 
 /** Collects identifiers only. Product and inventory details belong to the editor page. */
 @Component({
@@ -10,9 +11,11 @@ import { InventoryService } from '@services/inventory.service';
   standalone: true,
   imports: [SharedModule, CaptureComponent],
   templateUrl: './registration.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './registration.component.css',
 })
 export class RegistrationComponent {
+  protected readonly continueIcon = faArrowRight;
   protected api = inject(InventoryService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);

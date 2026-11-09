@@ -11,6 +11,7 @@
       @if (level.datatype === 'list' || level.datatype === 'letter') {
         <mat-select
           [ngModel]="value(level.id)"
+          [ngModelOptions]="{ standalone: true }"
           (ngModelChange)="change(level.id, $event)"
           [disabled]="disabled()"
         >
@@ -24,6 +25,7 @@
           matInput
           [type]="level.datatype === 'number' ? 'number' : 'text'"
           [ngModel]="value(level.id)"
+          [ngModelOptions]="{ standalone: true }"
           (ngModelChange)="change(level.id, $event)"
           [disabled]="disabled()"
           maxlength="64"

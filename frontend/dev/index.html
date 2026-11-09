@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>QR Router — local Dolibarr mock</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <script>
+      document.documentElement.dataset.mockTheme =
+        localStorage.getItem('qrr-mock-theme') || 'light';
+    </script>
+  </head>
+  <body>
+    <header class="mock-topbar">
+      <strong>Dolibarr</strong>
+      <span>Products / Stock / QR Router</span>
+      <b>LOCAL MOCK</b>
+    </header>
+    <form class="mock-controls" id="mock-controls">
+      <label>
+        Scenario
+        <select name="scenario" aria-label="Mock scenario">
+          <option value="populated">Sample inventory</option>
+          <option value="empty">Empty inventory / no employees</option>
+          <option value="no-employees">Sample inventory / no employees</option>
+          <option value="read-only">Read-only operator</option>
+          <option value="pending">Pending synchronization</option>
+          <option value="unavailable">Service unavailable</option>
+        </select>
+      </label>
+      <label>
+        Language
+        <select name="locale" aria-label="Mock language">
+          <option value="en_US">English</option>
+          <option value="nl_NL">Nederlands</option>
+          <option value="fr_FR">Français</option>
+        </select>
+      </label>
+      <label>
+        Delay
+        <select name="latency" aria-label="Mock response delay">
+          <option value="0">None</option>
+          <option value="250">250 ms</option>
+          <option value="1000">1 second</option>
+        </select>
+      </label>
+      <label>
+        Theme
+        <select name="theme" aria-label="Mock theme">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <button type="submit">Reset and apply</button>
+      <span>In-memory sample data. No real Dolibarr connection.</span>
+      <span id="mock-error" role="status"></span>
+    </form>
+    <main class="mock-main">
+      <qrr-root data-api="/custom/qrrouter/api.php"></qrr-root>
+    </main>
+    <script defer src="/mock/controls.js"></script>
+  </body>
+</html>

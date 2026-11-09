@@ -1,17 +1,48 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { available } from '@core/models/inventory';
+import {
+  faArrowRightFromBracket,
+  faArrowRightToBracket,
+  faArrowRotateLeft,
+  faArrowsRotate,
+  faArrowsUpDownLeftRight,
+  faClipboardCheck,
+  faCopy,
+  faMinus,
+  faPen,
+  faPlus,
+  faPrint,
+  faQrcode,
+  faRightLeft,
+} from '@fortawesome/free-solid-svg-icons';
 
 @Component({
   selector: 'qrr-item',
   standalone: true,
   imports: [SharedModule],
   templateUrl: './item.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './item.component.css',
 })
 export class ItemComponent {
+  protected readonly icons = {
+    checkout: faArrowRightFromBracket,
+    checkin: faArrowRightToBracket,
+    return: faArrowRotateLeft,
+    reconcile: faArrowsRotate,
+    move: faArrowsUpDownLeftRight,
+    correct: faClipboardCheck,
+    copy: faCopy,
+    consume: faMinus,
+    edit: faPen,
+    register: faPlus,
+    print: faPrint,
+    scan: faQrcode,
+    transfer: faRightLeft,
+  };
   protected api = inject(InventoryService);
   private route = inject(ActivatedRoute);
   protected code = signal(this.route.snapshot.paramMap.get('code') || '');

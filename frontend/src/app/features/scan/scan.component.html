@@ -4,38 +4,48 @@
   @if (!inputMode()) {
     <nav class="scanner-operations" [attr.aria-label]="'Warehouse operations' | t">
       <a routerLink="/scan" [queryParams]="{ input: 'camera' }">
+        <fa-icon [icon]="icons.camera" aria-hidden="true" />
         <strong>{{ 'QR camera' | t }}</strong>
       </a>
       <a routerLink="/scan" [queryParams]="{ input: 'manual' }">
+        <fa-icon [icon]="icons.manual" aria-hidden="true" />
         <strong>{{ 'Manual / USB entry' | t }}</strong>
       </a>
       @if (api.context()!.permissions.manage) {
         <a routerLink="/register">
+          <fa-icon [icon]="icons.register" aria-hidden="true" />
           <strong>{{ 'Register items' | t }}</strong>
         </a>
         <a routerLink="/workflow/transfer">
+          <fa-icon [icon]="icons.transfer" aria-hidden="true" />
           <strong>{{ 'Transfer contents between containers' | t }}</strong>
         </a>
         <a routerLink="/workflow/move">
+          <fa-icon [icon]="icons.move" aria-hidden="true" />
           <strong>{{ 'Move items' | t }}</strong>
           <small>{{ 'Warehouse or bin' | t }}</small>
         </a>
         <a routerLink="/workflow/consume">
+          <fa-icon [icon]="icons.consume" aria-hidden="true" />
           <strong>{{ 'Consume items' | t }}</strong>
           <small>{{ 'Remove from stock' | t }}</small>
         </a>
         <a routerLink="/workflow/return">
+          <fa-icon [icon]="icons.return" aria-hidden="true" />
           <strong>{{ 'Return items' | t }}</strong>
           <small>{{ 'Return to stock' | t }}</small>
         </a>
         @if (api.context()!.permissions.stock) {
           <a routerLink="/workflow/checkout">
+            <fa-icon [icon]="icons.checkout" aria-hidden="true" />
             <strong>{{ 'Check out items' | t }}</strong>
           </a>
           <a routerLink="/workflow/checkin">
+            <fa-icon [icon]="icons.checkin" aria-hidden="true" />
             <strong>{{ 'Check in items' | t }}</strong>
           </a>
           <a routerLink="/workflow/correct">
+            <fa-icon [icon]="icons.correct" aria-hidden="true" />
             <strong>{{ 'Correct container quantity' | t }}</strong>
             <small>{{ 'Count and adjust' | t }}</small>
           </a>
@@ -44,7 +54,10 @@
     </nav>
   }
   @if (inputMode()) {
-    <a mat-button routerLink="/scan">{{ 'Warehouse operations' | t }}</a>
+    <a mat-button routerLink="/scan">
+      <fa-icon [icon]="icons.previous" aria-hidden="true" />
+      {{ 'Warehouse operations' | t }}
+    </a>
     @if (!reviewing()) {
       <qrr-card [title]="(inputMode() === 'manual' ? 'Manual / USB entry' : 'QR camera') | t">
         <qrr-capture
@@ -60,6 +73,7 @@
           [queryParams]="{ input: inputMode(), step: 'review', codes: codes().join(',') }"
           [disabled]="!codes().length"
         >
+          <fa-icon [icon]="icons.next" aria-hidden="true" />
           {{ 'Review selected items' | t }}
         </a>
       </qrr-card>
@@ -70,6 +84,7 @@
         routerLink="/scan"
         [queryParams]="{ input: inputMode(), codes: codes().join(',') }"
       >
+        <fa-icon [icon]="icons.previous" aria-hidden="true" />
         {{ 'Change selection' | t }}
       </a>
       <div class="actions">
@@ -78,6 +93,7 @@
           (click)="resultIndex.set(resultIndex() - 1)"
           [disabled]="resultIndex() <= 0"
         >
+          <fa-icon [icon]="icons.previous" aria-hidden="true" />
           {{ 'Previous' | t }}
         </button>
         <span>{{ resultIndex() + 1 }} / {{ codes().length }}</span>
@@ -87,6 +103,7 @@
           [disabled]="resultIndex() >= codes().length - 1"
         >
           {{ 'Next' | t }}
+          <fa-icon [icon]="icons.next" aria-hidden="true" />
         </button>
       </div>
       <qrr-card [title]="'Scanned product' | t">
@@ -114,7 +131,10 @@
                   <dd>{{ item.qty ?? '?' }}</dd>
                 </div>
               </dl>
-              <a mat-stroked-button [routerLink]="['/items', code]">{{ 'Open item' | t }} →</a>
+              <a mat-stroked-button [routerLink]="['/items', code]">
+                {{ 'Open item' | t }}
+                <fa-icon [icon]="icons.next" aria-hidden="true" />
+              </a>
             } @else {
               <span>{{ code }} — {{ 'Unknown QR label' | t }}</span>
             }

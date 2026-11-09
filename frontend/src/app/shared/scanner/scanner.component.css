@@ -21,15 +21,12 @@
   align-items: center;
   gap: 8px;
 }
-.camera-state i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
+.camera-state-icon {
+  font-size: 8px;
   opacity: 0.5;
 }
-.camera-state.live i {
-  background: #239b42;
+.camera-state.live .camera-state-icon {
+  color: #239b42;
   opacity: 1;
 }
 .scan-count {
@@ -159,8 +156,18 @@ textarea {
     padding: 8px 0;
   }
   .camera-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 8px 0;
     gap: 4px;
+  }
+  .camera-actions button {
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 0.85em;
+  }
+  .camera-actions button:first-child {
+    grid-column: 1 / -1;
   }
   .codes {
     padding-inline: 0;

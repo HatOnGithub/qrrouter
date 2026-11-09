@@ -2,7 +2,7 @@
 
 An Angular frontend embedded in Dolibarr 21.0.2, a small PHP integration gateway, and a separate .NET 10 ASP.NET Core business service. This version targets a **clean installation** with empty QR inventory and no preconfigured employees or personal warehouses. It does not require data migration or the original PHP screens.
 
-The Angular code follows DeltaNext's engineering conventions: Angular/Material 21.1.5, standalone components, signals, `inject()`, lazy routes, typed HTTP services and a shared module. Its visual layout is specific to Dolibarr: inherited typography/colors, compact sections and horizontal module navigation, without DeltaNext branding, dark sidebar or gradient cards. Material controls and overlays take their colors/fonts from the host's native controls; the module does not change document-level theme variables. C# follows DeltaNext's controller/service/repository/options/middleware organization. The supplied original module remains under `reference/module-2.6.14` as reference and test-fixture material; its documentation describes the old implementation.
+The Angular code follows DeltaNext's engineering conventions: Angular 22.2.5, Material/CDK 22.2.6, TypeScript 6.0, standalone components, signals, `inject()`, lazy routes, typed HTTP services and a shared module. Its visual layout is specific to Dolibarr: inherited typography/colors, compact sections and horizontal module navigation, without DeltaNext branding, dark sidebar or gradient cards. Material controls and overlays take their colors/fonts from the host's native controls; the module does not change document-level theme variables. Icons use Font Awesome's Angular `fa-icon` component with individually imported free SVG definitions, bundled locally without an icon CDN or webfont. C# follows DeltaNext's controller/service/repository/options/middleware organization. The supplied original module remains under `reference/module-2.6.14` as reference and test-fixture material; its documentation describes the old implementation.
 
 ```mermaid
 flowchart LR
@@ -31,7 +31,7 @@ Serial/lot creation and metadata edits stage a durable intent in the service, co
 
 ## Build the installable module
 
-Requirements: Node.js 24, Python 3 and the .NET 10 SDK. The installed Dolibarr server needs PHP cURL, GD/TCPDF for QR image generation, and the Product, Stock, Lot/Serial and Binloc modules. The location adapter targets Binloc 2.19.1, including `fetchAnyByLot`, `setRawValues` and `createOrUpdate`.
+Requirements: Node.js 24.15 or newer within 24.x, Python 3 and the .NET 10 SDK. Angular's other supported Node versions are recorded in `frontend/package.json`. The installed Dolibarr server needs PHP cURL, GD/TCPDF for QR image generation, and the Product, Stock, Lot/Serial and Binloc modules. The location adapter targets Binloc 2.19.1, including `fetchAnyByLot`, `setRawValues` and `createOrUpdate`.
 
 ```sh
 cd frontend
@@ -150,7 +150,28 @@ python tests/angular_integration.py --php artifacts/php-runtime/php.exe --extens
 
 The helper downloads portable PHP 8.3 into ignored `artifacts`, checks the official SHA-256, and changes no system configuration. `tests/php_integration.py` remains an alias for the current integration suite.
 
-For frontend work, `npm start` runs Angular with a proxy to a PHP/Dolibarr host at `127.0.0.1:8088`; adjust `frontend/proxy.conf.json` to your development installation. Requests still need an authenticated Dolibarr session. Alternatively rebuild into `spa` and serve through Dolibarr to exercise the real host path. To run C# without Docker, set `AppSettings__ApiKey`, an absolute writable `AppSettings__DataDirectory`, and `ASPNETCORE_URLS=http://127.0.0.1:5087`, then run `dotnet run --project src/QrRouterApi`.
+For frontend development without Dolibarr, PHP, C# or a database:
+
+```sh
+cd frontend
+npm ci
+npm run start:mock
+```
+
+Open `http://127.0.0.1:4200`. Angular keeps its normal live reload. A Node mock API listens on loopback port 8089, and Angular proxies the existing PHP endpoint paths to it. The **LOCAL MOCK** toolbar provides sample inventory, empty inventory, no employees, a read-only operator, pending synchronization and service errors. It also selects English/Dutch/French, light/dark host themes, response delays, and resets the sample data. Sample inventory includes native-linked serials and box lots, generic items, consumed stock, loans, an uncounted container and unused labels. Changes persist in memory across browser reloads and reset when the command restarts or **Reset and apply** is pressed. All browser tabs share the same mock state.
+
+The mock supports the current 3.4 bootstrap (including label profiles), product/order/reference lookups, serial checks, Binloc location fields and summaries, picking, creation/registration/editing, counts, box transfers, warehouse workflows, personal warehouse mappings and synchronization recovery controls. QR images are scannable and print endpoints provide local previews. `frontend/dev/fixtures.mjs` holds the sample data; restart the command after changing mock fixtures or API behavior. The mock approximates responses for frontend work; native lot stock, permissions, transaction recovery and printer layout correctness still need the PHP/C# integration tests and a real Dolibarr installation.
+
+`npm run start:mock -- --port 4300` changes Angular's port. Set `QRR_MOCK_PORT` before starting if port 8089 is occupied. Ctrl+C stops both servers. No service key is needed. The mock configuration uses its own HTML shell, CSS, proxy and output directory; default production builds and the installable module do not include it.
+
+```sh
+npm run test:mock
+npm run e2e:mock
+```
+
+The browser command starts and stops its own mock and Angular server; install Playwright Chromium first as described above. The mock's Node tests use no extra test framework.
+
+To develop against an actual installation, `npm start` still runs Angular with a proxy to a PHP/Dolibarr host at `127.0.0.1:8088`; adjust `frontend/proxy.conf.json` to your installation. Requests need an authenticated Dolibarr session. Alternatively rebuild into `spa` and serve through Dolibarr to exercise the real host path. To run C# without Docker, set `AppSettings__ApiKey`, an absolute writable `AppSettings__DataDirectory`, and `ASPNETCORE_URLS=http://127.0.0.1:5087`, then run `dotnet run --project src/QrRouterApi`.
 
 ## Source formatting
 

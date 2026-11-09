@@ -19,6 +19,7 @@
       </p>
       @if (api.context()!.permissions.stock) {
         <button mat-stroked-button [disabled]="busy()" (click)="reconcile()">
+          <fa-icon [icon]="icons.reconcile" aria-hidden="true" />
           {{ 'Reconcile pending operation' | t }}
         </button>
       }
@@ -81,6 +82,7 @@
             target="_blank"
             rel="noopener"
           >
+            <fa-icon [icon]="icons.print" aria-hidden="true" />
             {{ 'Print label' | t }}
           </a>
           <a
@@ -98,15 +100,21 @@
       <div class="actions">
         @if (item.type === 'unassigned') {
           <a mat-flat-button routerLink="/register" [queryParams]="{ code: item.code }">
+            <fa-icon [icon]="icons.register" aria-hidden="true" />
             {{ 'Register item' | t }}
           </a>
         }
         @if (available(item)) {
-          <a mat-stroked-button [routerLink]="['/edit', item.code]">{{ 'Edit metadata' | t }}</a>
+          <a mat-stroked-button [routerLink]="['/edit', item.code]">
+            <fa-icon [icon]="icons.edit" aria-hidden="true" />
+            {{ 'Edit metadata' | t }}
+          </a>
           <a mat-flat-button routerLink="/workflow/move" [queryParams]="{ code: item.code }">
+            <fa-icon [icon]="icons.move" aria-hidden="true" />
             {{ 'Move' | t }}
           </a>
           <a mat-stroked-button routerLink="/workflow/consume" [queryParams]="{ code: item.code }">
+            <fa-icon [icon]="icons.consume" aria-hidden="true" />
             {{ 'Consume' | t }}
           </a>
           @if (api.context()!.permissions.stock) {
@@ -115,6 +123,7 @@
               routerLink="/workflow/checkout"
               [queryParams]="{ code: item.code }"
             >
+              <fa-icon [icon]="icons.checkout" aria-hidden="true" />
               {{ 'Check out' | t }}
             </a>
           }
@@ -124,6 +133,7 @@
               routerLink="/workflow/correct"
               [queryParams]="{ code: item.code }"
             >
+              <fa-icon [icon]="icons.correct" aria-hidden="true" />
               {{ 'Correct quantity' | t }}
             </a>
             <a
@@ -131,22 +141,26 @@
               routerLink="/workflow/transfer"
               [queryParams]="{ code: item.code }"
             >
+              <fa-icon [icon]="icons.transfer" aria-hidden="true" />
               {{ 'Transfer contents' | t }}
             </a>
           }
         }
         @if (item.checkout && api.context()!.permissions.stock) {
           <a mat-stroked-button routerLink="/workflow/checkin" [queryParams]="{ code: item.code }">
+            <fa-icon [icon]="icons.checkin" aria-hidden="true" />
             {{ 'Check in' | t }}
           </a>
         }
         @if ((item.consumed_units || 0) > 0 || item.status === 'consumed') {
           <a mat-stroked-button routerLink="/workflow/return" [queryParams]="{ code: item.code }">
+            <fa-icon [icon]="icons.return" aria-hidden="true" />
             {{ 'Return' | t }}
           </a>
         }
         @if (item.type !== 'unassigned') {
           <a mat-stroked-button routerLink="/create" [queryParams]="{ copy: item.code }">
+            <fa-icon [icon]="icons.copy" aria-hidden="true" />
             {{ 'Copy item' | t }}
           </a>
         }
@@ -185,6 +199,9 @@
 } @else {
   <qrr-card [title]="'Item not found' | t">
     <p>{{ 'This QR identifier is not registered in the current entity.' | t }}</p>
-    <a mat-button routerLink="/scan">{{ 'Scan QR' | t }}</a>
+    <a mat-button routerLink="/scan">
+      <fa-icon [icon]="icons.scan" aria-hidden="true" />
+      {{ 'Scan QR' | t }}
+    </a>
   </qrr-card>
 }
