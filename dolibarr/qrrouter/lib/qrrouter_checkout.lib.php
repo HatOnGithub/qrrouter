@@ -1,5 +1,5 @@
 <?php
-/** Native warehouse stock transfers for QR handoffs. Does not modify core or Binloc. */
+/** Native warehouse stock transfers and lot-specific Binloc assignments for QR handoffs. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
@@ -41,7 +41,7 @@ function qrr_native_batch($db, $product, $item, $warehouseId, $qty) {
 /** Return signed movements tagged with one unique inventory code. Read only. */
 function qrr_transfer_evidence($db, $pending) {
     $sql =
-        'SELECT fk_entrepot, value, fk_product FROM ' .
+        'SELECT fk_entrepot, value, fk_product, batch FROM ' .
         MAIN_DB_PREFIX .
         'stock_mouvement WHERE inventorycode=\'';
     $sql .= $db->escape($pending['inventorycode']) . "'";
@@ -56,6 +56,13 @@ function qrr_transfer_evidence($db, $pending) {
         $pid = (int) $m->fk_product;
         $wid = (int) $m->fk_entrepot;
         $qty = (float) $m->value;
+        if (
+            !empty($pending['native_batch']) &&
+            (string) ($m->batch ?? '') !== $pending['native_batch']
+        ) {
+            $extra++;
+            continue;
+        }
         if (
             $pid === (int) $pending['product_id'] &&
             $wid === (int) $pending['from'] &&
@@ -72,7 +79,16 @@ function qrr_transfer_evidence($db, $pending) {
             $extra++;
         }
     }
-    return ['out' => $out, 'in' => $in, 'extra' => $extra];
+    $proof = ['out' => $out, 'in' => $in, 'extra' => $extra];
+    if (!empty($pending['product_lot_id'])) {
+        $proof['location'] = qrr_native_location_matches(
+            $db,
+            $pending['product_lot_id'],
+            $pending['product_id'],
+            $pending['location_target'],
+        );
+    }
+    return $proof;
 }
 function qrr_transfer_evidence_complete($e) {
     return $e['out'] === 1 && $e['in'] === 1 && $e['extra'] === 0;
@@ -172,6 +188,14 @@ function qrr_do_native_transfer($db, $user, $item, $pending) {
             throw new RuntimeException(
                 'Native stock increase failed: ' .
                     ($product->error ?: implode('; ', (array) $product->errors)),
+            );
+        }
+        if (!empty($item['product_lot_id'])) {
+            qrr_native_save_location(
+                $db,
+                $user,
+                array_merge($item, $pending['location_target']),
+                $item['product_lot_id'],
             );
         }
         if ($db->commit() <= 0) {

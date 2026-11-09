@@ -12,6 +12,7 @@ import { InventoryService } from '@services/inventory.service';
 export class LabelsComponent {
   protected api = inject(InventoryService);
   protected count = 20;
+  protected format = 'dymo-25x54';
   protected busy = signal(false);
   protected error = signal('');
   protected batches = computed(() =>

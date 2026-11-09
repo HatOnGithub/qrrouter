@@ -1,5 +1,5 @@
 <?php
-/** Workflow engine for QR Router 2.6.0. No Dolibarr core or Binloc writes. */
+/** Recoverable native stock workflows and lot-specific Binloc assignments. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
@@ -50,8 +50,7 @@ function qrr_registration_fields($db, $user, $posted, $warehouses, $type) {
     $qty = $type === 'box' ? (int) $text : 1;
     $serial = $type === 'tracked' ? trim(strip_tags((string) ($posted['serial'] ?? ''))) : '';
     $details = $type === 'tracked' ? trim(strip_tags((string) ($posted['details'] ?? ''))) : '';
-    $nativeBatch =
-        $type === 'tracked' ? trim(strip_tags((string) ($posted['native_batch'] ?? ''))) : '';
+    $nativeBatch = $type === 'box' ? $label : ($type === 'tracked' ? $serial : '');
     if (strlen($nativeBatch) > 100) {
         throw new RuntimeException('Native batch value is too long');
     }
@@ -93,27 +92,27 @@ function qrr_registration_fields($db, $user, $posted, $warehouses, $type) {
 }
 /** Metadata registration only: native quantities are not increased on registration. */
 function qrr_register_codes($db, $user, $codes, $type, $fields) {
-    return qrr_command(
-        'register',
-        array_merge(
-            qrr_service_fields(
-                $type,
-                $fields['label'],
-                $fields['product_id'],
-                $fields['warehouse_id'],
-                $fields['choice'],
-                $fields['qty'],
-                $fields['details'],
-                $fields['serial'],
-                $fields['native_batch'],
-            ),
-            ['codes' => $codes],
+    $data = array_merge(
+        qrr_service_fields(
+            $type,
+            $fields['label'],
+            $fields['product_id'],
+            $fields['warehouse_id'],
+            $fields['choice'],
+            $fields['qty'],
+            $fields['details'],
+            $fields['serial'],
+            $fields['native_batch'],
         ),
+        ['codes' => $codes],
     );
+    return in_array($type, ['tracked', 'box'], true)
+        ? qrr_native_command($db, $user, 'register', $data)
+        : qrr_command('register', $data);
 }
 function qrr_native_evidence($db, $op) {
     $sql =
-        'SELECT fk_entrepot, value, fk_product FROM ' .
+        'SELECT fk_entrepot, value, fk_product, batch FROM ' .
         MAIN_DB_PREFIX .
         "stock_mouvement WHERE inventorycode='" .
         $db->escape($op['id']) .
@@ -130,6 +129,8 @@ function qrr_native_evidence($db, $op) {
         foreach ($expected as $i => $effect) {
             if (
                 (int) $m->fk_product === (int) $op['product_id'] &&
+                (empty($op['native_batch']) ||
+                    (string) ($m->batch ?? '') === $op['native_batch']) &&
                 (int) $m->fk_entrepot === (int) $effect['warehouse_id'] &&
                 abs((float) $m->value - (float) $effect['delta']) < 0.00001
             ) {
@@ -143,7 +144,16 @@ function qrr_native_evidence($db, $op) {
         }
     }
     $db->free($res);
-    return ['seen' => $seen, 'other' => $other];
+    $proof = ['seen' => $seen, 'other' => $other];
+    if (!empty($op['product_lot_id']) && isset($op['location_target'])) {
+        $proof['location'] = qrr_native_location_matches(
+            $db,
+            $op['product_lot_id'],
+            $op['product_id'],
+            $op['location_target'],
+        );
+    }
+    return $proof;
 }
 function qrr_native_evidence_complete($proof) {
     if ($proof['other'] !== 0) {
@@ -172,7 +182,7 @@ function qrr_native_apply($db, $user, $entry, $op) {
     if (!qrr_stock_write_right($user)) {
         throw new RuntimeException('Stock movement permission required');
     }
-    if (!qrr_native_evidence_none(qrr_native_evidence($db, $op))) {
+    if ($op['effects'] && !qrr_native_evidence_none(qrr_native_evidence($db, $op))) {
         throw new RuntimeException(
             'Movement with this inventory code already exists. Reconcile before retrying.',
         );
@@ -206,6 +216,11 @@ function qrr_native_apply($db, $user, $entry, $op) {
         $price = isset($product->pmp) ? (float) $product->pmp : 0.0;
         $eatby = 0;
         $sellby = 0;
+        if (!empty($entry['product_lot_id'])) {
+            [, $lot] = qrr_native_lot($db, $entry);
+            $eatby = $lot->eatby ?: 0;
+            $sellby = $lot->sellby ?: 0;
+        }
         foreach ($op['effects'] as $effect) {
             $wh = (int) $effect['warehouse_id'];
             $signed = (int) $effect['delta'];
@@ -229,7 +244,7 @@ function qrr_native_apply($db, $user, $entry, $op) {
                 }
                 if ($signed < 0) {
                     [$batch, $eatby, $sellby] = qrr_native_batch($db, $product, $entry, $wh, $n);
-                } elseif ($op['kind'] !== 'move') {
+                } elseif ($op['kind'] !== 'move' && empty($entry['product_lot_id'])) {
                     $eatby = 0;
                     $sellby = 0;
                 }
@@ -263,6 +278,14 @@ function qrr_native_apply($db, $user, $entry, $op) {
                 );
             }
         }
+        if (!empty($entry['product_lot_id']) && isset($op['location_target'])) {
+            qrr_native_save_location(
+                $db,
+                $user,
+                array_merge($entry, $op['location_target']),
+                $entry['product_lot_id'],
+            );
+        }
         if ($db->commit() <= 0) {
             throw new RuntimeException(
                 'Commit status unknown; reconcile pending QR operation before retrying',
@@ -294,7 +317,7 @@ function qrr_run_inventory_action($db, $user, $code, $kind, $args, $warehouses) 
     qrr_service_preflight($db, $user, $entry, $plan);
     $data['revision'] = $plan['revision'];
     $op = qrr_command('stage', $data);
-    if (!$op['effects']) {
+    if (!$op['effects'] && empty($op['product_lot_id'])) {
         return $op;
     }
     try {

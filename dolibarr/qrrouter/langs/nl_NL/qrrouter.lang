@@ -562,3 +562,30 @@ QRRUI_ae3c35bce94a=Geselecteerd:
 QRRUI_266d29844bcb=Individueel gevolgd accepteert één label per keer
 # Unable to load Binloc levels: 
 QRRUI_565a7a4ecf1a=Binloc-niveaus kunnen niet worden geladen: 
+
+QRRUI_6589ecbd6051=Printer / labelformaat
+QRRUI_4b38d93ee612=A4-labelvel
+QRRUI_c293b8979197=DYMO-labels bevatten de QR-code, QR-ID en gegevens in deze volgorde: serienummer, korte productnaam, productreferentie.
+QRRUI_0bc60cc7ca73=Product niet toegewezen
+QRRUI_4f18bf74f765=Referentie niet toegewezen
+QRRUI_1493a661d1d8=DYMO 550-labels
+QRRUI_dd7ad9a6639b=54 mm breed ? 25 mm hoog. E?n label per pagina.
+QRRUI_27a13c96842a=Kies uw DYMO LabelWriter 550 en papier van 25 ? 54 mm. Gebruik liggende afdrukstand, schaal 100%, geen marges en schakel kop- en voetteksten uit.
+QRRUI_43e64dc3ed9f=Gegevens: serienummer, korte productnaam, daarna productreferentie. Ontbrekende gegevens worden als niet toegewezen gemarkeerd.
+QRRUI_707fea89ce60=DYMO-labels afdrukken
+QRRUI_0767c1584a8a=A4-indeling
+QRRUI_8cc976f023b8=Terug naar QR Router
+QRRUI_0905c494d1f0=QR-afbeeldingen laden?
+QRRUI_e5bb92ef805f=Geen labels om af te drukken
+QRRUI_9adc5d3b4866=JavaScript is nodig om deze afdrukindeling voor te bereiden.
+QRRUI_5621ca78ef88=Labels gereed. Lange gegevens kunnen worden ingekort; de QR-ID blijft volledig.
+QRRUI_1565f470db44=QR-afbeelding kon niet worden geladen. Vernieuw v??r het afdrukken.
+
+QRRUI_f6a3ad4a5b9b=Labelformaat
+QRRUI_66b47e4c9af7=Formaat toepassen
+QRRUI_76f6d5d94323=E?n label per pagina
+QRRUI_1d8715588067=Grotere labels tonen ook partij, locatie, hoeveelheid, status en artikelgegevens wanneer beschikbaar.
+QRRUI_4c015926ec45=Kies uw printer en het bijpassende labelformaat. Gebruik liggende afdrukstand, schaal 100%, geen marges en schakel kop- en voetteksten uit.
+QRRUI_4a211932145b=Partij
+QRRUI_ecdda59aea5e=Artikel
+QRRUI_8f5e155f6115=DYMO-labelformaten

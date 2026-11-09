@@ -7,7 +7,8 @@ if (!$res) {
     die('Missing Dolibarr main.inc.php');
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
-if (!qrr_read_right($user)) {
+require_once __DIR__ . '/lib/qrrouter_labels.lib.php';
+if (!qrr_read_right($user) || !qrr_products_right($user)) {
     accessforbidden();
 }
 $code = qrr_input_code(GETPOST('code', 'alphanohtml'));
@@ -18,8 +19,25 @@ if (!$item) {
     exit('Label not found');
 }
 $img = qrr_link('qr.php', ['code' => $code]);
+$format = qrr_label_format(GETPOST('format', 'alphanohtml'));
+if ($format !== 'a4') {
+    qrr_dymo_document(
+        $db,
+        [$item],
+        'Print QR label',
+        qrr_link('label.php', ['code' => $code, 'format' => 'a4']),
+        qrr_app_link('items/' . $code),
+        $format,
+        ['code' => $code],
+    );
+    exit();
+}
 qrr_layout_start('Print QR label');
-print '<div class="qrr-noprint"><button class="qrr-btn" onclick="window.print()">Print</button></div>';
+print '<div class="qrr-noprint"><button class="qrr-btn" onclick="window.print()">Print</button> <a class="qrr-btn alt" href="' .
+    qrr_h(qrr_link('label.php', ['code' => $code, 'format' => 'dymo-25x54'])) .
+    '">' .
+    qrr_h(qrr_t('DYMO label sizes')) .
+    '</a></div>';
 print '<style>@page{size:A4;margin:8mm}.qrr-qr-label{border:1px dashed #888;width:65mm;min-height:65mm;padding:5mm;margin:15mm auto;text-align:center;box-sizing:border-box;background:white;color:black;font:12pt Arial}.qrr-qr-label img{width:40mm;height:40mm}.qrr-qr-label .qrr-printed-name{display:block;font-size:15pt;font-weight:700;overflow-wrap:anywhere}.qrr-qr-label .qrr-printed-code{display:block;font:9pt monospace;color:#555;overflow-wrap:anywhere}@media print{.qrr-qr-label{margin:0}}</style>';
 print '<div class="qrr-qr-label"><span class="qrr-printed-name">' .
     qrr_h(qrr_item_display_name($item)) .

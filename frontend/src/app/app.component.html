@@ -39,6 +39,27 @@
         </div>
       }
       @if (inventory.context()) {
+        @if (inventory.context()!.state.pending_native) {
+          <div class="alert" role="alert">
+            <p>
+              {{
+                'A Dolibarr synchronization is pending. Wait at least 30 seconds after the original request before recovery. Cancel is available only if no native changes committed.'
+                  | t
+              }}
+            </p>
+            @if (inventory.context()!.permissions.stock) {
+              <button mat-button (click)="recoverNative()" [disabled]="recovering()">
+                {{ 'Recover synchronization' | t }}
+              </button>
+              <button mat-button (click)="recoverNative(true)" [disabled]="recovering()">
+                {{ 'Cancel uncommitted synchronization' | t }}
+              </button>
+            }
+            @if (recoveryError()) {
+              <p>{{ recoveryError() }}</p>
+            }
+          </div>
+        }
         <router-outlet />
       } @else if (!inventory.loading()) {
         <qrr-card [title]="'Session unavailable' | t">

@@ -9,6 +9,7 @@ if (!$res) {
     exit('Dolibarr bootstrap unavailable');
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
+require_once __DIR__ . '/lib/qrrouter_labels.lib.php';
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -45,16 +46,27 @@ function qrr_api_fields($data, $existing = null) {
         $existing,
         !empty($data['keep_legacy']),
     );
+    $label = trim(strip_tags((string) ($data['label'] ?? '')));
+    $serial = trim(strip_tags((string) ($data['serial'] ?? '')));
+    $nativeBatch = $type === 'box' ? $label : ($type === 'tracked' ? $serial : '');
+    if (
+        in_array($type, ['box', 'tracked'], true) &&
+        ($nativeBatch === '' || strlen($nativeBatch) > 100)
+    ) {
+        throw new InvalidArgumentException(
+            'Enter a serial number or box name of at most 100 bytes',
+        );
+    }
     return qrr_service_fields(
         $type,
-        trim(strip_tags((string) ($data['label'] ?? ''))),
+        $label,
         $pid,
         $wid,
         $choice,
         $qty,
         trim(strip_tags((string) ($data['details'] ?? ''))),
-        trim(strip_tags((string) ($data['serial'] ?? ''))),
-        trim(strip_tags((string) ($data['native_batch'] ?? ''))),
+        $serial,
+        $nativeBatch,
     );
 }
 function qrr_api_translations() {
@@ -93,6 +105,7 @@ function qrr_api_get($resource) {
         }
         return [
             'state' => $state,
+            'label_formats' => qrr_label_profiles(),
             'warehouses' => (object) qrr_warehouses($db),
             'users' => (object) (qrr_write_right($user) ? qrr_personal_users($db) : []),
             'products' => (object) $products,
@@ -244,6 +257,20 @@ function qrr_api_get($resource) {
 function qrr_api_post($action, $data) {
     global $db, $user;
     qrr_api_permit(qrr_write_right($user));
+    if (in_array($action, ['native-recover', 'native-cancel'], true)) {
+        $pending = qrr_service('GET', '')['pending_native'] ?? null;
+        if (!$pending) {
+            throw new InvalidArgumentException('No pending synchronization');
+        }
+        if (time() - strtotime($pending['at']) < 30) {
+            throw new RuntimeException(
+                'Synchronization may still be running; wait 30 seconds before recovery',
+            );
+        }
+        return $action === 'native-cancel'
+            ? qrr_native_cancel($db, $user, $pending)
+            : qrr_native_complete($db, $user, $pending);
+    }
     // Never forward the browser's object wholesale to the C# service.
     if (in_array($action, ['create', 'update', 'bulk', 'register'], true)) {
         $code = qrr_input_code($data['code'] ?? '');
@@ -292,21 +319,28 @@ function qrr_api_post($action, $data) {
             }
             return ['codes' => $registered, 'warning' => $warning];
         }
-        return qrr_command($action, $fields);
+        return in_array($fields['type'], ['tracked', 'box'], true)
+            ? qrr_native_command($db, $user, $action, $fields)
+            : qrr_command($action, $fields);
     }
     if ($action === 'count') {
-        return qrr_command('count', [
+        $fields = [
             'code' => qrr_input_code($data['code'] ?? ''),
             'quantity' => qrr_api_int($data, 'quantity', -1),
             'reason' => (string) ($data['reason'] ?? ''),
-        ]);
+        ];
+        $item = qrr_load_state()['items'][$fields['code']] ?? null;
+        return !empty($item['product_lot_id'])
+            ? qrr_native_command($db, $user, 'count', $fields)
+            : qrr_command('count', $fields);
     }
     if ($action === 'box-transfer') {
-        return qrr_command('box-transfer', [
+        $fields = [
             'from' => qrr_input_code($data['from'] ?? ''),
             'to' => qrr_input_code($data['to'] ?? ''),
             'quantity' => qrr_api_int($data, 'quantity'),
-        ]);
+        ];
+        return qrr_native_command($db, $user, 'box-transfer', $fields);
     }
     if ($action === 'mapping') {
         qrr_api_permit(!empty($user->admin));

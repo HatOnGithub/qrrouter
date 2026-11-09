@@ -7,7 +7,8 @@ if (!$res) {
     die('Missing Dolibarr main.inc.php');
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
-if (!qrr_read_right($user)) {
+require_once __DIR__ . '/lib/qrrouter_labels.lib.php';
+if (!qrr_read_right($user) || !qrr_products_right($user)) {
     accessforbidden();
 }
 $batch = strtoupper(trim((string) GETPOST('batch', 'alphanohtml')));
@@ -24,6 +25,26 @@ $printCodes = array_values(
             (!$onlyUnassigned || ($state['items'][$code]['type'] ?? '') === 'unassigned');
     }),
 );
+$format = qrr_label_format(GETPOST('format', 'alphanohtml'));
+if ($format !== 'a4') {
+    $items = array_map(function ($code) use ($state) {
+        return $state['items'][$code];
+    }, $printCodes);
+    qrr_dymo_document(
+        $db,
+        $items,
+        'Printable QR batch',
+        qrr_link('batch_print.php', [
+            'batch' => $batch,
+            'unassigned' => $onlyUnassigned ? 1 : 0,
+            'format' => 'a4',
+        ]),
+        qrr_app_link('labels'),
+        $format,
+        ['batch' => $batch, 'unassigned' => $onlyUnassigned ? 1 : 0],
+    );
+    exit();
+}
 qrr_layout_start('Printable QR batch');
 print '<div class="qrr-noprint"><p>Batch ' .
     qrr_h($batch) .
@@ -36,6 +57,16 @@ if ($printCodes) {
     print '<button class="qrr-btn" onclick="window.print()">Print / Save as PDF</button> ';
 }
 print '<a class="qrr-btn alt" href="' .
+    qrr_h(
+        qrr_link('batch_print.php', [
+            'batch' => $batch,
+            'unassigned' => $onlyUnassigned ? 1 : 0,
+            'format' => 'dymo-25x54',
+        ]),
+    ) .
+    '">' .
+    qrr_h(qrr_t('DYMO label sizes')) .
+    '</a> <a class="qrr-btn alt" href="' .
     qrr_h(qrr_base() . 'index.php#/labels') .
     '">Back to unregistered QR batches</a> <a class="qrr-btn alt" href="' .
     qrr_h(qrr_base() . 'index.php#/register') .

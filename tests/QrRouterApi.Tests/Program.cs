@@ -485,6 +485,96 @@ try
         File.ReadAllText(Path.Combine(path, "state.json")) == "broken",
         "Corrupt state is never overwritten"
     );
+    var nativeActor = admin with { EntityId = 20 };
+    JsonNode? Native(string action, JsonObject fields) =>
+        service.Execute(nativeActor, action, fields);
+    var nativeFields = Fields("box", 12);
+    nativeFields["label"] = "Box A";
+    nativeFields["native_batch"] = "Box A";
+    var intent = (JsonObject)
+        Native("native-stage", Object(("action", "create"), ("fields", nativeFields)))!;
+    var nativeCode = intent.S("result");
+    Check(
+        service.State(nativeActor).Map("items").Count == 0,
+        "Native intent does not publish uncommitted inventory"
+    );
+    Reject(
+        () => Native("create", nativeFields),
+        "Pending native intent prevents concurrent mutation"
+    );
+    Reject(
+        () =>
+            Native("native-finish", Object(("id", intent.S("id")), ("bindings", new JsonObject()))),
+        "Missing lot receipt cannot publish inventory"
+    );
+    Native("native-finish", Object(("id", intent.S("id")), ("bindings", Object((nativeCode, 51)))));
+    Check(
+        service.State(nativeActor).Map("items")[nativeCode]!.I("product_lot_id") == 51,
+        "Native receipt binds QR identity to a distinct Dolibarr lot ID"
+    );
+    Reject(
+        () => Native("native-stage", Object(("action", "create"), ("fields", nativeFields))),
+        "Duplicate native lot identity cannot get a second QR"
+    );
+    var nativePlan = PlanData(nativeCode, "correct", Object(("quantity", 9)));
+    nativePlan["native_items"] = Object((nativeCode, Object(("qty", 7), ("warehouse_id", 1))));
+    var observedPlan = (JsonObject)Native("plan", nativePlan)!;
+    Check(
+        observedPlan["effects"]![0]!.I("delta") == 2,
+        "Stock correction plans from native stock observations, not cached quantity"
+    );
+    var nativeMove = PlanData(
+        nativeCode,
+        "move",
+        Object(("warehouse_id", 1), ("choice", Object(("bin", "B"))))
+    );
+    var nativeMovePlan = (JsonObject)Native("plan", nativeMove)!;
+    nativeMove["revision"] = nativeMovePlan.I("revision");
+    var nativeMoveOp = (JsonObject)Native("stage", nativeMove)!;
+    Check(
+        service.State(nativeActor).Map("items")[nativeCode]!["pending_operation"] is not null,
+        "Same-warehouse Binloc changes are durably staged"
+    );
+    Reject(
+        () =>
+            Native(
+                "finish",
+                Object(
+                    ("code", nativeCode),
+                    ("id", nativeMoveOp.S("id")),
+                    ("proof", new { seen = Array.Empty<int>(), other = 0 })
+                )
+            ),
+        "Location changes need native Binloc evidence"
+    );
+    Native(
+        "finish",
+        Object(
+            ("code", nativeCode),
+            ("id", nativeMoveOp.S("id")),
+            (
+                "proof",
+                new
+                {
+                    seen = Array.Empty<int>(),
+                    other = 0,
+                    location = true,
+                }
+            )
+        )
+    );
+    Check(
+        service.State(nativeActor).Map("items")[nativeCode]!.S("bin") == "B",
+        "Verified Binloc change finalizes"
+    );
+    Reject(
+        () =>
+            Native(
+                "plan",
+                PlanData(nativeCode, "consume", Object(("quantity", 1), ("post_stock", false)))
+            ),
+        "Native-linked consumption cannot silently change cached counts only"
+    );
     Console.WriteLine($"Passed {passed} assertions.");
 }
 finally

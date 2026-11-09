@@ -49,6 +49,7 @@ export class WorkflowComponent implements OnDestroy {
       item: this.api.context()!.state.items[code] as Item | undefined,
     }))
   );
+  protected nativeLinked = computed(() => this.rows().some(row => !!row.item?.product_lot_id));
   protected establishing = computed(
     () => this.kind() === 'correct' && this.rows().length === 1 && this.rows()[0].item?.qty === null
   );
@@ -92,6 +93,7 @@ export class WorkflowComponent implements OnDestroy {
       this.selected[code] = !!item;
       this.quantities[code] = this.kind() === 'correct' ? item?.qty || 0 : 1;
     }
+    if (this.nativeLinked()) this.postStock = true;
     this.review.set(true);
   }
 
@@ -114,7 +116,7 @@ export class WorkflowComponent implements OnDestroy {
           codes.map(code => ({
             code,
             ok: true,
-            message: 'Container contents transferred; native stock unchanged',
+            message: 'Contents transferred between Dolibarr lots; warehouse total unchanged',
           }))
         );
       } else if (this.establishing()) {
@@ -149,6 +151,15 @@ export class WorkflowComponent implements OnDestroy {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  protected adjustQuantity(code: string, delta: number): void {
+    const minimum = this.kind() === 'correct' ? 0 : 1;
+    const current = Number(this.quantities[code]);
+    this.quantities[code] = Math.min(
+      100000000,
+      Math.max(minimum, (Number.isFinite(current) ? current : minimum) + delta)
+    );
   }
 
   protected restart(): void {

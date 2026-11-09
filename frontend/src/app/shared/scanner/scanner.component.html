@@ -1,29 +1,59 @@
 <div class="scanner">
-  <video #video playsinline muted [hidden]="!camera()" [attr.aria-label]="'QR camera' | t"></video>
-  <div class="actions">
+  <div class="scanner-status" role="status">
+    <span class="camera-state" [class.live]="camera()">
+      <i aria-hidden="true"></i>
+      {{
+        (camera()
+          ? 'Camera running'
+          : starting()
+            ? 'Starting camera…'
+            : 'Manual / hardware scanner ready'
+        ) | t
+      }}
+    </span>
+    <span class="scan-count">{{ codes().length }} {{ 'scanned' | t }}</span>
+  </div>
+  <div class="scanner-workspace" [class.camera-active]="camera()">
+    <div class="camera-preview" [hidden]="!camera()">
+      <video #video playsinline muted [attr.aria-label]="'QR camera' | t"></video>
+      <div class="viewfinder" aria-hidden="true"></div>
+      <span class="camera-caption">{{ 'Place a QR label inside the frame' | t }}</span>
+    </div>
+    <div class="scanner-entry">
+      <h3>{{ 'Scan or enter a code' | t }}</h3>
+      <p class="entry-hint">
+        {{ 'Use your camera, a USB scanner, or enter QR identifiers below.' | t }}
+      </p>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>{{ 'QR identifiers' | t }}</mat-label>
+        <textarea
+          matInput
+          rows="2"
+          [(ngModel)]="manual"
+          (keydown.enter)="$event.preventDefault(); add()"
+          [attr.aria-label]="'QR identifiers' | t"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+        ></textarea>
+      </mat-form-field>
+      <button class="add-codes" type="button" mat-flat-button (click)="add()">
+        {{ 'Add codes' | t }}
+      </button>
+    </div>
+  </div>
+  <div class="camera-actions">
     <button type="button" mat-stroked-button (click)="start()" [disabled]="starting()">
       {{ (camera() ? 'Restart camera' : 'Start camera') | t }}
     </button>
     @if (camera() || starting()) {
       <button type="button" mat-button (click)="stop()">{{ 'Stop camera' | t }}</button>
     }
-    <span class="muted">{{ 'Camera or hardware scanner, or enter codes manually.' | t }}</span>
   </div>
-  <mat-form-field appearance="outline">
-    <mat-label>{{ 'QR identifiers' | t }}</mat-label>
-    <textarea
-      matInput
-      rows="2"
-      [(ngModel)]="manual"
-      (keydown.enter)="$event.preventDefault(); add()"
-      [attr.aria-label]="'QR identifiers' | t"
-    ></textarea>
-  </mat-form-field>
-  <button type="button" mat-flat-button (click)="add()">{{ 'Add codes' | t }}</button>
   @if (error()) {
     <p class="alert" role="alert">{{ error() }}</p>
   }
-  <div class="codes" aria-live="polite">
+  <div class="codes" aria-live="polite" [attr.aria-label]="'Scanned labels' | t">
     @for (code of codes(); track code) {
       <button
         type="button"

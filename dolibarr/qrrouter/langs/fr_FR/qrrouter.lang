@@ -562,3 +562,30 @@ QRRUI_ae3c35bce94a=Sélectionné :
 QRRUI_266d29844bcb=Le suivi individuel accepte une étiquette à la fois
 # Unable to load Binloc levels: 
 QRRUI_565a7a4ecf1a=Impossible de charger les niveaux Binloc : 
+
+QRRUI_6589ecbd6051=Imprimante / format d??tiquette
+QRRUI_4b38d93ee612=Planche d??tiquettes A4
+QRRUI_c293b8979197=Les ?tiquettes DYMO contiennent le QR, son identifiant, puis par priorit? : num?ro de s?rie, nom court du produit, r?f?rence produit.
+QRRUI_0bc60cc7ca73=Produit non attribu?
+QRRUI_4f18bf74f765=R?f?rence non attribu?e
+QRRUI_1493a661d1d8=?tiquettes DYMO 550
+QRRUI_dd7ad9a6639b=54 mm de large ? 25 mm de haut. Une ?tiquette par page.
+QRRUI_27a13c96842a=S?lectionnez votre DYMO LabelWriter 550 et le papier 25 ? 54 mm. Utilisez l?orientation paysage, une ?chelle de 100 %, aucune marge et d?sactivez les en-t?tes et pieds de page.
+QRRUI_43e64dc3ed9f=D?tails : num?ro de s?rie, nom court du produit, puis r?f?rence produit. Les donn?es absentes sont signal?es comme non attribu?es.
+QRRUI_707fea89ce60=Imprimer les ?tiquettes DYMO
+QRRUI_0767c1584a8a=Disposition A4
+QRRUI_8cc976f023b8=Retour ? QR Router
+QRRUI_0905c494d1f0=Chargement des images QR?
+QRRUI_e5bb92ef805f=Aucune ?tiquette ? imprimer
+QRRUI_9adc5d3b4866=JavaScript est requis pour pr?parer cette mise en page.
+QRRUI_5621ca78ef88=?tiquettes pr?tes. Les longs d?tails peuvent ?tre abr?g?s ; l?identifiant QR reste complet.
+QRRUI_1565f470db44=?chec du chargement d?une image QR. Actualisez avant d?imprimer.
+
+QRRUI_f6a3ad4a5b9b=Taille d??tiquette
+QRRUI_66b47e4c9af7=Appliquer la taille
+QRRUI_76f6d5d94323=Une ?tiquette par page
+QRRUI_1d8715588067=Les grandes ?tiquettes ajoutent lot, emplacement, quantit?, statut et d?tails d?article si disponibles.
+QRRUI_4c015926ec45=S?lectionnez votre imprimante et le papier correspondant. Utilisez l?orientation paysage, l??chelle 100 %, aucune marge et d?sactivez les en-t?tes et pieds de page.
+QRRUI_4a211932145b=Lot
+QRRUI_ecdda59aea5e=Article
+QRRUI_8f5e155f6115=Formats d??tiquettes DYMO

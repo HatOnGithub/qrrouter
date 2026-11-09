@@ -1,14 +1,67 @@
-<h1>{{ 'Scan QR' | t }}</h1>
-<p class="subtitle">{{ 'Scan or enter an inventory identifier to open its details.' | t }}</p>
-<qrr-card [title]="'QR camera' | t">
-  <qrr-scanner [multiple]="true" (changed)="codes.set($event)" />
-  @for (code of codes(); track code) {
-    <div class="actions">
-      @if (api.context()!.state.items[code]; as item) {
-        <a mat-stroked-button [routerLink]="['/items', code]">{{ item.label || code }} →</a>
-      } @else {
-        <span>{{ code }} — {{ 'Unknown QR label' | t }}</span>
+<section class="scanner-page">
+  <h1>{{ 'Scan QR' | t }}</h1>
+  <p class="subtitle">{{ 'Scan or enter an inventory identifier to open its details.' | t }}</p>
+  @if (api.context()!.permissions.manage) {
+    <nav class="scanner-operations" [attr.aria-label]="'Warehouse operations' | t">
+      <a routerLink="/workflow/move">
+        <span aria-hidden="true">↔</span>
+        <strong>{{ 'Move items' | t }}</strong>
+        <small>{{ 'Warehouse or bin' | t }}</small>
+      </a>
+      <a routerLink="/workflow/consume">
+        <span aria-hidden="true">−</span>
+        <strong>{{ 'Consume items' | t }}</strong>
+        <small>{{ 'Remove from stock' | t }}</small>
+      </a>
+      <a routerLink="/workflow/return">
+        <span aria-hidden="true">+</span>
+        <strong>{{ 'Return items' | t }}</strong>
+        <small>{{ 'Return to stock' | t }}</small>
+      </a>
+      @if (api.context()!.permissions.stock) {
+        <a routerLink="/workflow/correct">
+          <span aria-hidden="true">≡</span>
+          <strong>{{ 'Correct container quantity' | t }}</strong>
+          <small>{{ 'Count and adjust' | t }}</small>
+        </a>
       }
-    </div>
+    </nav>
   }
-</qrr-card>
+  <qrr-card [title]="'QR camera' | t">
+    <qrr-scanner [multiple]="true" (changed)="codes.set($event)" />
+  </qrr-card>
+  @if (codes().length) {
+    <qrr-card [title]="'Scanned product' | t">
+      @for (code of codes(); track code) {
+        <div class="scanned-product">
+          @if (api.context()!.state.items[code]; as item) {
+            <div class="product-identity">
+              <strong>{{ item.label || code }}</strong>
+              <span>{{ api.context()!.products[item.product_id]?.ref || code }}</span>
+              <small>{{ 'QR' | t }} {{ code }}</small>
+            </div>
+            <dl class="scan-product-facts">
+              <div>
+                <dt>{{ 'Dolibarr lot/serial' | t }}</dt>
+                <dd>{{ item.native_batch || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'Location' | t }}</dt>
+                <dd>
+                  {{ api.context()!.warehouses[item.warehouse_id]?.ref || '—' }} {{ item.bin }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ 'Available quantity' | t }}</dt>
+                <dd>{{ item.qty ?? '?' }}</dd>
+              </div>
+            </dl>
+            <a mat-stroked-button [routerLink]="['/items', code]">{{ 'Open item' | t }} →</a>
+          } @else {
+            <span>{{ code }} — {{ 'Unknown QR label' | t }}</span>
+          }
+        </div>
+      }
+    </qrr-card>
+  }
+</section>

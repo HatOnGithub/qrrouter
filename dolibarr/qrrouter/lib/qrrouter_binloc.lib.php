@@ -1,5 +1,5 @@
 <?php
-/** Read-only integration with Binloc's warehouse-level configuration. */
+/** Binloc warehouse-level validation and label formatting. Native persistence is in qrrouter_native.lib.php. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
@@ -104,7 +104,7 @@ function qrr_binloc_display_code($db, $warehouseId, $levels, $parts) {
     return ($prefix !== '' ? $prefix . $sep : '') . implode($sep, $parts);
 }
 
-/** Build an immutable per-item location to save in QR Router, not in Binloc. */
+/** Build a validated location choice; linked items persist it through Binloc's per-lot API. */
 function qrr_binloc_choice($db, $warehouseId, $posted, $previous = null, $keepLegacy = false) {
     if (!$warehouseId) {
         return ['bin' => '', 'bin_key' => '', 'bin_values' => []];

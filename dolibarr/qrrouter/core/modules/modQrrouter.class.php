@@ -14,13 +14,13 @@ class modQrrouter extends DolibarrModules {
         $this->name = 'Qrrouter';
         $this->description =
             'QR item registration, scan-many warehouse workflows, native stock transfers, consumption, returns and Binloc integration.';
-        $this->version = '3.1.0';
+        $this->version = '3.4.0';
         $this->const_name = 'MAIN_MODULE_QRROUTER';
         $this->picto = 'barcode';
         $this->langfiles = ['qrrouter@qrrouter'];
         $this->dirs = [];
         $this->config_page_url = ['setup.php@qrrouter'];
-        $this->depends = ['modProduct', 'modStock', 'modBinloc'];
+        $this->depends = ['modProduct', 'modStock', 'modProductBatch', 'modBinloc'];
         $this->requiredby = [];
         $this->conflictwith = [];
         $this->module_parts = [];
@@ -54,6 +54,9 @@ class modQrrouter extends DolibarrModules {
         ];
     }
     public function init($options = '') {
+        if ($this->_load_tables('/qrrouter/sql/') < 0) {
+            return -1;
+        }
         return $this->_init([], $options);
     }
     public function remove($options = '') {

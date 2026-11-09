@@ -18,6 +18,7 @@ import socket
 import subprocess
 import tempfile
 import time
+import native_fixture as native_contract
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import build_opener, HTTPCookieProcessor, urlopen
@@ -36,6 +37,7 @@ for path in (root / 'dolibarr/qrrouter').rglob('*.php'):
 print('All PHP adapter files pass syntax checks.', flush=True)
 subprocess.run(php + [str(root / 'tests/test_translation.php')], check=True)
 subprocess.run(php + [str(root / 'tests/test_service_settings.php')], check=True)
+subprocess.run(php + [str(root / 'tests/test_labels.php')], check=True)
 spec = importlib.util.spec_from_file_location('native_fixture', root / 'reference/module-2.6.14/qrrouter/tests/test_http_inventory.py')
 fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
@@ -65,9 +67,12 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-angular-') as directory:
     data = tmp / 'data'
     data.mkdir()
     shutil.copytree(root / 'dolibarr/qrrouter', webroot / 'custom/qrrouter')
-    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'commande/class', 'core/lib']:
+    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'custom/binloc/lib', 'commande/class', 'core/lib']:
         (webroot / folder).mkdir(parents=True, exist_ok=True)
     main = fixture.MAIN.replace("if(str_contains($sql,'FROM llx_entrepot')){", "if(str_contains($sql,'FROM llx_product WHERE')){$this->rows=[(object)['rowid'=>3,'ref'=>'PART-003','label'=>'Fixture Part']];}elseif(str_contains($sql,'FROM llx_entrepot')){")
+    main = main.replace("elseif(str_contains($sql,'FROM llx_entrepot')){", 'else' + native_contract.QUERIES.lstrip())
+    main = main.replace("'label'=>'Fixture Part']];", "'label'=>'Fixture Part'],(object)['rowid'=>4,'ref'=>'SERIAL-004','label'=>'Tracked Part']];")
+    main = main.replace('$this->idx=0;$s=$this->state();', '$this->idx=0;$s=$this->txn??$this->state();')
     main = main.replace('<meta charset="utf-8">', '<meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:rgb(40,40,40);background:rgb(250,250,250)}.butAction{background:rgb(83,101,117);color:white;border:1px solid gray;border-radius:3px}.flat{background:white;color:rgb(40,40,40)}</style>')
     main = main.replace('function llxHeader($a,$title){print ', 'function llxHeader($a,$title){global $conf; print ')
     main = main.replace("</head><body><main data-title=", "</head><body>'.(empty($conf->dol_hide_leftmenu)?'<aside id=\"id-left\">Native left menu</aside>':'').'<main data-title=")
@@ -125,9 +130,14 @@ function dolibarr_set_const($db, $name, $value, $type='chaine', $visible=0, $not
 }
 function setEventMessages($message, $errors=null, $style='mesgs') {}
 """
-    for target, content in {'main.inc.php': main, 'product/class/product.class.php': fixture.PRODUCT,
+    product = fixture.PRODUCT.replace("public $id,$type=0", "public $entity=1; public $id,$type=0")
+    product = product.replace('public function hasbatch(){return false;}', 'public function hasbatch(){return $this->id===4;}'+native_contract.PRODUCT_METHOD)
+    for target, content in {'main.inc.php': main, 'product/class/product.class.php': product,
                             'product/stock/class/entrepot.class.php': fixture.WAREHOUSE,
-                            'custom/binloc/class/binlocwarehouselevel.class.php': fixture.BINLOC,
+                            'product/stock/class/productlot.class.php': native_contract.LOT,
+                            'custom/binloc/class/binlocwarehouselevel.class.php': native_contract.LEVELS,
+                            'custom/binloc/class/binlocproductlocation.class.php': native_contract.LOCATION,
+                            'custom/binloc/lib/binloc.lib.php': native_contract.LIBRARY,
                             'commande/class/commande.class.php': commande,
                             'native.php': "<?php require __DIR__.'/main.inc.php'; llxHeader('', 'Native Dolibarr page'); llxFooter();",
                             'core/lib/admin.lib.php': admin}.items():
@@ -226,6 +236,9 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
             assert decoded == entity_expected
         populated = json.loads(native_path.read_text())
         populated['users_empty'] = False
+        populated['stock']['4'] = {'1': 30, '2': 4}
+        populated['lots'] = {'1': {'fk_product': 4, 'batch': 'SN-REGISTER', 'entity': 1}, '2': {'fk_product': 4, 'batch': 'Fixture box', 'entity': 1}, '3': {'fk_product': 4, 'batch': 'Browser container', 'entity': 1}}
+        populated['batches'] = {'4': {'1': {'SN-REGISTER': 1, 'Fixture box': 5, 'Browser container': 7}, '2': {}}}
         native_path.write_text(json.dumps(populated))
         assert key not in json.dumps(bootstrap)
         request(action='bulk', payload={'count': 2, 'type': 'unassigned'}, csrf='invalid', expected=409)
@@ -238,10 +251,10 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         assert len(codes) == 4
         tracked, box, generic, blank = codes
         for code, kind, qty in [(tracked, 'tracked', 1), (box, 'box', 5), (generic, 'generic', 1)]:
-            result = request(action='register', payload={'type': kind, 'codes': [code], 'label': 'Fixture ' + kind, 'product_id': 3, 'warehouse_id': 1, 'qty': qty})
+            result = request(action='register', payload={'type': kind, 'codes': [code], 'label': 'Fixture ' + kind, 'serial': 'SN-REGISTER' if kind == 'tracked' else '', 'details': 'Inspect seals annually; keep dry.' if kind == 'tracked' else '', 'product_id': 3 if kind == 'generic' else 4, 'warehouse_id': 1, 'qty': qty, 'levels': {'1': 'A'}})
             assert result['codes'] == [code]
         native = lambda: json.loads(native_path.read_text())
-        assert native()['stock']['3']['1'] == 30
+        assert native()['stock']['4']['1'] == 30
 
         def workflow(kind, code, **fields):
             result = request(action='workflow', payload={'kind': kind, 'codes': [code], **fields})
@@ -249,7 +262,7 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
             return result
 
         workflow('move', tracked, warehouse_id=2, patch={'qty': 999}, effects=[{'delta': 999}])
-        assert native()['stock']['3']['1'] == 29 and native()['stock']['3']['2'] == 5
+        assert native()['stock']['4']['1'] == 29 and native()['stock']['4']['2'] == 5
         workflow('consume', box, quantities={box: 3}, post_stock=True, reference_type='production', reference_id=19)
         workflow('return', box, quantities={box: 2}, post_stock=True, warehouse_id=1)
         workflow('correct', box, quantities={box: 5})
@@ -274,6 +287,65 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         with client.open(base + 'api.php?resource=picking&warehouse_id=1&order_id=39') as response:
             assert isinstance(json.load(response), list)
         assert len(native()['movements']) == 9
+        # Creating stock uses user names, native lots and Binloc, with independent QR IDs.
+        new_box = request(action='create', payload={'type': 'box', 'label': 'BOX-NEW', 'product_id': 4, 'warehouse_id': 1, 'qty': 8, 'levels': {'1': 'B'}})
+        new_serial = request(action='create', payload={'type': 'tracked', 'label': 'Named tool', 'serial': 'USER-SERIAL-01', 'native_batch': 'FORGED', 'product_lot_id': 9999, 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'C'}})
+        inventory = request()['state']['items']
+        box_lot = str(inventory[new_box]['product_lot_id'])
+        serial_lot = str(inventory[new_serial]['product_lot_id'])
+        assert native()['lots'][box_lot]['batch'] == 'BOX-NEW' and new_box != 'BOX-NEW'
+        assert native()['lots'][serial_lot]['batch'] == 'USER-SERIAL-01' and new_serial != 'USER-SERIAL-01'
+        assert native()['locations'][box_lot]['values']['1']['value'] == 'B'
+        assert native()['locations'][serial_lot]['values']['1']['value'] == 'C'
+        request(action='create', payload={'type': 'tracked', 'label': 'Duplicate', 'serial': 'USER-SERIAL-01', 'product_id': 4, 'warehouse_id': 1}, expected=409)
+        assert not request()['state'].get('pending_native')
+        workflow('move', new_serial, warehouse_id=1, levels={'1': 'D'})
+        assert request()['state']['items'][new_serial]['bin_values'] == {'1': 'D'}
+        # Native edits are visible after refresh, and subsequent correction uses the native quantity.
+        changed = native()
+        changed['batches']['4']['1']['BOX-NEW'] = 6
+        changed['stock']['4']['1'] -= 2
+        changed['locations'][box_lot]['values']['1']['value'] = 'E'
+        changed['locations'][box_lot]['values']['1']['display'] = 'E'
+        native_path.write_text(json.dumps(changed))
+        assert request()['state']['items'][new_box]['qty'] == 6
+        assert request()['state']['items'][new_box]['bin'] == 'E'
+        with client.open(base + 'api.php?resource=locations&warehouse_id=1') as response:
+            assert 'E' in json.load(response)['bins']
+        workflow('correct', new_box, quantities={new_box: 7})
+        assert native()['batches']['4']['1']['BOX-NEW'] == 7
+        total_before = native()['stock']['4']['1']
+        request(action='box-transfer', payload={'from': new_box, 'to': box, 'quantity': 2})
+        assert native()['batches']['4']['1']['BOX-NEW'] == 5 and native()['batches']['4']['1']['Fixture box'] == 7
+        assert native()['stock']['4']['1'] == total_before
+        workflow('checkout', new_serial, person_id=9)
+        workflow('checkin', new_serial)
+        assert request()['state']['items'][new_serial]['bin_values'] == {'1': 'D'}
+        # Binloc failure rolls back lot creation and stock, retaining durable recovery intent.
+        changed = native(); changed['fail_location'] = True; native_path.write_text(json.dumps(changed))
+        count_before = len(native()['lots']); stock_before = native()['stock']['4']['1']
+        request(action='create', payload={'type': 'box', 'label': 'RECOVER-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
+        assert len(native()['lots']) == count_before and native()['stock']['4']['1'] == stock_before
+        pending_path = data / 'qrrouter/entity-1/state.json'
+        pending_state = json.loads(pending_path.read_text()); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; pending_path.write_text(json.dumps(pending_state))
+        changed = native(); changed.pop('fail_location'); native_path.write_text(json.dumps(changed))
+        recovered = request(action='native-recover', payload={})
+        assert request()['state']['items'][recovered]['qty'] == 3 and not request()['state'].get('pending_native')
+        assert native()['stock']['4']['1'] == stock_before + 3
+        # Lost service-finalization response: the same committed receipt finishes without reapplying stock.
+        pending_path.write_text(json.dumps(pending_state))
+        lots_after = len(native()['lots']); movements_after = len(native()['movements'])
+        assert request(action='native-recover', payload={}) == recovered
+        assert len(native()['lots']) == lots_after and len(native()['movements']) == movements_after
+        assert native()['stock']['4']['1'] == stock_before + 3
+        changed = native(); changed['fail_location'] = True; native_path.write_text(json.dumps(changed))
+        request(action='create', payload={'type': 'box', 'label': 'CANCEL-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
+        pending_state = json.loads(pending_path.read_text()); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; pending_path.write_text(json.dumps(pending_state))
+        request(action='native-cancel', payload={})
+        assert not request()['state'].get('pending_native')
+        assert native()['stock']['4']['1'] == stock_before + 3
+        changed = native(); changed.pop('fail_location'); native_path.write_text(json.dumps(changed))
+        print('Native integration PASS: named serials, box lots, Binloc writes, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
         print('Gateway integration PASS: native workflows, real C# state, CSRF, permissions, trusted facts, product/order lookups, Angular hosting and no API-key exposure.', flush=True)
         if args.browser:
             env = dict(os.environ, QRR_E2E_URL=base, QRR_E2E_ITEM=tracked, QRR_E2E_BOX=box)

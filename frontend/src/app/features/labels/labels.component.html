@@ -26,6 +26,26 @@
   </qrr-card>
 }
 <qrr-card [title]="'Label batches' | t">
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'Printer / label format' | t }}</mat-label>
+    <mat-select [(ngModel)]="format">
+      @for (profile of api.context()!.label_formats; track profile.id) {
+        <mat-option [value]="profile.id">
+          DYMO LabelWriter 550 · {{ profile.height }} × {{ profile.width }} mm
+        </mat-option>
+      }
+      <mat-option value="a4">{{ 'A4 label sheet' | t }}</mat-option>
+    </mat-select>
+  </mat-form-field>
+  <p class="muted">
+    {{
+      'DYMO labels include the QR code, QR ID, and details in priority order: serial number, short product name, product reference.'
+        | t
+    }}
+  </p>
+  <p class="muted">
+    {{ 'Larger labels add lot, location, quantity, status and item details when available.' | t }}
+  </p>
   <table>
     <thead>
       <tr>
@@ -46,7 +66,7 @@
           <td>
             <a
               mat-stroked-button
-              [href]="api.link('batch_print.php', { batch: row.id })"
+              [href]="api.link('batch_print.php', { batch: row.id, format })"
               target="_blank"
               rel="noopener"
             >

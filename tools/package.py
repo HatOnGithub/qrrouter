@@ -4,7 +4,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
 module = root / 'dolibarr/qrrouter'
-output = root / 'artifacts/module_qrrouter-3.1.0.zip'
+output = root / 'artifacts/module_qrrouter-3.4.0.zip'
 output.parent.mkdir(parents=True, exist_ok=True)
 if not (module / 'spa/index.html').is_file():
     raise SystemExit('Build the Angular frontend first: python tools/build-frontend.py')

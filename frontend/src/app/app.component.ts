@@ -14,6 +14,21 @@ import { DolibarrThemeService } from '@services/dolibarr-theme.service';
 export class AppComponent {
   protected inventory = inject(InventoryService);
   protected menuOpen = signal(false);
+  protected recovering = signal(false);
+  protected recoveryError = signal('');
+
+  protected async recoverNative(cancel = false): Promise<void> {
+    this.recovering.set(true);
+    this.recoveryError.set('');
+    try {
+      await this.inventory.command(cancel ? 'native-cancel' : 'native-recover', {});
+      await this.inventory.refresh();
+    } catch (error) {
+      this.recoveryError.set(this.inventory.message(error));
+    } finally {
+      this.recovering.set(false);
+    }
+  }
   protected links = [
     { path: '/inventory', label: 'Inventory', icon: '▦' },
     { path: '/scan', label: 'Scan QR', icon: '⌗' },

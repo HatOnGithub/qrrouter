@@ -86,6 +86,7 @@ export class EditorComponent {
 
   protected typeChanged(type: ItemType): void {
     this.model.type = type;
+    if (type === 'tracked' || type === 'box') this.count = 1;
     if (type !== 'generic' && this.codes().length > 1) this.codes.set([]);
     this.thumbnail = '';
     this.model.qty = type === 'box' ? null : type === 'unassigned' ? 0 : 1;
@@ -158,6 +159,7 @@ export class EditorComponent {
       }
     } catch (error) {
       this.error.set(this.api.message(error));
+      await this.api.refresh();
     } finally {
       this.busy.set(false);
     }

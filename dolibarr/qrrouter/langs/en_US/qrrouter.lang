@@ -562,3 +562,30 @@ QRRUI_ae3c35bce94a=Selected:
 QRRUI_266d29844bcb=Serialised Unique accepts one label at a time
 # Unable to load Binloc levels: 
 QRRUI_565a7a4ecf1a=Unable to load Binloc levels: 
+
+QRRUI_6589ecbd6051=Printer / label format
+QRRUI_4b38d93ee612=A4 label sheet
+QRRUI_c293b8979197=DYMO labels include the QR code, QR ID, and details in priority order: serial number, short product name, product reference.
+QRRUI_0bc60cc7ca73=Product not assigned
+QRRUI_4f18bf74f765=Reference not assigned
+QRRUI_1493a661d1d8=DYMO 550 labels
+QRRUI_dd7ad9a6639b=54 mm wide ? 25 mm high. One label per page.
+QRRUI_27a13c96842a=Select your DYMO LabelWriter 550 and 25 ? 54 mm paper in the print dialog. Use landscape orientation, 100% scale, no margins, and turn off headers and footers.
+QRRUI_43e64dc3ed9f=Details: serial number, short product name, then product reference. Missing details are marked as unassigned.
+QRRUI_707fea89ce60=Print DYMO labels
+QRRUI_0767c1584a8a=A4 layout
+QRRUI_8cc976f023b8=Back to QR Router
+QRRUI_0905c494d1f0=Loading QR images?
+QRRUI_e5bb92ef805f=No labels to print
+QRRUI_9adc5d3b4866=JavaScript is required to prepare this print layout.
+QRRUI_5621ca78ef88=Labels ready. Long details may be shortened; the QR ID is always complete.
+QRRUI_1565f470db44=QR image failed to load. Refresh before printing.
+
+QRRUI_f6a3ad4a5b9b=Label size
+QRRUI_66b47e4c9af7=Apply size
+QRRUI_76f6d5d94323=One label per page
+QRRUI_1d8715588067=Larger labels add lot, location, quantity, status and item details when available.
+QRRUI_4c015926ec45=Select your printer and matching label paper in the print dialog. Use landscape orientation, 100% scale, no margins, and turn off headers and footers.
+QRRUI_4a211932145b=Lot
+QRRUI_ecdda59aea5e=Item
+QRRUI_8f5e155f6115=DYMO label sizes

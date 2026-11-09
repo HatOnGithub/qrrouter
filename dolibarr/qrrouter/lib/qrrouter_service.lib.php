@@ -93,6 +93,14 @@ function qrr_service($method, $action, $data = null) {
     return $action === '' ? $result : $result['result'] ?? null;
 }
 function qrr_command($action, $data) {
+    global $db;
+    if (!in_array($action, ['native-finish', 'native-cancel'], true)) {
+        $state = qrr_service('GET', '');
+        if (!empty($state['pending_native']) && !str_starts_with($action, 'query-')) {
+            throw new RuntimeException('Complete the pending Dolibarr synchronization first');
+        }
+        $data['native_items'] = (object) qrr_native_observations($db, $state);
+    }
     return qrr_service('POST', $action, $data);
 }
 
@@ -141,6 +149,9 @@ function qrr_service_fields(
 
 /** Integration preflight before durable staging; native execution repeats checks before writing. */
 function qrr_service_preflight($db, $user, $entry, $plan) {
+    if (!empty($entry['product_lot_id'])) {
+        qrr_native_rights($user);
+    }
     if (empty($plan['effects'])) {
         return;
     }

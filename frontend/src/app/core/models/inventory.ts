@@ -24,6 +24,7 @@ export interface Item {
   consumed_units?: number;
   serial: string;
   native_batch: string;
+  product_lot_id?: number;
   details: string;
   created_at: string;
   updated_at?: string;
@@ -50,6 +51,7 @@ export interface LabelSettings {
   show_warehouse: boolean;
 }
 export interface InventoryState {
+  pending_native?: { id: string; action: string; at: string };
   schema: number;
   revision: number;
   items: Record<string, Item>;
@@ -77,6 +79,7 @@ export interface Level {
   options: { id: number; value: string }[];
 }
 export interface Bootstrap {
+  label_formats: { id: string; width: number; height: number; level: number }[];
   state: InventoryState;
   warehouses: Record<string, Warehouse>;
   users: Record<string, string>;

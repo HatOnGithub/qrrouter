@@ -1,19 +1,150 @@
+:host {
+  display: block;
+  --scanner-blue: #0754ae;
+}
+.scanner {
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.scanner-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--scanner-blue) 6%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  font-size: 0.9em;
+}
+.camera-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.camera-state i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+.camera-state.live i {
+  background: #239b42;
+  opacity: 1;
+}
+.scan-count {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.scanner-workspace {
+  display: grid;
+  min-width: 0;
+}
+.scanner-workspace.camera-active {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.camera-preview {
+  position: relative;
+  min-height: 235px;
+  background: #111820;
+  overflow: hidden;
+}
+.camera-preview[hidden] {
+  display: none;
+}
 video {
+  display: block;
   width: 100%;
-  max-height: 350px;
-  background: #000;
-  border-radius: 10px;
+  height: 100%;
+  max-height: 320px;
   object-fit: contain;
 }
-video[hidden] {
-  display: none;
+.viewfinder {
+  position: absolute;
+  top: 15%;
+  left: 25%;
+  width: 50%;
+  height: 60%;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.camera-caption {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  text-align: center;
+  padding: 5px 8px;
+  background: #000b;
+  color: #fff;
+  font-size: 0.85em;
+}
+.scanner-entry {
+  min-width: 0;
+  padding: 20px;
+}
+h3 {
+  font-size: 1.05em;
+  margin: 0 0 8px;
+  color: color-mix(in srgb, var(--scanner-blue) 80%, currentColor);
+}
+.entry-hint {
+  margin: 0 0 18px;
+  opacity: 0.75;
+  line-height: 1.5;
+}
+textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 1.1em;
+}
+.add-codes {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 14px;
+  background: var(--scanner-blue);
+  color: #fff;
+  --mat-button-filled-container-color: var(--scanner-blue);
+  --mat-button-filled-label-text-color: #fff;
+}
+.camera-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 14px;
+}
+.camera-actions button {
+  min-height: 44px;
 }
 .codes {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 18px 0;
+  padding: 0 16px;
+}
+.codes:has(button) {
+  padding-bottom: 16px;
+}
+.codes button {
+  min-height: 44px;
+  font-family: ui-monospace, monospace;
 }
 .alert {
-  margin-top: 16px;
+  margin: 0 16px 16px;
+}
+@media (max-width: 700px) {
+  .scanner-workspace.camera-active {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .camera-preview {
+    min-height: 180px;
+  }
+  video {
+    max-height: 230px;
+  }
+  .scanner-entry {
+    padding: 16px;
+  }
 }

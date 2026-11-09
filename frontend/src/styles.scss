@@ -158,6 +158,198 @@ qrr-root {
     padding: 28px;
   }
 }
+// Scanner screens follow a warehouse workstation layout, scoped to this module.
+qrr-root .scanner-page {
+  --scanner-blue: #0754ae;
+  --scanner-green: #218c39;
+  max-width: 1160px;
+  margin-inline: auto;
+  h1 {
+    color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+    font-size: 1.5em;
+  }
+  qrr-card article {
+    height: auto;
+    padding: 18px;
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-radius: 6px;
+  }
+  qrr-card h2 {
+    color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+    border: 0;
+    padding: 0 0 4px;
+    font-size: 1.1em;
+  }
+  .scanner-primary {
+    min-height: 52px;
+    width: 100%;
+    padding-inline: 22px;
+    background: var(--scanner-green);
+    color: #fff;
+    font-weight: 700;
+    --mat-button-filled-label-text-color: #fff;
+  }
+  .scanner-primary:disabled {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    color: inherit;
+    opacity: 0.5;
+  }
+  qrr-card footer {
+    display: block;
+  }
+  .scanner-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 28px;
+    padding: 16px;
+    margin-bottom: 20px;
+    border: 1px solid color-mix(in srgb, var(--scanner-green) 65%, currentColor);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--scanner-green) 7%, transparent);
+  }
+  .scanner-steps {
+    display: flex;
+    gap: 12px 24px;
+    margin: 0 0 20px;
+    flex-wrap: wrap;
+  }
+  .scanner-steps span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.55;
+    font-size: 0.9em;
+  }
+  .scanner-steps b {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+  }
+  .scanner-steps .current {
+    opacity: 1;
+    font-weight: 700;
+  }
+  .scanner-steps .current b {
+    color: #fff;
+    background: var(--scanner-blue);
+    border-color: var(--scanner-blue);
+  }
+  .scanner-operations {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .scanner-operations a {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 6px 10px;
+    align-content: center;
+    min-height: 88px;
+    padding: 14px;
+    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    border-top: 3px solid var(--scanner-blue);
+    border-radius: 5px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .scanner-operations a:hover {
+    background: color-mix(in srgb, var(--scanner-blue) 7%, transparent);
+  }
+  .scanner-operations a:focus-visible {
+    outline: 2px solid var(--scanner-blue);
+    outline-offset: 3px;
+  }
+  .scanner-operations a > span {
+    grid-row: span 2;
+    font-size: 1.9em;
+    color: color-mix(in srgb, var(--scanner-blue) 75%, currentColor);
+  }
+  .scanner-operations small {
+    opacity: 0.7;
+  }
+  .scanned-product {
+    padding: 16px 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  }
+  .scanned-product:last-child {
+    border-bottom: 0;
+  }
+  .product-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-wrap: anywhere;
+  }
+  .product-identity strong {
+    font-size: 1.2em;
+  }
+  .product-identity small {
+    opacity: 0.65;
+    font-family: ui-monospace, monospace;
+  }
+  .scan-product-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .scan-product-facts dt {
+    opacity: 0.7;
+    font-size: 0.9em;
+    margin-bottom: 6px;
+  }
+  .scan-product-facts dd {
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .scanned-product a {
+    min-height: 44px;
+  }
+}
+@media (max-width: 700px) {
+  qrr-root .scanner-page {
+    qrr-card article {
+      padding: 14px;
+    }
+    .scanner-operations {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .scanner-operations a {
+      padding: 10px;
+      grid-template-columns: 24px minmax(0, 1fr);
+    }
+    .scanner-steps {
+      gap: 10px;
+    }
+    .scanner-steps span {
+      font-size: 0.8em;
+      gap: 5px;
+    }
+    .scanner-steps b {
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .scan-product-facts {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    .scan-product-facts > div {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .scan-product-facts dd {
+      text-align: right;
+    }
+  }
+}
 @media print {
   .no-print,
   #id-top,

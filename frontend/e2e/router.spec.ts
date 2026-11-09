@@ -1,9 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
 import { validCode } from '../src/app/shared/scanner/codes';
+import { writeFile } from 'node:fs/promises';
 
 async function open(page: Page, route: string): Promise<void> {
   await page.goto('index.php#/' + route);
-  await expect(page.locator('qrr-root nav')).toBeVisible();
+  await expect(page.locator('qrr-root router-outlet')).toBeAttached();
 }
 async function choose(page: Page, label: string, option: string): Promise<void> {
   await page.getByRole('combobox', { name: label, exact: true }).click();
@@ -23,6 +24,207 @@ async function blank(page: Page): Promise<string> {
   const updated = await (await page.request.get('api.php?resource=bootstrap')).json();
   return updated.state.batches[id].codes[0];
 }
+
+async function scannerScreenshot(page: Page, path: string): Promise<void> {
+  await page.locator('.scanner-page').screenshot({
+    path,
+    // Expand the nested scroll container only while capturing the complete screen.
+    style:
+      'qrr-root .app-shell, qrr-root main, qrr-root .content { display: block !important; height: auto !important; max-height: none !important; overflow: visible !important; }',
+  });
+}
+
+test('DYMO labels add details and preserve physical dimensions at every size', async ({ page }) => {
+  const code = process.env['QRR_E2E_ITEM']!;
+  // The native QR endpoint needs TCPDF/GD, absent in the Dolibarr-shaped fixture.
+  // Stub only its image response; label identity, metadata, CSS and pagination stay real.
+  await page.route('**/qr.php?code=*', route =>
+    route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a9sAAAAASUVORK5CYII=',
+        'base64'
+      ),
+    })
+  );
+  await page.goto('label.php?code=' + code + '&format=dymo-25x54');
+  await expect(page.getByRole('button', { name: 'Print DYMO labels', exact: true })).toBeEnabled();
+  await expect(page.locator('.qrr-label-detail')).toHaveCount(3);
+  expect(
+    await page
+      .locator('.qrr-label-detail')
+      .evaluateAll(fields => fields.map(field => field.getAttribute('data-kind')))
+  ).toEqual(['serial', 'name', 'ref']);
+  await expect(page.locator('.qrr-label-detail.serial')).toContainText('SN-REGISTER');
+  await expect(page.locator('.qrr-id-code')).toHaveText(code);
+  await expect(page.locator('.qrr-qr-column img')).toHaveAttribute(
+    'src',
+    new RegExp('qr.php\\?code=' + code)
+  );
+  const size = await page.locator('.qrr-thermal-label').boundingBox();
+  expect(size!.width).toBeCloseTo((54 * 96) / 25.4, 0);
+  expect(size!.height).toBeCloseTo((25 * 96) / 25.4, 0);
+  const pdf = await page.pdf({
+    preferCSSPageSize: true,
+    printBackground: true,
+    displayHeaderFooter: false,
+  });
+  const pdfText = pdf.toString('latin1');
+  expect((pdfText.match(/\/Type\s*\/Page\b/g) || []).length).toBe(1);
+  const dimensions = pdfText.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/)!;
+  expect(Number(dimensions[1])).toBeCloseTo((54 * 72) / 25.4, 0);
+  expect(Number(dimensions[2])).toBeCloseTo((25 * 72) / 25.4, 0);
+  await writeFile('../artifacts/dymo-label-layout-test.pdf', pdf);
+  // Even very long serials and names remain within their allotted rows; the QR ID is never fitted away.
+  await page.locator('.qrr-label-detail span').evaluateAll(fields =>
+    fields.forEach(field => {
+      field.textContent = 'Very long detail '.repeat(12);
+      (field as HTMLElement).dataset['original'] = field.textContent;
+    })
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  expect(
+    await page.locator('.qrr-label-detail').evaluateAll(fields =>
+      fields.every(field => {
+        const span = field.querySelector('span')!;
+        return (
+          span.scrollWidth <= field.clientWidth + 1 && span.scrollHeight <= field.clientHeight + 1
+        );
+      })
+    )
+  ).toBe(true);
+  await expect(page.locator('.qrr-id-code')).toHaveText(code);
+
+  let previousDetails = 2;
+  for (const [format, width, height] of [
+    ['dymo-25x54', 54, 25],
+    ['dymo-32x57', 57, 32],
+    ['dymo-36x89', 89, 36],
+    ['dymo-54x101', 101, 54],
+  ] as const) {
+    await page.goto('label.php?code=' + code + '&format=' + format);
+    await expect(
+      page.getByRole('button', { name: 'Print DYMO labels', exact: true })
+    ).toBeEnabled();
+    const count = await page.locator('.qrr-label-detail').count();
+    expect(count).toBeGreaterThan(previousDetails);
+    previousDetails = count;
+    await expect(page.locator('.qrr-id-code')).toHaveText(code);
+    const label = await page.locator('.qrr-thermal-label').boundingBox();
+    expect(label!.width).toBeCloseTo((width * 96) / 25.4, 0);
+    expect(label!.height).toBeCloseTo((height * 96) / 25.4, 0);
+    const sheet = (
+      await page.pdf({ preferCSSPageSize: true, displayHeaderFooter: false })
+    ).toString('latin1');
+    expect((sheet.match(/\/Type\s*\/Page\b/g) || []).length).toBe(1);
+    const box = sheet.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/)!;
+    expect(Number(box[1])).toBeCloseTo((width * 72) / 25.4, 0);
+    expect(Number(box[2])).toBeCloseTo((height * 72) / 25.4, 0);
+    expect(
+      await page.locator('.qrr-label-detail').evaluateAll(fields =>
+        fields.every(field => {
+          const span = field.querySelector('span')!;
+          return (
+            span.scrollWidth <= field.clientWidth + 1 && span.scrollHeight <= field.clientHeight + 1
+          );
+        })
+      )
+    ).toBe(true);
+  }
+  await page.getByRole('combobox', { name: 'Label size' }).selectOption('dymo-32x57');
+  await page.getByRole('button', { name: 'Apply size' }).click();
+  await expect(page).toHaveURL(new RegExp('code=' + code));
+  await expect(page.getByRole('combobox', { name: 'Label size' })).toHaveValue('dymo-32x57');
+
+  await open(page, 'labels');
+  await page.getByRole('spinbutton', { name: 'Number of QR codes (1–200)' }).fill('2');
+  const batchCount = await page.locator('tbody tr').count();
+  await page.getByRole('button', { name: 'Create batch', exact: true }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(batchCount + 1);
+  const printLink = page.getByRole('link', { name: 'Print', exact: true }).first();
+  await expect(printLink).toHaveAttribute('href', /format=dymo-25x54/);
+  await page.goto((await printLink.getAttribute('href'))!);
+  await expect(page.getByRole('button', { name: 'Print DYMO labels', exact: true })).toBeEnabled();
+  await expect(page.locator('.qrr-thermal-label')).toHaveCount(2);
+  await expect(page.locator('.qrr-label-detail')).toHaveCount(4);
+  const batchUrl = page.url();
+  for (const format of ['dymo-25x54', 'dymo-32x57', 'dymo-36x89', 'dymo-54x101']) {
+    const url = new URL(batchUrl);
+    url.searchParams.set('format', format);
+    await page.goto(url.href);
+    await expect(
+      page.getByRole('button', { name: 'Print DYMO labels', exact: true })
+    ).toBeEnabled();
+    const batchPdf = await page.pdf({ preferCSSPageSize: true, displayHeaderFooter: false });
+    expect((batchPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length).toBe(2);
+  }
+  await page.unroute('**/qr.php?code=*');
+  await page.route('**/qr.php?code=*', route =>
+    route.fulfill({ status: 500, body: 'QR renderer unavailable' })
+  );
+  await page.reload();
+  await expect(page.getByRole('status')).toContainText('QR image failed to load');
+  await expect(page.getByRole('button', { name: 'Print DYMO labels', exact: true })).toBeDisabled();
+});
+
+test('scanner workstation shows product context and touch quantity controls on mobile', async ({
+  page,
+}) => {
+  const code = process.env['QRR_E2E_BOX']!;
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async () => {
+          throw new Error('Camera unavailable. Manual and USB scanning remain ready.');
+        },
+      },
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page, 'scan');
+  await expect(page.getByRole('navigation', { name: 'Warehouse operations' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'QR identifiers' }).fill(code);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await expect(page.locator('.scanned-product')).toContainText('Fixture box');
+  await expect(page.locator('.scan-product-facts')).toContainText('Dolibarr lot/serial');
+  await expect(page.getByRole('button', { name: 'Add codes', exact: true })).toHaveCSS(
+    'min-height',
+    '48px'
+  );
+  expect(
+    await page.locator('qrr-root .content').evaluate(el => el.scrollWidth <= el.clientWidth)
+  ).toBe(true);
+  await scannerScreenshot(page, '../artifacts/scanner-mobile.png');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await scannerScreenshot(page, '../artifacts/scanner-desktop.png');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page, 'workflow/correct?code=' + code);
+  const quantity = page.getByRole('spinbutton', { name: 'Quantity', exact: true });
+  const initial = Number(await quantity.inputValue());
+  await page.getByRole('button', { name: 'Increase quantity ' + code, exact: true }).click();
+  await expect(quantity).toHaveValue(String(initial + 1));
+  await expect(page.locator('.quantity-difference')).toContainText('+1');
+  await page.getByRole('button', { name: 'Decrease quantity ' + code, exact: true }).click();
+  await expect(quantity).toHaveValue(String(initial));
+  await quantity.fill('0');
+  await expect(
+    page.getByRole('button', { name: 'Decrease quantity ' + code, exact: true })
+  ).toBeDisabled();
+  await expect(page.locator('.scanner-steps [aria-current="step"]')).toContainText(
+    'Review and confirm'
+  );
+  await expect(page.locator('.review-product')).toHaveCSS('display', 'grid');
+  expect(
+    await page.locator('qrr-root .content').evaluate(el => el.scrollWidth <= el.clientWidth)
+  ).toBe(true);
+  await page
+    .getByRole('button', { name: 'Confirm operation', exact: true })
+    .scrollIntoViewIfNeeded();
+  await expect(page.getByRole('button', { name: 'Confirm operation', exact: true })).toBeVisible();
+  await scannerScreenshot(page, '../artifacts/scanner-count-mobile.png');
+});
 
 test('product results remain selectable outside a clipping form container', async ({ page }) => {
   await open(page, 'create');
@@ -146,19 +348,43 @@ test('register a container using the product lookup and native warehouse selecti
   const code = await blank(page);
   await open(page, 'register?code=' + code + '&mode=box');
   await page
-    .getByRole('textbox', { name: 'Item name / label', exact: true })
+    .getByRole('textbox', { name: 'Box name / Dolibarr lot', exact: true })
     .fill('Browser container');
   await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Fixture');
-  await page.getByRole('option', { name: 'PART-003 — Fixture Part', exact: true }).click();
+  await page.getByRole('option', { name: 'SERIAL-004 — Tracked Part', exact: true }).click();
   await choose(page, 'Warehouse', 'MAIN');
-  await page
-    .getByRole('spinbutton', { name: 'Container quantity (blank = unknown)', exact: true })
-    .fill('7');
+  await page.getByRole('spinbutton', { name: 'Dolibarr lot quantity', exact: true }).fill('7');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Browser container', exact: true })).toBeVisible();
   const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
   expect(state.items[code].qty).toBe(7);
   expect(state.items[code].type).toBe('box');
+});
+
+test('create a named Dolibarr serial with an independent QR identity and Binloc location', async ({
+  page,
+}) => {
+  await open(page, 'create');
+  await choose(page, 'QR type', 'Tracked Individual');
+  await page.getByRole('textbox', { name: 'Item name / label', exact: true }).fill('Browser tool');
+  await page
+    .getByRole('textbox', { name: 'Dolibarr serial number', exact: true })
+    .fill('BROWSER-SERIAL');
+  await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Tracked');
+  await page.getByRole('option', { name: 'SERIAL-004 — Tracked Part', exact: true }).click();
+  await choose(page, 'Warehouse', 'MAIN');
+  await page.getByRole('textbox', { name: 'Shelf', exact: true }).fill('Tool shelf');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Browser tool', exact: true })).toBeVisible();
+  const link = page.getByRole('link', { name: 'Dolibarr lot/serial: BROWSER-SERIAL', exact: true });
+  await expect(link).toHaveAttribute('href', /productlot_card.php\?id=\d+/);
+  const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
+  const item = Object.values(state.items).find(
+    (item: any) => item.native_batch === 'BROWSER-SERIAL'
+  ) as any;
+  expect(item.product_lot_id).toBeGreaterThan(0);
+  expect(item.code).not.toBe(item.serial);
+  expect(item.bin_values).toEqual({ '1': 'Tool shelf' });
 });
 
 test('move workflow confirms native transfer and refreshes authoritative state', async ({
@@ -194,15 +420,15 @@ test('box transfer is available from navigation and updates both container quant
   const destination = await blank(page);
   const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
   for (const code of [source, destination]) {
-    const response = await page.request.post('api.php?action=register', {
+    const response = await page.request.post('api.php?action=update', {
       form: {
         token: bootstrap.token,
         qrr_token: bootstrap.csrf,
         payload: JSON.stringify({
           type: 'box',
-          codes: [code],
-          label: 'Transfer container',
-          product_id: 3,
+          code,
+          label: 'Transfer ' + code,
+          product_id: 4,
           warehouse_id: 1,
           qty: 5,
         }),
@@ -221,7 +447,7 @@ test('box transfer is available from navigation and updates both container quant
   await page.getByRole('spinbutton', { name: 'Quantity', exact: true }).first().fill('2');
   await page.getByRole('button', { name: 'Confirm operation', exact: true }).click();
   await expect(
-    page.getByText('Container contents transferred; native stock unchanged').first()
+    page.getByText('Contents transferred between Dolibarr lots; warehouse total unchanged').first()
   ).toBeVisible();
   const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
   expect(state.items[source].qty).toBe(3);

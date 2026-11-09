@@ -32,7 +32,14 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         if (action.StartsWith("query-", StringComparison.Ordinal))
         {
             Permit(actor.Read || actor.Manage || actor.Admin);
-            return repository.Read(actor.EntityId, s => InventoryQueries.Execute(s, action, data));
+            return repository.Read(
+                actor.EntityId,
+                s =>
+                {
+                    RefreshNative(s, data);
+                    return InventoryQueries.Execute(s, action, data);
+                }
+            );
         }
         Permit(actor.Manage || actor.Admin);
         if (action == "validate")
@@ -52,7 +59,11 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         if (action is "plan" or "handoff-plan")
             return repository.Read(
                 actor.EntityId,
-                s => Plan(s, data, actor, action == "handoff-plan")
+                s =>
+                {
+                    RefreshNative(s, data);
+                    return Plan(s, data, actor, action == "handoff-plan");
+                }
             );
         var context = AuditContext(data);
         return repository.Update(
@@ -62,8 +73,16 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             context,
             s =>
             {
+                Require(
+                    s["pending_native"] is null || action is "native-finish" or "native-cancel",
+                    "Complete the pending Dolibarr synchronization first"
+                );
+                RefreshNative(s, data);
                 var result = action switch
                 {
+                    "native-stage" => NativeStage(s, data, actor),
+                    "native-finish" => NativeFinish(s, data, actor),
+                    "native-cancel" => NativeCancel(s, data, actor),
                     "create" => Create(s, data),
                     "bulk" => Bulk(s, data),
                     "register" => Register(s, data),
@@ -85,6 +104,140 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                 return result;
             }
         );
+    }
+
+    // These observations come only from the authenticated PHP adapter, never the browser.
+    private static void RefreshNative(JsonObject state, JsonObject data)
+    {
+        if (data["native_items"] is not JsonObject observations)
+            return;
+        foreach (var pair in observations)
+        {
+            var item = Item(state, pair.Key);
+            if (
+                item.I("product_lot_id") <= 0
+                || item["pending_operation"] is not null
+                || item["pending_handoff"] is not null
+            )
+                continue;
+            foreach (
+                var key in new[]
+                {
+                    "warehouse_id",
+                    "qty",
+                    "bin",
+                    "bin_key",
+                    "bin_values",
+                    "native_batch",
+                    "serial",
+                    "label",
+                    "status",
+                }
+            )
+                if (pair.Value?[key] is not null)
+                    item[key] = pair.Value[key].Copy();
+        }
+    }
+
+    private static JsonNode NativeStage(JsonObject state, JsonObject data, Actor actor)
+    {
+        Permit(actor.Stock);
+        var candidate = (JsonObject)state.DeepClone();
+        var fields = (JsonObject)(
+            data["fields"] ?? throw new ArgumentException("Missing native fields")
+        );
+        var action = data.S("action");
+        var result = action switch
+        {
+            "create" => Create(candidate, fields),
+            "bulk" => Bulk(candidate, fields),
+            "register" => Register(candidate, fields),
+            "update" => Edit(candidate, fields),
+            "count" => EstablishCount(candidate, fields),
+            "box-transfer" => Transfer(candidate, fields),
+            _ => throw new ArgumentException("Invalid native command"),
+        };
+        var changes = new JsonObject();
+        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in candidate.Map("items"))
+        {
+            var after = pair.Value!;
+            var before = state.Map("items")[pair.Key];
+            if (after.S("native_batch") != "")
+                Require(
+                    identities.Add($"{after.I("product_id")}:{after.S("native_batch")}"),
+                    "A Dolibarr lot/serial can belong to only one QR item"
+                );
+            if (JsonNode.DeepEquals(before, after))
+                continue;
+            if (before?.I("product_lot_id") > 0)
+                Require(
+                    before.S("native_batch") == after.S("native_batch"),
+                    "The linked Dolibarr lot/serial name cannot be changed here"
+                );
+            if (after.S("type") is "tracked" or "box")
+                Require(
+                    after.I("product_id") > 0
+                        && after.I("warehouse_id") > 0
+                        && after.S("native_batch") != ""
+                        && after["qty"] is not null,
+                    "Choose a product, warehouse, serial/box name and known quantity"
+                );
+            changes[pair.Key] = Object(("before", before.Copy()), ("after", after.Copy()));
+        }
+        var pending = Object(
+            ("id", "QRR-N-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(10))),
+            ("at", Now),
+            ("action", action),
+            ("changes", changes),
+            ("result", result.Copy()),
+            ("items", candidate["items"].Copy()),
+            ("batches", candidate["batches"].Copy())
+        );
+        state["pending_native"] = pending;
+        return pending.DeepClone();
+    }
+
+    private static JsonNode? NativeFinish(JsonObject state, JsonObject data, Actor actor)
+    {
+        Permit(actor.Stock);
+        var pending =
+            state["pending_native"]
+            ?? throw new InvalidOperationException("No pending native synchronization");
+        Require(pending.S("id") == data.S("id"), "Pending native operation changed");
+        var items = (JsonObject)pending["items"]!.DeepClone();
+        foreach (var pair in (JsonObject)pending["changes"]!)
+        {
+            if (pair.Value!["after"].S("native_batch") == "")
+                continue;
+            var id = data["bindings"]?.I(pair.Key) ?? 0;
+            Require(id > 0, "Missing native lot/serial receipt");
+            items[pair.Key]!["product_lot_id"] = id;
+        }
+        state["items"] = items;
+        state["batches"] = pending["batches"].Copy();
+        var result = pending["result"].Copy();
+        state.Remove("pending_native");
+        return result;
+    }
+
+    private static JsonNode? NativeCancel(JsonObject state, JsonObject data, Actor actor)
+    {
+        Permit(actor.Stock);
+        var pending =
+            state["pending_native"]
+            ?? throw new InvalidOperationException("No pending native synchronization");
+        Require(
+            pending.S("id") == data.S("id") && data.B("cancelled_receipt"),
+            "Missing native cancellation receipt"
+        );
+        Require(
+            DateTimeOffset.TryParse(pending.S("at"), out var at)
+                && DateTimeOffset.UtcNow - at >= TimeSpan.FromSeconds(30),
+            "Synchronization may still be running"
+        );
+        state.Remove("pending_native");
+        return null;
     }
 
     private static JsonObject AuditContext(JsonObject data)
@@ -213,8 +366,9 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             Require(choice.S("bin") == "" || wid > 0, "Choose a warehouse before a bin");
             Require(qty is null || qty is >= 0 and <= 100000000, "Invalid container quantity");
             Require(
-                type == "tracked" || (details == "" && serial == "" && batch == ""),
-                "Only tracked items may have serial, batch or details"
+                type == "tracked"
+                    || (details == "" && serial == "" && (type == "box" || batch == "")),
+                "Only tracked items may have serial/details; lots belong to tracked items or boxes"
             );
         }
         var item = Object(
@@ -462,6 +616,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         var reason = Text(args, "reason", 200);
         var op = Object(
             ("kind", kind),
+            ("product_lot_id", item.I("product_lot_id")),
+            ("native_batch", item.S("native_batch")),
             ("product_id", pid),
             ("reason", reason),
             ("reference_type", args.S("reference_type")),
@@ -507,6 +663,13 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             op["from"] = from;
             op["to"] = to;
             op["qty"] = qty;
+            op["location_target"] =
+                kind == "checkout"
+                    ? Object(("warehouse_id", to), ("bin_values", new JsonObject()))
+                    : Object(
+                        ("warehouse_id", to),
+                        ("bin_values", loan!["origin_bin_values"].Copy() ?? new JsonObject())
+                    );
             Effect(from, -qty);
             Effect(to, qty);
         }
@@ -544,6 +707,10 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             Location(to);
             patch["status"] = "in_stock";
             patch["consumed_units"] = Math.Max(0, outstanding - n);
+            Require(
+                item.I("product_lot_id") == 0 || args.B("post_stock"),
+                "Native-linked items require native stock posting; refresh to see adjustments made directly in Dolibarr"
+            );
             if (args.B("post_stock"))
                 Effect(to, n);
         }
@@ -582,6 +749,10 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                         patch["qty"] = qty - n;
                     if (qty == n)
                         patch["consumed_at"] = Now;
+                    Require(
+                        item.I("product_lot_id") == 0 || args.B("post_stock"),
+                        "Native-linked items require native stock posting; refresh to see adjustments made directly in Dolibarr"
+                    );
                     if (args.B("post_stock"))
                         Effect(from, -n);
                     break;
@@ -611,6 +782,24 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             foreach (var effect in effects)
                 Warehouse(data, effect!.I("warehouse_id"));
         }
+        if (
+            !handoff
+            && item.I("product_lot_id") > 0
+            && (
+                kind == "move"
+                || (
+                    patch.S("status", item.S("status")) != "consumed"
+                    && (item.S("type") != "box" || patch.I("qty", item.I("qty")) > 0)
+                )
+            )
+        )
+            op["location_target"] = Object(
+                ("warehouse_id", patch.I("warehouse_id", from)),
+                (
+                    "bin_values",
+                    patch["bin_values"].Copy() ?? item["bin_values"].Copy() ?? new JsonObject()
+                )
+            );
         op["effects"] = effects;
         op["patch"] = patch;
         return op;
@@ -626,7 +815,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         op.Remove("revision");
         var effects = (JsonArray)op["effects"]!;
         op["id"] =
-            effects.Count == 0
+            effects.Count == 0 && op.I("product_lot_id") == 0
                 ? ""
                 : "QRR-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(10));
         op["at"] = Now;
@@ -636,7 +825,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             op["inventorycode"] = op.S("id");
             item["pending_handoff"] = op.DeepClone();
         }
-        else if (effects.Count > 0)
+        else if (effects.Count > 0 || op.I("product_lot_id") > 0)
             item["pending_operation"] = op.DeepClone();
         else
             Apply(item, op);
@@ -696,6 +885,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             "Missing conflicting-movement count"
         );
         var complete = proof.I(handoff ? "extra" : "other") == 0 && counts.All(n => n == 1);
+        if (op.I("product_lot_id") > 0 && op["location_target"] is not null)
+            complete = complete && proof.B("location");
         var none = proof.I(handoff ? "extra" : "other") == 0 && counts.All(n => n == 0);
         Require(
             complete || (reconcile && none),

@@ -45,7 +45,19 @@
           <b>{{ 'Consumed units' | t }}</b>
           {{ item.consumed_units || 0 }}
         </p>
-        <p>{{ item.serial }} {{ item.native_batch }}</p>
+        @if (item.product_lot_id) {
+          <p>
+            <a
+              [href]="
+                api.link('../../product/stock/productlot_card.php', { id: item.product_lot_id })
+              "
+            >
+              {{ 'Dolibarr lot/serial' | t }}: {{ item.native_batch }}
+            </a>
+          </p>
+        } @else {
+          <p>{{ item.serial }} {{ item.native_batch }}</p>
+        }
         <p class="item-details">{{ item.details }}</p>
         @if (item.checkout) {
           <p>
@@ -70,6 +82,14 @@
             rel="noopener"
           >
             {{ 'Print label' | t }}
+          </a>
+          <a
+            mat-stroked-button
+            [href]="api.link('label.php', { code: item.code, format: 'dymo-25x54' })"
+            target="_blank"
+            rel="noopener"
+          >
+            {{ 'DYMO label sizes' | t }}
           </a>
         </p>
       </div>

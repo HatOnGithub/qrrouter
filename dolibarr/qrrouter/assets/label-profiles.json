@@ -1,0 +1,38 @@
+[
+  {
+    "id": "dymo-25x54",
+    "width": 54,
+    "height": 25,
+    "level": 0,
+    "detail_limit": 3,
+    "qr": 20,
+    "font": 8
+  },
+  {
+    "id": "dymo-32x57",
+    "width": 57,
+    "height": 32,
+    "level": 1,
+    "detail_limit": 6,
+    "qr": 24,
+    "font": 8.5
+  },
+  {
+    "id": "dymo-36x89",
+    "width": 89,
+    "height": 36,
+    "level": 2,
+    "detail_limit": 9,
+    "qr": 28,
+    "font": 9
+  },
+  {
+    "id": "dymo-54x101",
+    "width": 101,
+    "height": 54,
+    "level": 3,
+    "detail_limit": 12,
+    "qr": 36,
+    "font": 10
+  }
+]

@@ -286,7 +286,20 @@ function qrr_data_dir() {
     return rtrim(DOL_DATA_ROOT, '/\\') . '/qrrouter/entity-' . (int) $GLOBALS['conf']->entity;
 }
 function qrr_load_state() {
-    return qrr_service('GET', '');
+    global $db;
+    $state = qrr_service('GET', '');
+    foreach (qrr_native_observations($db, $state) as $code => $fields) {
+        $state['items'][$code] = array_merge($state['items'][$code], $fields);
+        $state['items'][$code]['bin_values'] = (array) $fields['bin_values'];
+    }
+    // Native intent snapshots are server-only. The browser only needs recovery status.
+    if (!empty($state['pending_native'])) {
+        $state['pending_native'] = array_intersect_key(
+            $state['pending_native'],
+            array_flip(['id', 'action', 'at']),
+        );
+    }
+    return $state;
 }
 
 function qrr_product($db, $id) {
@@ -582,6 +595,7 @@ require_once __DIR__ . '/qrrouter_batches.lib.php';
 require_once __DIR__ . '/qrrouter_thumbnails.lib.php';
 require_once __DIR__ . '/qrrouter_extra.lib.php';
 require_once __DIR__ . '/qrrouter_binloc.lib.php';
+require_once __DIR__ . '/qrrouter_native.lib.php';
 require_once __DIR__ . '/qrrouter_checkout.lib.php';
 require_once __DIR__ . '/qrrouter_workflows.lib.php';
 function qrr_boot() {
