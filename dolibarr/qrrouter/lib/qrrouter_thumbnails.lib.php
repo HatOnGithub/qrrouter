@@ -64,9 +64,3 @@ function qrr_thumbnail_store($code, $bytes) {
         }
     }
 }
-function qrr_thumbnail_exists($code) {
-    return qrr_code_valid($code) && is_file(qrr_thumbnail_path($code));
-}
-function qrr_thumbnail_url($code) {
-    return qrr_link(qrr_thumbnail_exists($code) ? 'thumbnail.php' : 'qr.php', ['code' => $code]);
-}

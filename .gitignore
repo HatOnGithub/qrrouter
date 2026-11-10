@@ -1,10 +1,23 @@
+# .NET build output
 **/bin/
 **/obj/
 .vs/
+
+# Local settings and persistent/generated data
 .env
+.env.*
+!.env.example
 data/
 artifacts/
+
+# Python bytecode and tool caches
 __pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Angular / Node dependencies and generated output
 **/node_modules/
@@ -18,15 +31,18 @@ __pycache__/
 **/test-results/
 dolibarr/qrrouter/spa/
 
-# Local environment overrides and editor state
-.env.*
-!.env.example
+# Runtime logs, temporary files and editor state
+*.log
+*.log.*
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
 *.user
 *.suo
 .idea/
 *.tsbuildinfo
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 .DS_Store
 Thumbs.db

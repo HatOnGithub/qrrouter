@@ -20,6 +20,3 @@ csharp_preserve_single_line_statements = false
 
 [*.md]
 trim_trailing_whitespace = false
-
-[**/reference/**]
-generated_code = true

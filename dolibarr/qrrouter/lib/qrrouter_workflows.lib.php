@@ -4,18 +4,6 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
 
-function qrr_item_status($item) {
-    if (($item['type'] ?? '') === 'unassigned') {
-        return 'unassigned';
-    }
-    return ($item['status'] ?? 'in_stock') === 'consumed' ? 'consumed' : 'in_stock';
-}
-function qrr_available($item) {
-    return qrr_item_status($item) === 'in_stock' &&
-        empty($item['checkout']) &&
-        empty($item['pending_handoff']) &&
-        empty($item['pending_operation']);
-}
 function qrr_workflow_codes($raw, $limit = 200) {
     if (is_array($raw)) {
         $raw = implode("\n", $raw);
@@ -157,17 +145,7 @@ function qrr_native_evidence($db, $op) {
     }
     return $proof;
 }
-function qrr_native_evidence_complete($proof) {
-    if ($proof['other'] !== 0) {
-        return false;
-    }
-    foreach ($proof['seen'] as $count) {
-        if ($count !== 1) {
-            return false;
-        }
-    }
-    return true;
-}
+
 function qrr_native_evidence_none($proof) {
     if ($proof['other'] !== 0) {
         return false;
@@ -300,13 +278,7 @@ function qrr_native_apply($db, $user, $entry, $op) {
         throw $e;
     }
 }
-function qrr_op_delta($op) {
-    $sum = 0;
-    foreach ($op['effects'] as $effect) {
-        $sum += (int) $effect['delta'];
-    }
-    return $sum;
-}
+
 /** Plans the only allowed persisted changes, never accepting arbitrary field replacement from POST. */
 
 function qrr_run_inventory_action($db, $user, $code, $kind, $args, $warehouses) {

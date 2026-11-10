@@ -8,6 +8,5 @@
 **/package-lock.json
 **/bin/**
 **/obj/**
-reference/**
 artifacts/**
 dolibarr/qrrouter/spa/**
