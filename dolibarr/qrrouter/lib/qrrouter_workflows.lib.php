@@ -174,10 +174,7 @@ function qrr_native_apply($db, $user, $entry, $op) {
     require_once DOL_DOCUMENT_ROOT . '/product/stock/class/entrepot.class.php';
     foreach ($op['effects'] as $effect) {
         $w = new Entrepot($db);
-        if (
-            $w->fetch((int) $effect['warehouse_id']) <= 0 ||
-            (int) $w->status === (int) Entrepot::STATUS_CLOSED
-        ) {
+        if ($w->fetch((int) $effect['warehouse_id']) <= 0 || qrr_warehouse_closed($w)) {
             throw new RuntimeException('Warehouse unavailable or closed');
         }
         if (

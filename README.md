@@ -34,6 +34,8 @@ Follow the [update guide](docs/updating.md) to preserve existing inventory, conf
 
 See the [user guide](docs/user-guide/README.md) for every interface area and step-by-step scanner workflows. Available actions depend on your Dolibarr permissions.
 
+For installation errors, missing tables, service connectivity and retained stock operations, see the [troubleshooting guide](docs/troubleshooting.md).
+
 ## Development
 
 See the [development guide](docs/development.md) for local setup, mocks, builds and tests.

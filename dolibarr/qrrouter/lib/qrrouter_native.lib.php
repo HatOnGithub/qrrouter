@@ -396,10 +396,7 @@ function qrr_native_complete($db, $user, $pending) {
                 $wid = (int) $after['warehouse_id'];
                 require_once DOL_DOCUMENT_ROOT . '/product/stock/class/entrepot.class.php';
                 $warehouse = new Entrepot($db);
-                if (
-                    $warehouse->fetch($wid) <= 0 ||
-                    (int) $warehouse->status === (int) Entrepot::STATUS_CLOSED
-                ) {
+                if ($warehouse->fetch($wid) <= 0 || qrr_warehouse_closed($warehouse)) {
                     throw new RuntimeException('Warehouse missing or closed');
                 }
                 $current = qrr_native_lot_qty($db, $after, $wid);

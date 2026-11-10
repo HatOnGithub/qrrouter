@@ -80,4 +80,4 @@ Creating a new serial or container can receive stock. Linking an existing unasso
 - Current source uses an embedded SQLite database per entity; no database server is required. JSON-based releases through v0.3.6 migrate on first access when updated.
 - Keep the configured service data directory when replacing or removing application files; it contains the saved QR state.
 
-See [Setup and help](user-guide/help.md) for connection and synchronization problems, and [the security audit](../SECURITY_AUDIT.md) for deployment limitations. Service hosting and physical printer operation require verification in your own environment.
+See [Troubleshooting](troubleshooting.md) for installation errors, missing tables and service diagnostics, [Setup and help](user-guide/help.md) for recovery controls, and [the security audit](../SECURITY_AUDIT.md) for deployment limitations. Service hosting and physical printer operation require verification in your own environment.

@@ -95,10 +95,10 @@ class Product {
 WAREHOUSE = r'''<?php
 class Entrepot {
  const STATUS_CLOSED=0; const STATUS_OPEN_ALL=1;
- public $status=1,$statut=1,$error='',$errors=[],$ref,$label,$lieu,$description;
+ public $id,$status=0,$statut=1,$error='',$errors=[],$ref,$label,$lieu,$description;
  private $db;
  public function __construct($db){$this->db=$db;}
- public function fetch($wid){$w=$this->db->state()['warehouses'][(int)$wid]??null;if(!$w)return -1;$this->status=$w['status'];return 1;}
+ public function fetch($wid){$w=$this->db->state()['warehouses'][(int)$wid]??null;if(!$w)return -1;$this->statut=$w['status'];return 1;}
  public function create($user){return $this->db->warehouse($this->ref);}
 }
 '''

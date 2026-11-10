@@ -157,7 +157,7 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
     for target, content in {'main.inc.php': main, 'product/class/product.class.php': product,
                             'core/class/extrafields.class.php': fixture.EXTRAFIELDS,
                             'categories/class/categorie.class.php': fixture.CATEGORIES,
-                            'product/stock/class/entrepot.class.php': fixture.WAREHOUSE.replace('public $status=1', 'public $id; public $status=1').replace('public function fetch($wid){', 'public function fetch($wid){$this->id=(int)$wid;'),
+                            'product/stock/class/entrepot.class.php': fixture.WAREHOUSE.replace('public function fetch($wid){', 'public function fetch($wid){$this->id=(int)$wid;'),
                             'product/stock/class/productlot.class.php': native_contract.LOT,
                             'custom/binloc/class/binlocwarehouselevel.class.php': native_contract.LEVELS,
                             'custom/binloc/class/binlocproductlocation.class.php': native_contract.LOCATION,
@@ -654,6 +654,33 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         ]:
             request(action='bulk', payload=payload, expected=400)
             assert native_path.read_bytes() == before_text_limits and not request()['state'].get('pending_native')
+        # Legacy warehouses populate statut only. Closed warehouses must still reject writes.
+        saved_native = native_path.read_bytes()
+        changed = native(); changed['warehouses']['1']['status'] = 0; native_path.write_text(json.dumps(changed))
+        closed_native = native_path.read_bytes()
+        rejected = request(action='workflow', payload={'kind': 'correct', 'codes': [new_box], 'quantities': {new_box: 6}})
+        assert not rejected[0]['ok'] and 'Warehouse missing or closed' in rejected[0]['message']
+        assert native_path.read_bytes() == closed_native
+        native_path.write_bytes(saved_native)
+        warehouse_stock_before = native()['stock']['4']['1']
+        warehouse_lots_before = len(native()['lots'])
+        changed = native(); changed['warehouses']['1']['status'] = 0; native_path.write_text(json.dumps(changed))
+        request(action='create', payload={'type': 'box', 'label': 'WAREHOUSE-RECOVERY', 'product_id': 4, 'warehouse_id': 1, 'qty': 2}, expected=409)
+        assert native()['stock']['4']['1'] == warehouse_stock_before
+        assert len(native()['lots']) == warehouse_lots_before
+        pending_state = read_state(pending_path)
+        assert pending_state.get('pending_native')
+        pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'
+        write_state(pending_path, pending_state)
+        request(action='native-recover', payload={}, expected=409)
+        assert read_state(pending_path)['pending_native']['id'] == pending_state['pending_native']['id']
+        assert native()['stock']['4']['1'] == warehouse_stock_before
+        changed = native(); changed['warehouses']['1']['status'] = 1; native_path.write_text(json.dumps(changed))
+        recovered_warehouse = request(action='native-recover', payload={})
+        assert request()['state']['items'][recovered_warehouse]['qty'] == 2
+        assert not request()['state'].get('pending_native')
+        assert native()['stock']['4']['1'] == warehouse_stock_before + 2
+        print('Warehouse compatibility PASS: legacy statut, closed warehouse rejection, retained intent and recovery after reopening.', flush=True)
         print('Native integration PASS: bulk assigned serials, exact label serials, automatic and named serials, box lots, Binloc writes, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
         print('Gateway integration PASS: native workflows, real C# state, CSRF, permissions, trusted facts, product/order lookups, Angular hosting and no API-key exposure.', flush=True)
         if args.browser:

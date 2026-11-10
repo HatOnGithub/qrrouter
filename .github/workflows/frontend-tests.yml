@@ -117,6 +117,9 @@ jobs:
       - name: Verify PHP gateway authorization and field privacy
         run: python3 tests/angular_integration.py --php php
 
+      - name: Verify supported Dolibarr native APIs
+        run: python3 tests/dolibarr_compatibility.py --download --php php
+
   release:
     name: Build and publish release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')

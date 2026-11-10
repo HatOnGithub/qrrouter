@@ -82,9 +82,12 @@ The result is `artifacts/docker-module/qrrouter`. For installation from publishe
 dotnet run --project tests/QrRouterApi.Tests -c Release
 python tests/http_smoke.py
 python tests/angular_integration.py --php /path/to/php
+python tests/dolibarr_compatibility.py --download --php /path/to/php
 ```
 
 The service assertions run through a console runner, so use `dotnet run`. The gateway suite executes the PHP module against the real service and Dolibarr-shaped fixtures, including authorization, stock transactions and recovery.
+
+The Dolibarr compatibility suite downloads official sources for 21.0.2, 22.0.5, 23.0.4 and 24.0.2 and executes selected native method bodies, including warehouse fetching, against isolated database doubles. It also checks legacy-only and modern-only warehouse status properties. CI runs this suite; add new supported Dolibarr versions to `tests/dolibarr_compatibility.py` and verify them before claiming compatibility. New upstream releases are not automatically supported by a passing test against older versions.
 
 ### Database migrations
 
