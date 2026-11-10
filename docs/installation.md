@@ -17,11 +17,11 @@ For a new installation, follow the steps below. For an existing installation, fo
 
 1. Open the project's [Releases](https://github.com/HatOnGithub/qrrouter/releases) page and choose a release.
 2. Under **Assets**, download both files for the same version:
-   - `module_qrrouter-v0.3.6.zip`: the installable Dolibarr module, including its built interface.
-   - `qrrouter-service-v0.3.6.zip`: the matching portable business service.
+   - `module_qrrouter-v0.3.7.zip`: the installable Dolibarr module, including its built interface.
+   - `qrrouter-service-v0.3.7.zip`: the matching portable business service.
 3. Download `SHA256SUMS` if you want to verify the files against their published SHA-256 checksums.
 
-The filenames above illustrate v0.3.6; use the matching files from your chosen release. Download the attached module ZIP rather than GitHub's automatically generated **Source code** archive, which does not include the built interface. If no release is available yet, use the [source build instructions](development.md#build-the-installable-module).
+The filenames above illustrate v0.3.7; use the matching files from your chosen release. Download the attached module ZIP rather than GitHub's automatically generated **Source code** archive, which does not include the built interface. If no release is available yet, use the [source build instructions](development.md#build-the-installable-module).
 
 ## 2. Start the business service
 
