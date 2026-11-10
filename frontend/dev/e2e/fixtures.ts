@@ -101,6 +101,10 @@ export const test = base.extend<{ mock: MockApplication }>({
       const errors: string[] = [];
       const watch = (page: Page) => {
         page.on('pageerror', error => errors.push(error.message));
+        page.on('response', response => {
+          if (response.request().resourceType() === 'script' && response.status() >= 400)
+            errors.push(`Script load failed: ${response.status()} ${response.url()}`);
+        });
         page.on('console', message => {
           if (message.type() === 'warning') warnings.push(message.text());
         });
@@ -111,6 +115,10 @@ export const test = base.extend<{ mock: MockApplication }>({
       await mock.reset();
       await use(mock);
       if (info.status !== info.expectedStatus) {
+        await info.attach('browser-errors', {
+          body: JSON.stringify(errors, null, 2),
+          contentType: 'application/json',
+        });
         const response = await request.get('/custom/qrrouter/api.php?resource=bootstrap');
         await info.attach('mock-state', {
           body: await response.body(),

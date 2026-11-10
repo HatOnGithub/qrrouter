@@ -7,6 +7,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:4300',
     browserName: 'chromium',
+    launchOptions: { args: ['--autoplay-policy=user-gesture-required'] },
     headless: true,
     viewport: { width: 1440, height: 1000 },
     trace: 'retain-on-failure',

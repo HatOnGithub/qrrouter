@@ -22,6 +22,7 @@ export class EditorComponent {
   private route = inject(ActivatedRoute);
   protected editing = this.route.snapshot.routeConfig?.path === 'edit/:code';
   protected registering = this.route.snapshot.routeConfig?.path === 'register/details';
+  protected bulkAssigned = this.route.snapshot.queryParamMap.get('bulk') === 'assigned';
   protected code = this.route.snapshot.paramMap.get('code') || '';
   protected codes = signal<string[]>(
     this.route.snapshot.queryParamMap.get('codes')
@@ -65,6 +66,7 @@ export class EditorComponent {
   protected original = this.editing ? this.api.context()!.state.items[this.code] : undefined;
 
   constructor() {
+    if (this.bulkAssigned) this.count = 20;
     inject(DestroyRef).onDestroy(() => {
       clearTimeout(this.serialTimer);
       ++this.serialRequest;
@@ -174,6 +176,8 @@ export class EditorComponent {
     this.error.set('');
     this.notice.set('');
     try {
+      if (this.bulkAssigned && (!this.model.product_id || !this.model.warehouse_id))
+        throw new Error('Choose a product and warehouse for the assigned batch.');
       if (this.editing && !this.original) throw new Error('Item not found');
       const payload =
         this.model.type === 'unassigned'
@@ -206,7 +210,10 @@ export class EditorComponent {
         await this.api.refresh();
         if (result.codes.length === 1 && !result.warning)
           await this.router.navigate(['/items', result.codes[0]]);
-      } else if (!this.editing && (this.count > 1 || this.model.type === 'unassigned')) {
+      } else if (
+        !this.editing &&
+        (this.bulkAssigned || this.count > 1 || this.model.type === 'unassigned')
+      ) {
         const batch = await this.api.command<string>('bulk', payload);
         await this.api.refresh();
         await this.router.navigate(['/labels'], { queryParams: { batch } });

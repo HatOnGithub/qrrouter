@@ -1,4 +1,11 @@
 {
+  "Create assigned QR batch": "Toegewezen QR-batch aanmaken",
+  "Create assigned batch": "Toegewezen batch aanmaken",
+  "Create multiple QR labels with the same product and location. Each label receives its own QR ID.": "Maak meerdere QR-labels met hetzelfde product en dezelfde locatie. Elk label krijgt een eigen QR-ID.",
+  "Choose a product and warehouse for the assigned batch.": "Kies een product en magazijn voor de toegewezen batch.",
+  "Create assigned labels now, or print blank labels to register later.": "Maak nu toegewezen labels of druk lege labels af om later te registreren.",
+  "Unassigned labels show only the QR code and QR ID.": "Niet-toegewezen labels tonen alleen de QR-code en het QR-ID.",
+  "Assigned labels show product details. Unassigned labels show only the QR code and QR ID.": "Toegewezen labels tonen productgegevens. Niet-toegewezen labels tonen alleen de QR-code en het QR-ID.",
   "Camera is off": "Camera staat uit",
   "Starting camera…": "Camera starten…",
   "Customer order": "Klantorder",

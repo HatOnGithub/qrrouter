@@ -3,11 +3,9 @@
 Use --browser to also run Playwright against the built, PHP-hosted Angular application.
 """
 import argparse
-import ast
 import contextlib
 import http.cookiejar
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -18,6 +16,7 @@ import socket
 import subprocess
 import tempfile
 import time
+import dolibarr_fixture as fixture
 import native_fixture as native_contract
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -38,9 +37,7 @@ print('All PHP adapter files pass syntax checks.', flush=True)
 subprocess.run(php + [str(root / 'tests/test_translation.php')], check=True)
 subprocess.run(php + [str(root / 'tests/test_service_settings.php')], check=True)
 subprocess.run(php + [str(root / 'tests/test_labels.php')], check=True)
-spec = importlib.util.spec_from_file_location('native_fixture', root / 'reference/module-2.6.14/qrrouter/tests/test_http_inventory.py')
-fixture = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(fixture)
+
 
 
 def port():
@@ -67,7 +64,7 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-angular-') as directory:
     data = tmp / 'data'
     data.mkdir()
     shutil.copytree(root / 'dolibarr/qrrouter', webroot / 'custom/qrrouter')
-    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'custom/binloc/lib', 'commande/class', 'core/lib']:
+    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'custom/binloc/lib', 'commande/class', 'core/lib', 'core/modules']:
         (webroot / folder).mkdir(parents=True, exist_ok=True)
     main = fixture.MAIN.replace("if(str_contains($sql,'FROM llx_entrepot')){", "if(str_contains($sql,'FROM llx_product WHERE')){$this->rows=[(object)['rowid'=>3,'ref'=>'PART-003','label'=>'Fixture Part']];}elseif(str_contains($sql,'FROM llx_entrepot')){")
     main = main.replace("elseif(str_contains($sql,'FROM llx_entrepot')){", 'else' + native_contract.QUERIES.lstrip())
@@ -75,6 +72,11 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-angular-') as directory:
     main = main.replace('$this->idx=0;$s=$this->state();', '$this->idx=0;$s=$this->txn??$this->state();')
     main = main.replace('<meta charset="utf-8">', '<meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:rgb(40,40,40);background:rgb(250,250,250)}.butAction{background:rgb(83,101,117);color:white;border:1px solid gray;border-radius:3px}.flat{background:white;color:rgb(40,40,40)}</style>')
     main = main.replace('function llxHeader($a,$title){print ', 'function llxHeader($a,$title){global $conf; print ')
+    main = main.replace('function llxFooter()', '''function dol_get_fiche_head($head,$selected,$title='',$notab=0,$picto='') {
+ $html='<nav data-native-tabs>';foreach($head as $tab)$html.='<a href="'.htmlspecialchars($tab[0]).'">'.htmlspecialchars($tab[1]).'</a>';return $html.'</nav>';
+}
+function dol_get_fiche_end(){return '';}
+function llxFooter()''')
     main = main.replace("</head><body><main data-title=", "</head><body>'.(empty($conf->dol_hide_leftmenu)?'<aside id=\"id-left\">Native left menu</aside>':'').'<main data-title=")
     main = main.replace("elseif(str_contains($sql,'FROM llx_user')){", "elseif(str_contains($sql,'FROM llx_user')){ if (!empty($s['users_empty'])) return true;")
     main = main.replace("$GLOBALS['db']=new FakeDB();", """
@@ -82,8 +84,7 @@ $GLOBALS['db']=new FakeDB();
 $GLOBALS['conf']->entity = max(1, (int) ($_GET['entity'] ?? 1));
 $GLOBALS['conf']->global = (object) ($GLOBALS['db']->state()['constants'][(string) $GLOBALS['conf']->entity] ?? []);
 """)
-    locale_source = ast.parse((root / 'reference/module-2.6.14/qrrouter/tests/test_http_locales.py').read_text(encoding='utf-8'))
-    locale_fixture = next(ast.literal_eval(node.value) for node in locale_source.body if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'LANGS' for target in node.targets))
+    locale_fixture = fixture.LANGS
     entity_text = (
         'Tools &amp; parts&hellip; &mdash; &quot;quoted&quot; &#39;single&#39; '
         '&lt;img src=&quot;entity-regression&quot; '
@@ -128,7 +129,7 @@ $GLOBALS['user']=new class($role) {
 function isModEnabled($module){$role=$_GET['role']??'';return !(($module==='qrrouter'&&$role==='disabled')||$role==='disabled-'.$module);}
 function restrictedArea($actor,$feature,$id=0,$table='',$feature2='',$key='fk_soc',$select='rowid',$draft=0,$mode=0){
  if($mode!==1)throw new RuntimeException('Object checks must use non-terminating mode');
- $allowed=['commande'=>[39],'mrp'=>[19],'expedition'=>[29],'user'=>[8,9]];
+ $allowed=['produit'=>[3,4],'stock'=>[1,2],'commande'=>[39],'mrp'=>[19],'expedition'=>[29],'user'=>[8,9]];
  return in_array((int)$id,$allowed[$feature]??[],true)&&!(($_GET['role']??'')==='restricted'&&$feature==='commande')?1:0;
 }
 """)
@@ -152,13 +153,33 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
     product = product.replace('$this->id=(int)$id;', "$this->id=(int)$id;$this->entity=(int)($this->db->state()['product_entities'][$id]??1);")
     product = product.replace('public function hasbatch(){return false;}', 'public function hasbatch(){return $this->id===4;}'+native_contract.PRODUCT_METHOD)
     for target, content in {'main.inc.php': main, 'product/class/product.class.php': product,
-                            'product/stock/class/entrepot.class.php': fixture.WAREHOUSE,
+                            'product/stock/class/entrepot.class.php': fixture.WAREHOUSE.replace('public $status=1', 'public $id; public $status=1').replace('public function fetch($wid){', 'public function fetch($wid){$this->id=(int)$wid;'),
                             'product/stock/class/productlot.class.php': native_contract.LOT,
                             'custom/binloc/class/binlocwarehouselevel.class.php': native_contract.LEVELS,
                             'custom/binloc/class/binlocproductlocation.class.php': native_contract.LOCATION,
                             'custom/binloc/lib/binloc.lib.php': native_contract.LIBRARY,
                             'commande/class/commande.class.php': commande,
                             'native.php': "<?php require __DIR__.'/main.inc.php'; llxHeader('', 'Native Dolibarr page'); llxFooter();",
+                            'core/lib/product.lib.php': """<?php
+function product_prepare_head($object){return [['/product/card.php?id='.$object->id,'Product','card'],['/custom/binloc/tab_product_locations.php?id='.$object->id,'Binloc','binloc'],['/custom/qrrouter/native.php?kind=product&id='.$object->id,'QR entries','qrrouter']];}
+function productlot_prepare_head($object){return [['/product/stock/productlot_card.php?id='.$object->id,'Lot','card'],['/custom/qrrouter/native.php?kind=lot&id='.$object->id,'QR entries','qrrouter']];}
+""",
+                            'core/lib/stock.lib.php': """<?php
+function stock_prepare_head($object){return [['/product/stock/card.php?id='.$object->id,'Warehouse','card'],['/custom/binloc/tab_warehouse_locations.php?id='.$object->id,'Binloc','binloc'],['/custom/qrrouter/native.php?kind=warehouse&id='.$object->id,'QR entries','qrrouter']];}
+""",
+                            'custom/qrrouter/hook_fixture.php': """<?php
+require __DIR__.'/../../main.inc.php';
+require __DIR__.'/class/actions_qrrouter.class.php';
+$object=(object)['id'=>(int)GETPOST('id','int')]; $action=(string)GETPOST('action');
+$hooks=new ActionsQrrouter($db); $hooks->addMoreActionsButtons(['currentcontext'=>(string)GETPOST('context')],$object,$action);
+""",
+                            'core/modules/DolibarrModules.class.php': "<?php #[AllowDynamicProperties] class DolibarrModules {}",
+                            'custom/qrrouter/descriptor_fixture.php': """<?php
+require __DIR__.'/../../main.inc.php';
+require __DIR__.'/core/modules/modQrrouter.class.php';
+$module=new modQrrouter($db);
+echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'=>eval('return '.$module->menu[1]['perms'].';')]);
+""",
                             'core/lib/admin.lib.php': admin}.items():
         (webroot / target).write_text(content, encoding='utf-8')
     native_path = data / 'native.json'
@@ -284,6 +305,56 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
             result = request(action='register', payload={'type': kind, 'codes': [code], 'label': 'Fixture ' + kind, 'serial': 'SN-REGISTER' if kind == 'tracked' else '', 'details': 'Inspect seals annually; keep dry.' if kind == 'tracked' else '', 'product_id': 3 if kind == 'generic' else 4, 'warehouse_id': 1, 'qty': qty, 'levels': {'1': 'A'}})
             assert result['codes'] == [code]
         native = lambda: json.loads(native_path.read_text())
+        def native_entries(kind, identifier, role='admin', expected=200, **params):
+            url = base + 'native.php?' + urlencode({'kind': kind, 'id': identifier, 'role': role, **params})
+            try:
+                with client.open(url) as response:
+                    assert response.status == expected
+                    assert response.headers['Cache-Control'] == 'no-store'
+                    return response.read().decode()
+            except HTTPError as error:
+                assert error.code == expected, error.read().decode()
+                return ''
+        product_entries = native_entries('product', 4)
+        for role, allowed in [('admin', True), ('reader', True), ('no-stock', False), ('external-admin', False), ('inactive', False), ('disabled-binloc', False)]:
+            with client.open(base + 'descriptor_fixture.php?role=' + role) as response:
+                descriptor = json.load(response)
+                assert descriptor['allowed'] is allowed
+                assert 'productlotcard' in descriptor['parts']['hooks']['data']
+                assert [tab['data'].split(':', 1)[0] for tab in descriptor['tabs']] == ['product', 'stock', 'productlot']
+        assert '#/items/' + tracked in product_entries and '#/items/' + box in product_entries
+        assert '#/items/' + generic not in product_entries
+        assert 'data-native-tabs' in product_entries and 'tab_product_locations.php?id=4' in product_entries
+        assert '#/items/' + generic in native_entries('product', 3)
+        assert '#/items/' + tracked in native_entries('lot', 1)
+        assert '#/items/' + box not in native_entries('lot', 1)
+        assert '#/items/' + tracked in native_entries('warehouse', 1, bin_key='1:v' + 'a')
+        assert 'No related QR entries.' in native_entries('warehouse', 2)
+        native_entries('warehouse', 1, role='no-binloc', expected=403, bin_key='1:va')
+        for role in ['no-stock', 'no-product', 'external', 'disabled']:
+            native_entries('product', 4, role=role, expected=403)
+        native_entries('product', 999, expected=403)
+        native_entries('lot', 999, expected=403)
+        native_entries('warehouse', 999, expected=403)
+        native_entries('invalid', 4, expected=400)
+        native_entries('salesorder', 39, role='restricted', expected=403)
+        native_entries('user', 9, role='reader', expected=403)
+        for context, kind, identifier in [('productcard', 'product', 4), ('warehousecard', 'warehouse', 1), ('productlotcard', 'lot', 1), ('ordercard', 'salesorder', 39)]:
+            with client.open(base + 'hook_fixture.php?' + urlencode({'context': context + ':globalcard', 'id': identifier})) as response:
+                assert 'native.php?kind=' + kind + '&amp;id=' + str(identifier) in response.read().decode()
+        for context, role in [('productcard', 'external'), ('ordercard', 'restricted'), ('unknown', 'admin')]:
+            with client.open(base + 'hook_fixture.php?' + urlencode({'context': context, 'id': 4 if context == 'productcard' else 39, 'role': role})) as response:
+                assert response.read().decode() == ''
+        offline = native(); original_url = offline['constants']['1']['QRR_SERVICE_URL']
+        try:
+            offline['constants']['1']['QRR_SERVICE_URL'] = 'http://127.0.0.1:1'
+            native_path.write_text(json.dumps(offline))
+            with client.open(base + 'hook_fixture.php?context=productcard&id=4') as response:
+                assert 'native.php?kind=product' in response.read().decode()
+            native_entries('product', 4, expected=503)
+        finally:
+            restored = native(); restored['constants']['1']['QRR_SERVICE_URL'] = original_url
+            native_path.write_text(json.dumps(restored))
         assert native()['stock']['4']['1'] == 30
 
         def workflow(kind, code, **fields):
@@ -295,12 +366,15 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
         assert native()['stock']['4']['1'] == 29 and native()['stock']['4']['2'] == 5
         workflow('consume', box, quantities={box: 3}, post_stock=True, reference_type='production', reference_id=19)
         references = request()['consumption_references']
+        assert '#/items/' + box in native_entries('production', 19)
+        native_entries('production', 19, role='reader', expected=403)
         assert references['production:19']['ref'] == 'MO-0019'
         assert references['production:19']['url'].endswith('/mrp/mo_card.php?id=19')
         assert 'production:19' not in request(role='reader')['consumption_references']
         workflow('return', box, quantities={box: 2}, post_stock=True, warehouse_id=1)
         workflow('correct', box, quantities={box: 5})
         workflow('checkout', generic, person_id=9)
+        assert '#/items/' + generic in native_entries('user', 9)
         reader_view = request(role='reader')
         assert reader_view['state']['items'][generic]['checkout'] == {}
         assert '9' not in reader_view['users'] and '9' not in reader_view['state']['personal_warehouses']
@@ -364,6 +438,8 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
                 assert secret not in json.dumps(request('locations', role=role, params={'warehouse_id': 2}))
             foreign = native(); foreign['product_entities'] = {'4': 2}; native_path.write_text(json.dumps(foreign))
             scoped = request()
+            native_entries('product', 4, expected=403)
+            assert '#/items/' + tracked not in native_entries('warehouse', 2)
             assert tracked not in scoped['state']['items'] and box not in scoped['state']['items']
             assert '4' not in scoped['products']
             assert all(tracked not in row['codes'] and box not in row['codes'] for row in scoped['state']['batches'].values())
@@ -381,6 +457,7 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
             restored = native(); restored.pop('product_entities', None); native_path.write_text(json.dumps(restored))
         assert request()['state']['revision'] == before
         print('Authorization PASS: native read rights, external/disabled users, object scopes, restricted references, employee privacy, field projection and direct media access.', flush=True)
+        print('Native references PASS: product/warehouse/lot tabs, card hooks, Binloc filtering, employee loans, transaction history and authorization.', flush=True)
         request(action='register', payload={'type': 'generic', 'codes': [blank], 'label': 'Unsafe', 'product_id': 999, 'warehouse_id': 1}, expected=409)
         assert request()['state']['items'][blank]['type'] == 'unassigned'
         with client.open(base + 'index.php') as response:

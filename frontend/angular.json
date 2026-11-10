@@ -51,6 +51,7 @@
           "configurations": {
             "mock": {
               "buildTarget": "qrrouter:build:mock",
+              "prebundle": false,
               "proxyConfig": "dev/proxy.conf.cjs",
               "host": "127.0.0.1"
             }

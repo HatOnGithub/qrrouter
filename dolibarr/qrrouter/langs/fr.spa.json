@@ -1,4 +1,11 @@
 {
+  "Create assigned QR batch": "Créer un lot de QR attribués",
+  "Create assigned batch": "Créer le lot attribué",
+  "Create multiple QR labels with the same product and location. Each label receives its own QR ID.": "Créez plusieurs étiquettes QR avec le même produit et emplacement. Chaque étiquette reçoit son propre identifiant QR.",
+  "Choose a product and warehouse for the assigned batch.": "Choisissez un produit et un entrepôt pour le lot attribué.",
+  "Create assigned labels now, or print blank labels to register later.": "Créez des étiquettes attribuées maintenant ou imprimez des étiquettes vierges à enregistrer plus tard.",
+  "Unassigned labels show only the QR code and QR ID.": "Les étiquettes non attribuées affichent uniquement le code QR et son identifiant.",
+  "Assigned labels show product details. Unassigned labels show only the QR code and QR ID.": "Les étiquettes attribuées affichent les détails du produit. Les étiquettes non attribuées affichent uniquement le code QR et son identifiant.",
   "Camera is off": "Caméra désactivée",
   "Starting camera…": "Démarrage de la caméra…",
   "Customer order": "Commande client",

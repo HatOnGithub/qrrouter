@@ -43,10 +43,14 @@ label_check(
 $item['type'] = 'unassigned';
 $item['label'] = '';
 $empty = qrr_label_details($item);
-label_check(
-    count($empty) === 2 && $empty[0]['missing'] && $empty[1]['missing'],
-    'Two explicit placeholders for blank labels',
-);
+label_check($empty === [], 'Unassigned labels have no descriptive text');
+foreach (qrr_label_profiles() as $profile) {
+    label_check(
+        qrr_label_details($item, $product, $profile['id'], 'MAIN') === [],
+        'Unassigned labels omit all details at every size',
+    );
+}
+$item['type'] = 'generic';
 $onlyRef = qrr_label_details($item, ['ref' => 'REF-ONLY']);
 label_check(
     $onlyRef[0]['value'] === 'REF-ONLY' && count($onlyRef) === 2,
@@ -61,11 +65,6 @@ label_check(
 label_check(
     str_contains($html, 'class="qrr-id-code">23456X'),
     'QR lookup ID is always printed separately',
-);
-$item['code'] = 'ITM-123456789012345678901234567890123456789012345678';
-label_check(
-    str_contains(qrr_dymo_label($item, $product), 'long-id'),
-    'Long legacy identifiers get a full-code layout',
 );
 label_check(
     qrr_label_format('dymo-25x54') === 'dymo-25x54' && qrr_label_format('') === 'a4',

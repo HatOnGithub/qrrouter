@@ -39,6 +39,9 @@ function qrr_label_format($value) {
 
 /** Keep available values in priority order, and mark missing data without inventing it. */
 function qrr_label_details($item, $product = [], $format = 'dymo-25x54', $warehouse = '') {
+    if (($item['type'] ?? '') === 'unassigned') {
+        return [];
+    }
     $serial = trim((string) ($item['serial'] ?? ''));
     if ($serial === '' && ($item['type'] ?? '') === 'tracked') {
         $serial = trim((string) ($item['native_batch'] ?? ''));
@@ -141,6 +144,7 @@ function qrr_dymo_label($item, $product = [], $format = 'dymo-25x54', $warehouse
             : count($details);
     $html =
         '<article class="qrr-thermal-label' .
+        (($item['type'] ?? '') === 'unassigned' ? ' qrr-label-id-only' : '') .
         (strlen($code) > 16 ? ' long-id' : '') .
         '" aria-label="' .
         qrr_h(qrr_t('QR label') . ' ' . $code) .
@@ -240,7 +244,7 @@ function qrr_dymo_document(
         '</p><p>' .
         qrr_h(
             qrr_t(
-                'Details: serial number, short product name, then product reference. Missing details are marked as unassigned.',
+                'Assigned labels show product details. Unassigned labels show only the QR code and QR ID.',
             ),
         ) .
         '</p><div class="qrr-print-actions"><button type="button" id="qrr-print" disabled>' .

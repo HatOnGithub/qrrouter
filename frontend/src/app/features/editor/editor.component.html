@@ -1,10 +1,23 @@
 <div [class.scanner-page]="registering">
-  <h1>{{ (editing ? 'Edit QR item' : registering ? 'Register items' : 'Create QR item') | t }}</h1>
+  <h1>
+    {{
+      (editing
+        ? 'Edit QR item'
+        : registering
+          ? 'Register items'
+          : bulkAssigned
+            ? 'Create assigned QR batch'
+            : 'Create QR item'
+      ) | t
+    }}
+  </h1>
   <p class="subtitle">
     {{
-      (registering
-        ? 'Assign product details and location. New serials receive one unit; existing serial stock is preserved.'
-        : 'Creating a serial or box creates a Dolibarr lot and receives the entered quantity into stock.'
+      (bulkAssigned
+        ? 'Create multiple QR labels with the same product and location. Each label receives its own QR ID.'
+        : registering
+          ? 'Assign product details and location. New serials receive one unit; existing serial stock is preserved.'
+          : 'Creating a serial or box creates a Dolibarr lot and receives the entered quantity into stock.'
       ) | t
     }}
   </p>
@@ -28,10 +41,14 @@
               (ngModelChange)="typeChanged($event)"
               [disabled]="editing && original?.type !== 'unassigned'"
             >
-              <mat-option value="tracked">{{ 'Tracked Individual' | t }}</mat-option>
+              @if (!bulkAssigned) {
+                <mat-option value="tracked">{{ 'Tracked Individual' | t }}</mat-option>
+              }
               <mat-option value="generic">{{ 'Tracked Generic' | t }}</mat-option>
-              <mat-option value="box">{{ 'Counted Container' | t }}</mat-option>
-              @if (!registering) {
+              @if (!bulkAssigned) {
+                <mat-option value="box">{{ 'Counted Container' | t }}</mat-option>
+              }
+              @if (!registering && !bulkAssigned) {
                 <mat-option value="unassigned">{{ 'Unassigned printable label' | t }}</mat-option>
               }
             </mat-select>
@@ -179,10 +196,15 @@
               type="submit"
               [class.scanner-primary]="registering"
               mat-flat-button
-              [disabled]="busy() || form.invalid || (registering && !codes().length)"
+              [disabled]="
+                busy() ||
+                form.invalid ||
+                (registering && !codes().length) ||
+                (bulkAssigned && (!model.product_id || !model.warehouse_id))
+              "
             >
               <fa-icon [icon]="icons.save" aria-hidden="true" />
-              {{ (busy() ? 'Saving…' : 'Save') | t }}
+              {{ (busy() ? 'Saving…' : bulkAssigned ? 'Create assigned batch' : 'Save') | t }}
             </button>
             <a mat-button routerLink="/inventory">
               <fa-icon [icon]="icons.cancel" aria-hidden="true" />

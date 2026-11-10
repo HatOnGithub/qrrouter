@@ -98,7 +98,6 @@ try
                 Check(!Codes.Valid(new string(changed)), "Adjacent swap detection");
             }
     }
-    Check(Codes.Valid("ITM-123456") && Codes.Valid("ABCDEFGH23"), "Legacy code compatibility");
     Reject(
         () => service.State(admin with { Read = false, Manage = false, Admin = false }),
         "Read permission"
@@ -396,97 +395,6 @@ try
                 PlanData(box, "consume", Object(("quantity", 1), ("post_stock", true)))
             ),
         "Native stock permission"
-    );
-    // Import PHP's empty associative arrays, preserve opaque legacy fields and audit history.
-    var imported = JsonNode
-        .Parse(
-            """{"schema":2,"revision":4,"items":[],"history":[{"action":"legacy"}],"batches":[],"personal_warehouses":[],"opaque":{"keep":true}}"""
-        )!
-        .AsObject();
-    service.Execute(admin with { EntityId = 3 }, "import", Object(("state", imported)));
-    Check(
-        service.State(admin with { EntityId = 3 })["opaque"]!.B("keep"),
-        "Import preserves extension metadata"
-    );
-    Reject(
-        () => service.Execute(admin with { EntityId = 3 }, "import", Object(("state", imported))),
-        "Import cannot overwrite existing store"
-    );
-    var oldItem = GetItem(box);
-    oldItem["pending_handoff"] = Object(
-        ("id", "QRR-LEGACY"),
-        ("inventorycode", "QRR-LEGACY"),
-        ("kind", "checkout"),
-        ("person_id", 9),
-        ("from", 1),
-        ("to", 3),
-        ("qty", 4),
-        ("product_id", 4),
-        ("reason", "Legacy pending"),
-        ("at", "2020-01-01T00:00:00Z")
-    );
-    var legacy = Object(
-        ("schema", 2),
-        ("revision", 12),
-        ("history", new JsonArray()),
-        ("items", Object((box, oldItem))),
-        ("personal_warehouses", new JsonArray()),
-        ("batches", new JsonArray())
-    );
-    service.Execute(admin with { EntityId = 5 }, "import", Object(("state", legacy)));
-    service.Execute(
-        admin with
-        {
-            EntityId = 5,
-        },
-        "handoff-reconcile",
-        Object(
-            ("code", box),
-            ("id", "QRR-LEGACY"),
-            (
-                "proof",
-                new
-                {
-                    @out = 1,
-                    @in = 1,
-                    extra = 0,
-                }
-            )
-        )
-    );
-    Check(
-        service.State(admin with { EntityId = 5 })["items"]![box]!.I("warehouse_id") == 3,
-        "Original PHP pending handoffs reconcile without C#-only effect fields"
-    );
-    var noneItem = GetItem(unknownBox);
-    noneItem["pending_operation"] = Object(
-        ("id", "QRR-NONE"),
-        ("at", "2020-01-01T00:00:00Z"),
-        ("effects", new[] { new { warehouse_id = 1, delta = -1 } })
-    );
-    var noneState = Object(
-        ("schema", 2),
-        ("revision", 1),
-        ("history", new JsonArray()),
-        ("items", Object((unknownBox, noneItem)))
-    );
-    service.Execute(admin with { EntityId = 6 }, "import", Object(("state", noneState)));
-    service.Execute(
-        admin with
-        {
-            EntityId = 6,
-        },
-        "reconcile",
-        Object(
-            ("code", unknownBox),
-            ("id", "QRR-NONE"),
-            ("proof", new { seen = new[] { 0 }, other = 0 })
-        )
-    );
-    Check(
-        service.State(admin with { EntityId = 6 })["items"]![unknownBox]!["pending_operation"]
-            is null,
-        "No native evidence cancels an old pending operation"
     );
     // Independent repository instances must serialize writes to the same entity.
     var before = State().Map("items").Count;

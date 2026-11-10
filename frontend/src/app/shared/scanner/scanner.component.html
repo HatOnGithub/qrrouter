@@ -20,7 +20,7 @@
       <video
         #video
         playsinline
-        muted
+        [muted]="true"
         [hidden]="!camera()"
         [attr.aria-label]="'QR camera' | t"
       ></video>

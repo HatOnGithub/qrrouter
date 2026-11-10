@@ -69,6 +69,12 @@ a {
   justify-content: center;
   min-width: 0;
 }
+.qrr-label-id-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+.qrr-label-id-only .qrr-label-details {
+  display: none;
+}
 .qrr-qr-column img {
   display: block;
   flex: 0 0 auto;

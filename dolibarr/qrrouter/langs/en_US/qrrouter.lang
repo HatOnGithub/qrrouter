@@ -589,3 +589,11 @@ QRRUI_4c015926ec45=Select your printer and matching label paper in the print dia
 QRRUI_4a211932145b=Lot
 QRRUI_ecdda59aea5e=Item
 QRRUI_8f5e155f6115=DYMO label sizes
+
+QRRRelatedEntries=QR entries
+QRRUI_72f3bb3ca122=QR entries
+QRRUI_bb00e96eb1ff=Back to native card
+QRRUI_a56ebebdd0b2=Binloc locations
+QRRUI_797a4917230e=All locations
+QRRUI_667c6de9a153=No related QR entries.
+QRRUI_3ef1317e1807=QR inventory is temporarily unavailable.

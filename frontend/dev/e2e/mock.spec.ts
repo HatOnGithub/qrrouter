@@ -1,6 +1,64 @@
 import { expect, test } from './fixtures';
 import type { Bootstrap } from '../../src/app/core/models/inventory';
 
+test('assigned batches share product and location and open printable labels', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/labels');
+  await page.getByRole('link', { name: 'Create assigned QR batch', exact: true }).click();
+  const create = page.getByRole('button', { name: 'Create assigned batch', exact: true });
+  await expect(create).toBeDisabled();
+  await page.getByRole('textbox', { name: 'Item name / label', exact: true }).fill('Bulk drills');
+  await mock.lookup('Dolibarr product', 'DRILL', /DRILL-18V/);
+  await mock.select('Warehouse', 'MAIN');
+  await page.getByRole('spinbutton', { name: 'Shelf', exact: true }).fill('3');
+  await page.getByRole('spinbutton', { name: 'Number of labels', exact: true }).fill('3');
+  await create.click();
+  await expect(page).toHaveURL(/#\/labels\?batch=/);
+  const state = await mock.bootstrap();
+  const batch = new URL(page.url().split('#')[1], 'http://mock').searchParams.get('batch')!;
+  const codes = state.state.batches[batch].codes;
+  expect(codes).toHaveLength(3);
+  expect(new Set(codes).size).toBe(3);
+  for (const code of codes) {
+    expect(state.state.items[code]).toMatchObject({
+      type: 'generic',
+      label: 'Bulk drills',
+      product_id: 2,
+      warehouse_id: 1,
+      bin_values: { 2: '3' },
+    });
+  }
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('link', { name: 'Print', exact: true }).first().click();
+  const popup = await popupPromise;
+  await expect(popup.locator('.label')).toHaveCount(3);
+  await expect(popup.getByText('Bulk drills', { exact: true })).toHaveCount(3);
+  await popup.close();
+});
+
+test('a direct camera link starts muted without a user gesture', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__physicalCameraRequests = 0;
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async () => {
+        (window as any).__physicalCameraRequests++;
+        throw new Error('Physical camera requested before mock initialization');
+      },
+    });
+  });
+  await page.goto('/#/scan?input=camera');
+  await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
+  await expect(page.locator('qrr-scanner video')).toHaveJSProperty('muted', true);
+  await expect(page.locator('qrr-scanner video')).toHaveJSProperty('paused', false);
+  expect(await page.evaluate(() => (window as any).__physicalCameraRequests)).toBe(0);
+  await expect(page.locator('#mock-camera-status')).toContainText(
+    '1 active virtual camera stream.'
+  );
+});
+
 test('the current Angular app runs in the local Dolibarr shell', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));

@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+
 import { validCode } from '../src/app/shared/scanner/codes';
 import { writeFile } from 'node:fs/promises';
 
@@ -34,6 +35,31 @@ async function scannerScreenshot(page: Page, path: string): Promise<void> {
   });
 }
 
+test('native product and Binloc-adjacent warehouse tabs open the related QR entries', async ({
+  page,
+}) => {
+  const code = process.env['QRR_E2E_BOX']!;
+  const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
+  const item = bootstrap.state.items[code];
+  await page.goto('native.php?kind=product&id=' + item.product_id);
+  await expect(
+    page.locator('[data-native-tabs]').getByRole('link', { name: 'QR entries', exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Binloc locations', exact: true })).toHaveAttribute(
+    'href',
+    /binloc\/tab_product_locations\.php/
+  );
+  await expect(page.locator('a[href$="#/items/' + code + '"]')).toHaveAttribute(
+    'href',
+    new RegExp('#/items/' + code + '$')
+  );
+  await page.goto('native.php?kind=warehouse&id=' + item.warehouse_id);
+  await page.getByRole('combobox', { name: 'Binloc locations' }).selectOption(item.bin_key);
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('bin_key='));
+  await page.locator('a[href$="#/items/' + code + '"]').click();
+  await expect(page.getByRole('heading', { name: item.label, exact: true })).toBeVisible();
+});
 test('DYMO labels add details and preserve physical dimensions at every size', async ({ page }) => {
   const code = process.env['QRR_E2E_ITEM']!;
   // The native QR endpoint needs TCPDF/GD, absent in the Dolibarr-shaped fixture.
@@ -146,12 +172,14 @@ test('DYMO labels add details and preserve physical dimensions at every size', a
   await page.goto((await printLink.getAttribute('href'))!);
   await expect(page.getByRole('button', { name: 'Print DYMO labels', exact: true })).toBeEnabled();
   await expect(page.locator('.qrr-thermal-label')).toHaveCount(2);
-  await expect(page.locator('.qrr-label-detail')).toHaveCount(4);
+  await expect(page.locator('.qrr-label-detail')).toHaveCount(0);
+  await expect(page.locator('.qrr-id-code')).toHaveCount(2);
   const batchUrl = page.url();
   for (const format of ['dymo-25x54', 'dymo-32x57', 'dymo-36x89', 'dymo-54x101']) {
     const url = new URL(batchUrl);
     url.searchParams.set('format', format);
     await page.goto(url.href);
+    await expect(page.locator('.qrr-label-detail')).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Print DYMO labels', exact: true })
     ).toBeEnabled();

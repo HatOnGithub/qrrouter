@@ -96,7 +96,11 @@ async function printPage(store, url) {
       const item = store.item(code);
       const qr = await QRCode.toString(code, { type: 'svg', margin: 2 });
       const product = store.data.products[item.product_id];
-      return `<section class="label">${qr}<div><strong>${escape(code)}</strong><span>${escape(item.label || 'Unassigned label')}</span><small>${escape(item.serial || item.native_batch)}</small><small>${escape(product?.ref)} ${escape(product?.label)}</small></div></section>`;
+      const details =
+        item.type === 'unassigned'
+          ? ''
+          : `<span>${escape(item.label)}</span><small>${escape(item.serial || item.native_batch)}</small><small>${escape(product?.ref)} ${escape(product?.label)}</small>`;
+      return `<section class="label">${qr}<div><strong>${escape(code)}</strong>${details}</div></section>`;
     })
   );
   const css = profile
