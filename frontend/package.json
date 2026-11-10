@@ -2,6 +2,7 @@
   "name": "qrrouter-web",
   "version": "0.3.5",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": "^22.22.3 || ^24.15.0 || >=26.0.0"

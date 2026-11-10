@@ -11,6 +11,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--tag', help='Require a matching version tag, optionally ending in -beta.N.')
 args = parser.parse_args()
 module = root / 'dolibarr/qrrouter'
+if (module / 'LICENSE').read_bytes() != (root / 'LICENSE').read_bytes():
+    raise SystemExit('Project and Dolibarr module licenses must match.')
 version = json.loads((root / 'frontend/package.json').read_text(encoding='utf-8'))['version']
 if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
     raise SystemExit('Project version must use major.minor.incremental.')

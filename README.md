@@ -2,6 +2,8 @@
 
 QR-based inventory handling inside Dolibarr, originally developed as an internal tool for DeltaIoT.
 
+Available under the [MIT License](LICENSE). Third-party dependencies retain their own licenses.
+
 ## Features
 
 - **Intended use:** label and identify warehouse items, locate them, track stock actions and manage employee loans from a phone or workstation.
