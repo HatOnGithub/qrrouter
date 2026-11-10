@@ -58,7 +58,13 @@ Build the service separately:
 dotnet build QrRouter.sln -c Release
 ```
 
-For Docker module exports and deployment, see [Installation](installation.md).
+To export a built module directory using Docker:
+
+```sh
+docker buildx build --target dolibarr-module --output type=local,dest=artifacts/docker-module .
+```
+
+The result is `artifacts/docker-module/qrrouter`. For installation from published assets, see [Installation](installation.md).
 
 ## Validate changes
 

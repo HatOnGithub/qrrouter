@@ -1,6 +1,6 @@
 # QR Router v0.3.5
 
-QR-based inventory handling inside Dolibarr. This is an unreleased development version, originally developed as an internal tool for DeltaIoT.
+QR-based inventory handling inside Dolibarr, originally developed as an internal tool for DeltaIoT.
 
 ## Features
 
@@ -16,7 +16,7 @@ QR-based inventory handling inside Dolibarr. This is an unreleased development v
 
 ## Installation
 
-See the [installation guide](docs/installation.md) to build or install the module, connect its service and configure access.
+Download the module ZIP and matching business service ZIP from [Releases](https://github.com/HatOnGithub/qrrouter/releases). Install the module through Dolibarr's external-module installer, then start and connect the service as described in the [installation guide](docs/installation.md).
 
 ## Usage
 

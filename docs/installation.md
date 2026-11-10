@@ -7,51 +7,46 @@
 - An existing Dolibarr installation. The integration targets Dolibarr 21.0.2 and Binloc 2.19.1.
 - Product, Stock, Lot/Serial and Binloc modules enabled.
 - PHP cURL and GD, with Dolibarr's QR/TCPDF support available.
-- A running QR Router business service. Docker Compose is the deployment method described below.
+- The .NET 10 ASP.NET Core Runtime on the machine that will run the QR Router business service. A .NET SDK and Node.js are not needed to install release files.
 - An internal Dolibarr administrator account for installation and setup.
 - HTTPS access to Dolibarr for camera scanning from phones and remote workstations. Manual / USB entry remains available without camera access.
 
-This development version targets a clean QR Router installation. Deploy the PHP module, built frontend and service together.
+This version targets a clean QR Router installation. Install the module and business service from the same release.
 
-## 1. Prepare the module
+## 1. Download a release
 
-There is no published release yet. Build the installable module from this checkout using the [build instructions](development.md#build-the-installable-module), or export it with Docker:
+1. Open the project's [Releases](https://github.com/HatOnGithub/qrrouter/releases) page and choose a release.
+2. Under **Assets**, download both files for the same version:
+   - `module_qrrouter-v0.3.5.zip`: the installable Dolibarr module, including its built interface.
+   - `qrrouter-service-v0.3.5.zip`: the matching portable business service.
+3. Download `SHA256SUMS` if you want to verify the files against their published SHA-256 checksums.
 
-```sh
-docker buildx build --target dolibarr-module --output type=local,dest=artifacts/docker-module .
-```
-
-The Docker export produces `artifacts/docker-module/qrrouter`, ready to copy into Dolibarr's `htdocs/custom` directory. The source build produces `artifacts/module_qrrouter-v0.3.5.zip` for Dolibarr's external-module installer. Both must include the built `spa` directory.
+The filenames above illustrate v0.3.5; use the matching files from your chosen release. Download the attached module ZIP rather than GitHub's automatically generated **Source code** archive, which does not include the built interface. If no release is available yet, use the [source build instructions](development.md#build-the-installable-module).
 
 ## 2. Start the business service
 
-1. Copy `.env.example` to `.env` in the repository root.
-2. Set `QRR_SERVICE_API_KEY` to a random secret of at least 32 characters. Keep it for the Dolibarr connection step.
-3. Start the service:
+1. Extract the service ZIP into a dedicated directory on the service machine.
+2. Open the extracted `appsettings.json`. Under `AppSettings`, set:
+   - `ApiKey`: a random secret of at least 32 characters. Keep it for the Dolibarr connection step.
+   - `DataDirectory`: an absolute path to a persistent, writable directory outside the extracted application directory. Keep this directory when upgrading the service.
+3. From the extracted service directory, start it:
 
    ```sh
-   docker compose up -d --build --wait
+   dotnet QrRouterApi.dll --urls http://127.0.0.1:5087
    ```
 
-The default configuration exposes the service on the Docker host at `http://127.0.0.1:5087` and stores QR state in the persistent `qrrouter-data` volume. This address works when Dolibarr's PHP process runs on that same host.
+4. Check `http://127.0.0.1:5087/health` on that machine. A running service returns a healthy status.
+5. Configure your operating system's service manager to keep the process running, using the extracted service directory as its working directory and the same arguments.
 
-### If Dolibarr runs in Docker
-
-Set `DOLIBARR_NETWORK` in `.env` to the existing network used by Dolibarr, then start with:
-
-```sh
-docker compose -f compose.yaml -f compose.dolibarr.yaml up -d --build --wait
-```
-
-Use `http://qrrouter-api:8080` in the module settings. This joins the existing network; it does not install Dolibarr or its database. For a service on another host, configure a reachable HTTPS endpoint and restrict access to the Dolibarr server.
+The loopback address works when Dolibarr's PHP process runs on the same machine. If Dolibarr runs in a container or on another host, configure an endpoint reachable from that PHP process; use HTTPS between hosts and restrict access to the Dolibarr server. Enter that reachable address in the module settings below.
 
 ## 3. Install and connect the Dolibarr module
 
-1. Install the built ZIP through Dolibarr's external-module installer, or copy the complete built `qrrouter` directory into `htdocs/custom/qrrouter`.
+1. Install the downloaded module ZIP through Dolibarr's external-module installer, or extract and copy the complete `qrrouter` directory into `htdocs/custom/qrrouter`.
 2. Open **Setup > Modules/Applications**, enable QR Router and ensure its dependencies are enabled.
 3. Open QR Router's configuration gear, or `/custom/qrrouter/admin/setup.php`.
 4. Enter **Service URL**, using the address appropriate to the deployment above.
-5. Enter **Service API key**, matching `.env`, and select **Save**.
+5. Enter **Service API key**, matching the service's `AppSettings.ApiKey`, and select **Save**.
 6. Open **QR Router** and select **Refresh**. A clean installation starts with empty inventory.
 
 The connection key is saved through Dolibarr's native configuration. Leave an already saved key blank to retain it when the URL stays the same; re-enter it when changing the URL. Do not put the key into browser or frontend configuration.
@@ -68,10 +63,10 @@ Creating a new serial or container can receive stock. Linking an existing unasso
 
 ## Updates and backups
 
-- Back up the Dolibarr database, service data volume and QR thumbnail directory together before updating.
-- Deploy the rebuilt frontend, PHP module and service together. Disable and re-enable QR Router after module changes that add tabs, hooks, menus or tables.
+- Back up the Dolibarr database, service data directory and QR thumbnail directory together before updating.
+- Install the module and service assets from the same release together. Stop the service while replacing its application files, retain its data directory and connection settings, then restart it. Disable and re-enable QR Router after module changes that add tabs, hooks, menus or tables.
 - Reload the page after deployment. Restart PHP workers if their opcode cache retains old files.
 - Run one service instance using a local persistent volume; the file store is not intended for distributed replicas.
-- Keep the service volume when stopping containers. Removing Docker volumes removes the saved QR state.
+- Keep the configured service data directory when replacing or removing application files; it contains the saved QR state.
 
-See [Setup and help](user-guide/help.md) for connection and synchronization problems, and [the security audit](../SECURITY_AUDIT.md) for deployment limitations. Docker deployment and physical printer operation require verification in your own environment.
+See [Setup and help](user-guide/help.md) for connection and synchronization problems, and [the security audit](../SECURITY_AUDIT.md) for deployment limitations. Service hosting and physical printer operation require verification in your own environment.

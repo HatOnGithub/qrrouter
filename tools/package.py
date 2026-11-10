@@ -1,15 +1,21 @@
 """Build a Dolibarr module ZIP with portable, forward-slash entry names."""
 from pathlib import Path
+import argparse
 import json
 import re
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--tag', help='Require this release tag to match the project version (vmajor.minor.incremental).')
+args = parser.parse_args()
 module = root / 'dolibarr/qrrouter'
 version = json.loads((root / 'frontend/package.json').read_text(encoding='utf-8'))['version']
 if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
     raise SystemExit('Project version must use major.minor.incremental.')
+if args.tag is not None and args.tag != 'v' + version:
+    raise SystemExit(f'Release tag must match the project version: v{version}.')
 lock = json.loads((root / 'frontend/package-lock.json').read_text(encoding='utf-8'))
 descriptor = (module / 'core/modules/modQrrouter.class.php').read_text(encoding='utf-8')
 module_version = re.search(r"\$this->version\s*=\s*'([^']+)'", descriptor)

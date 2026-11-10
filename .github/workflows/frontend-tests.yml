@@ -1,4 +1,4 @@
-name: Frontend tests
+name: CI
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   frontend-mocks:
@@ -114,3 +114,72 @@ jobs:
 
       - name: Verify PHP gateway authorization and field privacy
         run: python3 tests/angular_integration.py --php php
+
+  release:
+    name: Build and publish release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [frontend-mocks, gateway-authorization]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build production module
+        run: |
+          python3 tools/build-frontend.py
+          python3 tools/package.py --tag "$RELEASE_TAG"
+
+      - name: Publish portable business service
+        run: dotnet publish src/QrRouterApi/QrRouterApi.csproj -c Release -p:UseAppHost=false --output artifacts/service
+
+      - name: Archive service and checksum release files
+        shell: bash
+        run: |
+          cd artifacts/service
+          zip -qr "../qrrouter-service-${RELEASE_TAG}.zip" .
+          cd ..
+          sha256sum "module_qrrouter-${RELEASE_TAG}.zip" "qrrouter-service-${RELEASE_TAG}.zip" > SHA256SUMS
+
+      - name: Retain release files
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            artifacts/module_qrrouter-*.zip
+            artifacts/qrrouter-service-*.zip
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "artifacts/module_qrrouter-${RELEASE_TAG}.zip" \
+            "artifacts/qrrouter-service-${RELEASE_TAG}.zip" \
+            artifacts/SHA256SUMS \
+            --verify-tag --generate-notes --title "QR Router ${RELEASE_TAG}"
