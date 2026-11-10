@@ -108,6 +108,7 @@ for (const destination of [
       stock_posted: true,
     });
     await mock.navigate('Inventory');
+    if (destination.units === item.qty) await mock.select('Status', 'Consumed');
     const row = page.locator('tbody tr').filter({ hasText: destination.label });
     if (destination.type === 'salesorder') {
       await expect(row.locator('.inventory-status')).toContainText('Consumed');

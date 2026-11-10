@@ -6,7 +6,7 @@
 
 1. Open **Inventory**.
 2. Enter a term in **Search inventory**. Search covers QR IDs, item and product names, references, serials, lots, bins, details, product tags and extra fields you may view.
-3. Optionally choose a **Warehouse** and **Type**. These filters apply together with the search.
+3. Optionally choose a **Warehouse**, **Type** and **Status**. These filters apply together with the search. Unassigned and consumed items are hidden by default: choose **Type > Unassigned** for blank labels, or **Status > Consumed** for consumed stock. Searching alone does not reveal these items.
 4. Select an item name to open its details.
 
 The summary shows QR labels, unassigned entries, loans and pending operations. **Loans** opens a similar list limited to loaned items.

@@ -18,7 +18,8 @@ test('inventory search matches product tags and extra-field names and values', a
   ] as const) {
     await search.fill(query);
     const expected = Object.values(bootstrap.state.items).filter(
-      item => item.product_id === productId
+      item =>
+        item.product_id === productId && item.type !== 'unassigned' && item.status !== 'consumed'
     );
     await expect(page.locator('tbody tr')).toHaveCount(expected.length);
     for (const item of expected) {
@@ -29,7 +30,7 @@ test('inventory search matches product tags and extra-field names and values', a
   await search.fill('Networking');
   await expect(page.locator('tbody tr')).toHaveCount(
     Object.values(bootstrap.state.items).filter(
-      item => item.product_id === 3 && item.warehouse_id === 1
+      item => item.product_id === 3 && item.warehouse_id === 1 && item.status !== 'consumed'
     ).length
   );
   await search.fill('no-such-tag-or-extra-field');
@@ -358,6 +359,7 @@ test('registration uses the current selection/details flow and existing serial w
 
 test('inventory embeds borrowers and consumption references in statuses and links metadata', async ({
   page,
+  mock,
 }) => {
   await page.goto('/#/inventory');
   const loan = page.locator('tbody tr').filter({ hasText: 'Loaned cable' });
@@ -365,10 +367,6 @@ test('inventory embeds borrowers and consumption references in statuses and link
   await expect(
     loan.locator('.inventory-status').getByRole('link', { name: 'Alex Operator' })
   ).toHaveAttribute('href', '/user/card.php?id=8');
-  const consumed = page.locator('tbody tr').filter({ hasText: 'Consumed cable' });
-  await expect(
-    consumed.locator('.inventory-status').getByRole('link', { name: 'MO-0019' })
-  ).toHaveAttribute('href', '/mrp/mo_card.php?id=19');
   await expect(page.locator('.inventory-summary qrr-card')).toHaveCount(0);
   const drill = page.locator('tbody tr').filter({ hasText: 'Workshop drill' });
   await expect(drill.getByRole('link', { name: 'DRILL-18V', exact: true })).toHaveAttribute(
@@ -379,6 +377,11 @@ test('inventory embeds borrowers and consumption references in statuses and link
     'href',
     '/product/stock/card.php?id=1'
   );
+  await mock.select('Status', 'Consumed');
+  const consumed = page.locator('tbody tr').filter({ hasText: 'Consumed cable' });
+  await expect(
+    consumed.locator('.inventory-status').getByRole('link', { name: 'MO-0019' })
+  ).toHaveAttribute('href', '/mrp/mo_card.php?id=19');
   await consumed.getByRole('link', { name: 'Consumed cable', exact: true }).click();
   await expect(page.getByText('Latest consumption destination', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'MO-0019', exact: true })).toHaveCount(2);
@@ -389,6 +392,7 @@ test('inventory embeds borrowers and consumption references in statuses and link
 test('restricted readers receive no manufacturing references or internal audit payloads', async ({
   page,
   request,
+  mock,
 }) => {
   await request.post('/__mock/reset', { data: { scenario: 'read-only' } });
   const response: Bootstrap = await (
@@ -404,6 +408,7 @@ test('restricted readers receive no manufacturing references or internal audit p
   expect(response.users).not.toHaveProperty('9');
   await page.goto('/#/inventory');
   await expect(page.getByRole('link', { name: 'MO-0019', exact: true })).toHaveCount(0);
+  await mock.select('Status', 'Consumed');
   await page.getByRole('link', { name: 'Consumed cable', exact: true }).click();
   await expect(page.getByRole('link', { name: /MO-0019|Production order #19/ })).toHaveCount(0);
   await expect(page.locator('.content')).not.toContainText('MO-0019');
@@ -556,6 +561,7 @@ for (const theme of ['light', 'dark']) {
   test(`${theme} controls keep native backgrounds, compact dimensions and consistent spacing`, async ({
     page,
     request,
+    mock,
   }) => {
     await request.post('/__mock/reset', { data: { scenario: 'pending' } });
     await page.addInitScript(value => localStorage.setItem('qrr-mock-theme', value), theme);
@@ -595,13 +601,28 @@ for (const theme of ['light', 'dark']) {
     await input.clear();
     expect((await field.boundingBox())!.height).toBeLessThanOrEqual(40);
     await expect(field).toHaveCSS('border-top-left-radius', '8px');
-    const statusColors = await page
-      .locator('.inventory-status')
-      .evaluateAll(elements => [
-        ...new Set(elements.map(element => getComputedStyle(element).backgroundColor)),
-      ]);
-    expect(statusColors).toHaveLength(5);
-    expect(statusColors).not.toContain('rgba(0, 0, 0, 0)');
+    const statusColors = new Set<string>();
+    const collectStatusColors = async () => {
+      await expect(page.getByRole('listbox')).toBeHidden();
+      const colors = await page
+        .locator('.inventory-status')
+        .evaluateAll(elements =>
+          elements.map(element => getComputedStyle(element).backgroundColor)
+        );
+      colors.forEach(color => statusColors.add(color));
+    };
+    await collectStatusColors();
+    await mock.select('Type', 'Unassigned');
+    await expect(page.locator('.inventory-status').first()).toContainText('Unassigned');
+    await collectStatusColors();
+    await mock.select('Type', 'All types');
+    await expect(page.getByRole('listbox')).toBeHidden();
+    await mock.select('Status', 'Consumed');
+    await expect(page.locator('.inventory-status').first()).toContainText('Consumed');
+    await collectStatusColors();
+    expect(statusColors.size).toBe(5);
+    expect(statusColors.has('rgba(0, 0, 0, 0)')).toBe(false);
+    await mock.select('Status', 'Active items');
     await page.screenshot({ path: `../artifacts/inventory-${theme}-theme.png` });
     await page.goto('/#/labels');
     const create = page.getByRole('button', { name: 'Create batch', exact: true });
@@ -639,3 +660,47 @@ for (const theme of ['light', 'dark']) {
     );
   });
 }
+
+test('inventory hides unassigned and consumed items until explicitly filtered', async ({
+  page,
+  mock,
+}) => {
+  const items = Object.values((await mock.bootstrap()).state.items);
+  const active = items.filter(item => item.type !== 'unassigned' && item.status !== 'consumed');
+  const unassigned = items.filter(item => item.type === 'unassigned');
+  const consumed = items.filter(item => item.status === 'consumed');
+  expect(unassigned.length).toBeGreaterThan(0);
+  expect(consumed.length).toBeGreaterThan(0);
+  await page.goto('/#/inventory');
+  const links = page.locator('tbody a[href^="#/items/"]');
+  await expect(links).toHaveCount(active.length);
+  for (const item of [...unassigned, ...consumed]) {
+    await expect(page.locator(`tbody a[href="#/items/${item.code}"]`)).toHaveCount(0);
+  }
+  const search = page.getByRole('textbox', { name: 'Search inventory', exact: true });
+  for (const item of [unassigned[0], consumed[0]]) {
+    await search.fill(item.code);
+    await expect(links).toHaveCount(0);
+  }
+  await search.fill('');
+  await mock.select('Type', 'Unassigned');
+  await expect(links).toHaveCount(unassigned.length);
+  await search.fill(unassigned[0].code);
+  await expect(links).toHaveCount(1);
+  await search.fill('');
+  await mock.select('Type', 'All types');
+  await mock.select('Status', 'Consumed');
+  await expect(links).toHaveCount(consumed.length);
+  for (const item of consumed) {
+    await expect(page.locator(`tbody a[href="#/items/${item.code}"]`)).toBeVisible();
+  }
+  await mock.select('Warehouse', 'MAIN');
+  await mock.select('Type', 'Tracked Generic');
+  await expect(links).toHaveCount(
+    consumed.filter(item => item.warehouse_id === 1 && item.type === 'generic').length
+  );
+  await mock.select('Warehouse', 'All warehouses');
+  await mock.select('Type', 'All types');
+  await mock.select('Status', 'Active items');
+  await expect(links).toHaveCount(active.length);
+});

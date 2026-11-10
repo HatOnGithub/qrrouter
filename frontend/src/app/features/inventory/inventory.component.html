@@ -44,6 +44,13 @@
         <mat-option value="unassigned">{{ 'Unassigned' | t }}</mat-option>
       </mat-select>
     </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Status' | t }}</mat-label>
+      <mat-select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+        <mat-option value="active">{{ 'Active items' | t }}</mat-option>
+        <mat-option value="consumed">{{ 'Consumed' | t }}</mat-option>
+      </mat-select>
+    </mat-form-field>
   </div>
   <div class="table-scroll">
     <table>

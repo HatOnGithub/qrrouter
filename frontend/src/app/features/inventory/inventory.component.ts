@@ -27,6 +27,7 @@ export class InventoryComponent {
   protected query = signal('');
   protected warehouse = signal(0);
   protected type = signal('');
+  protected statusFilter = signal<'active' | 'consumed'>('active');
   protected rows = computed(() =>
     this.api
       .items()
@@ -35,6 +36,10 @@ export class InventoryComponent {
           (!this.loans || !!item.checkout) &&
           (!this.warehouse() || item.warehouse_id === this.warehouse()) &&
           (!this.type() || item.type === this.type()) &&
+          (item.type !== 'unassigned' || this.type() === 'unassigned') &&
+          (this.statusFilter() === 'consumed'
+            ? item.status === 'consumed'
+            : item.status !== 'consumed') &&
           this.matchesSearch(item)
       )
       .sort((a, b) =>
