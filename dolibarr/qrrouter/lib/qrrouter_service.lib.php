@@ -147,6 +147,12 @@ function qrr_service_fields(
     ];
 }
 
+/** Older Dolibarr fetches populate statut while newer releases also expose status. */
+function qrr_warehouse_closed($warehouse) {
+    return (int) ($warehouse->statut ?? ($warehouse->status ?? Entrepot::STATUS_CLOSED)) ===
+        (int) Entrepot::STATUS_CLOSED;
+}
+
 /** Integration preflight before durable staging; native execution repeats checks before writing. */
 function qrr_service_preflight($db, $user, $entry, $plan) {
     if (!empty($entry['product_lot_id'])) {
@@ -169,7 +175,7 @@ function qrr_service_preflight($db, $user, $entry, $plan) {
     foreach ($plan['effects'] as $effect) {
         $wid = (int) $effect['warehouse_id'];
         $w = new Entrepot($db);
-        if ($w->fetch($wid) <= 0 || (int) $w->status === (int) Entrepot::STATUS_CLOSED) {
+        if ($w->fetch($wid) <= 0 || qrr_warehouse_closed($w)) {
             throw new RuntimeException('Warehouse missing or closed');
         }
         if ($effect['delta'] < 0) {

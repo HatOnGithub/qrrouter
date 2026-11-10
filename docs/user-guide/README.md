@@ -12,6 +12,7 @@ Open **QR Router** from Dolibarr. On a phone, use **Menu** to open the navigatio
 | Bins and locations, local label format and Picking                 | [Locations and picking](locations-and-picking.md) |
 | Loans and Personal warehouses                                      | [Employee loans](loans.md)                        |
 | Setup, refresh, permissions and pending operations                 | [Setup and help](help.md)                         |
+| Errors, missing tables, service connectivity and recovery          | [Troubleshooting](../troubleshooting.md)          |
 
 ## Before using stock actions
 

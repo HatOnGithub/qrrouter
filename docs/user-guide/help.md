@@ -2,6 +2,8 @@
 
 [Guide index](README.md)
 
+For specific error messages, missing native receipt tables, warehouse validation failures and service diagnostics, see [Troubleshooting](../troubleshooting.md).
+
 ## Administrator connection settings
 
 The module and its business service must be installed before this step.

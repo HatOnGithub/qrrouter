@@ -118,7 +118,7 @@ function qrr_do_native_transfer($db, $user, $item, $pending) {
         if ($warehouse->fetch($whid) <= 0) {
             throw new RuntimeException('Warehouse is unavailable');
         }
-        if ((int) $warehouse->status === (int) Entrepot::STATUS_CLOSED) {
+        if (qrr_warehouse_closed($warehouse)) {
             throw new RuntimeException('Cannot transfer stock to or from a closed warehouse');
         }
     }

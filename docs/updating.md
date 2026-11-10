@@ -4,6 +4,8 @@
 
 Updates replace application files. Inventory, configuration and native stock must remain in their existing persistent stores. Use matching module and service files from the same release.
 
+If an update reports a missing native receipt table, a warehouse error or retained synchronization, follow [Troubleshooting](troubleshooting.md) before submitting another stock action.
+
 ## What to preserve
 
 | Store                               | Contents                                                                                                                                                                               | Keep across updates                                                                                 |
