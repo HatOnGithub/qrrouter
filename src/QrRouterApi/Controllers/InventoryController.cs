@@ -27,7 +27,9 @@ public sealed class InventoryController(IInventoryService service) : ControllerB
     }
 
     [HttpGet]
-    public IActionResult Get() => Ok(service.State(Actor()));
+    // The PHP adapter does not use private audit history. Load it only for explicit exports.
+    public IActionResult Get([FromQuery] bool includeHistory = false) =>
+        Ok(service.State(Actor(), includeHistory));
 
     [HttpPost("{command}")]
     public IActionResult Command(string command, [FromBody] JsonObject data) =>

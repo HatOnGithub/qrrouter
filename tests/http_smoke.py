@@ -71,6 +71,8 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-http-') as directory:
             batch = request('/api/inventory/bulk', {'count': 2})['result']
             state = request('/api/inventory')
             assert len(state['batches'][batch]['codes']) == 2
+            assert state['history'] == []
+            assert len(request('/api/inventory?includeHistory=true')['history']) == 1
             readonly = dict(headers, **{'X-Qrr-Manage': '0', 'X-Qrr-Admin': '0', 'X-Qrr-Stock': '0'})
             request('/api/inventory/bulk', {'count': 1}, override=readonly, expected=403)
             request('/api/inventory/query-batches', {}, override=readonly)
@@ -112,14 +114,18 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-http-') as directory:
         {'QRR_CONFIG_FILE': 'relative-config.json'},
     ]:
         invalid = dict(env, **settings)
-        snapshot = (data_directory / 'entity-1/state.json').read_bytes()
+        snapshot = (data_directory / 'entity-1/state.sqlite3').read_bytes()
         with open(Path(directory) / 'rejected-startup.log', 'w', encoding='utf-8') as log:
             rejected = subprocess.Popen(['dotnet', str(dll)], cwd=root, env=invalid, stdout=log, stderr=log)
             try:
-                assert rejected.wait(timeout=15) != 0, 'Invalid persistent storage configuration accepted'
+                try:
+                    assert rejected.wait(timeout=30) != 0, 'Invalid persistent storage configuration accepted'
+                except subprocess.TimeoutExpired as error:
+                    details = (Path(directory) / 'rejected-startup.log').read_text(encoding='utf-8', errors='replace')
+                    raise AssertionError(f'Startup did not reject {settings}: {details}') from error
             finally:
                 if rejected.poll() is None:
                     rejected.terminate()
                     rejected.wait(timeout=10)
-        assert (data_directory / 'entity-1/state.json').read_bytes() == snapshot
+        assert (data_directory / 'entity-1/state.sqlite3').read_bytes() == snapshot
     print('Storage validation PASS: unsafe paths and missing external settings reject startup without changing saved inventory.')

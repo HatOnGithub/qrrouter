@@ -31,6 +31,8 @@ Use `npm run start:mock -- --port 4300` for another frontend port. Set `QRR_MOCK
 
 ## Persistent service configuration
 
+The service persists each entity in `state.sqlite3` through Entity Framework Core with SQLite transactions. Item/settings records and append-only audit history are stored separately; warehouse queries use an index. Full state exports remain schema-2 JSON. The private inventory endpoint omits audit history by default; `?includeHistory=true` includes it for exports. Existing `state.json` files are imported once and retained unchanged.
+
 Real service runs require an absolute `AppSettings.DataDirectory` outside the service application's directory. Set it and the API key through environment variables, or point `QRR_CONFIG_FILE` to an external JSON settings file. A configured file must exist. See the [update guide](updating.md) for storage layout and migration from earlier application-local data.
 
 The frontend mock remains temporary, in-memory sample data for development; it does not replace persistent service storage.
@@ -83,6 +85,21 @@ python tests/angular_integration.py --php /path/to/php
 ```
 
 The service assertions run through a console runner, so use `dotnet run`. The gateway suite executes the PHP module against the real service and Dolibarr-shaped fixtures, including authorization, stock transactions and recovery.
+
+### Database migrations
+
+The EF model lives in `src/QrRouterApi/Repositories/InventoryDbContext.cs`; versioned migrations and the model snapshot live in `src/QrRouterApi/Migrations`. Change the model, then scaffold a migration from the repository root:
+
+```sh
+dotnet tool restore
+dotnet tool run dotnet-ef migrations add DescribeTheChange --project src/QrRouterApi
+dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/QrRouterApi
+dotnet run --project tests/QrRouterApi.Tests -c Release
+```
+
+Review generated `Up` and `Down` methods and add a data-preservation test for any data conversion. Commit the migration, designer and snapshot together. The design-time factory uses an in-memory connection so scaffolding cannot touch live inventory. `database update` requires an explicit `--connection` to affect a persistent database; use a test copy for manual verification.
+
+On first access to each entity after deployment, the repository applies pending migrations, then transactionally imports legacy JSON if that entity has not been initialized. It rejects database migration histories from newer service versions. Back up with the service stopped before updates; do not use `EnsureCreated` or remove applied migrations. The service runner checks the model against its snapshot as well as migration, concurrent-write, rollback and recovery behavior. See [EF Core migration guidance](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/) for tooling details.
 
 ### Browser integration
 

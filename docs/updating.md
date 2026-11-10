@@ -6,12 +6,12 @@ Updates replace application files. Inventory, configuration and native stock mus
 
 ## What to preserve
 
-| Store                               | Contents                                                                                                                                         | Keep across updates                                                                                 |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| Service `AppSettings.DataDirectory` | Per-entity `entity-N/state.json` files: QR identities, associations, batches, employee warehouse mappings, loans, history and pending operations | The complete data directory, outside the service application directory                              |
-| External service settings           | API key and absolute data directory, with any other service settings                                                                             | An external JSON file referenced by `QRR_CONFIG_FILE`, or the existing service environment settings |
-| Dolibarr database                   | Products, serials/lots, stock, Binloc locations, permissions, module settings and native synchronization receipts                                | The existing database, including QR Router tables and settings                                      |
-| Dolibarr documents                  | QR scan thumbnails under `DOL_DATA_ROOT/qrrouter/entity-N/thumbnails`                                                                            | The existing Dolibarr documents directory                                                           |
+| Store                               | Contents                                                                                                                                                                               | Keep across updates                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Service `AppSettings.DataDirectory` | Per-entity `entity-N/state.sqlite3` databases (older releases: `state.json`): QR identities, associations, batches, employee warehouse mappings, loans, history and pending operations | The complete data directory, outside the service application directory                              |
+| External service settings           | API key and absolute data directory, with any other service settings                                                                                                                   | An external JSON file referenced by `QRR_CONFIG_FILE`, or the existing service environment settings |
+| Dolibarr database                   | Products, serials/lots, stock, Binloc locations, permissions, module settings and native synchronization receipts                                                                      | The existing database, including QR Router tables and settings                                      |
+| Dolibarr documents                  | QR scan thumbnails under `DOL_DATA_ROOT/qrrouter/entity-N/thumbnails`                                                                                                                  | The existing Dolibarr documents directory                                                           |
 
 Do not rebuild QR associations by registering or importing the same inventory again. Reuse the saved service state. Current state files use schema 2; invalid or unsupported state is rejected rather than reset automatically.
 
@@ -21,20 +21,28 @@ Do not rebuild QR associations by registering or importing the same inventory ag
 2. Record the current service URL, service account, configuration path, actual data path and Dolibarr entity IDs. Keep the previous application files for rollback.
 3. Ask operators to stop using QR Router. Let active requests finish and resolve pending synchronization or stock operations where possible.
 4. Stop the business service and keep QR Router unavailable during the update.
-5. Back up the complete service data directory, external service settings, Dolibarr database and QR document directory together. Verify that each used entity has its expected `state.json` in the backup.
+5. Back up the complete service data directory, external service settings, Dolibarr database and QR document directory together. Verify that each used entity has its expected `state.sqlite3` (or pre-migration `state.json`) in the backup. Copy the whole entity directory, including any SQLite `-wal` and `-shm` files; never copy only the database while the service is running.
 
 ## 2. Move application-local data once, if necessary
 
 If your existing service already uses an absolute data path outside its application directory, keep that path and skip the move.
 
-Earlier installations could use `DataDirectory: "data"`. This was resolved relative to the service's **working directory**, which might differ from the folder containing its DLL. Locate the actual existing `entity-N/state.json` files before proceeding. Do not point the update at a new empty folder and assume the old inventory will be found automatically.
+Earlier installations could use `DataDirectory: "data"`. This was resolved relative to the service's **working directory**, which might differ from the folder containing its DLL. Locate the actual existing `entity-N/state.sqlite3` or older `state.json` files before proceeding. Do not point the update at a new empty folder and assume the old inventory will be found automatically.
 
 1. With the service stopped, copy the **entire existing data directory** to a persistent location outside the application directory, such as `/var/lib/qrrouter` on Linux or `C:/ProgramData/QrRouter/data` on Windows.
-2. Check that the copied `entity-N/state.json` files match the originals for every entity. Keep the original directory and backup until verification is complete.
+2. Check that the copied entity directories match the originals for every entity. Keep the original directory and backup until verification is complete.
 3. Give the service account read/write access to the new data directory.
 4. Set `AppSettings.DataDirectory` to that absolute path in the settings used by the new service.
 
 The updated service requires an absolute data path outside its application directory. Empty, relative and application-local paths prevent startup. It does not automatically move or discard existing data.
+
+### Database migrations and JSON import
+
+When upgrading from a JSON-based release (through v0.3.6), stop the old service before starting the new one. On first access to each entity, Entity Framework Core applies pending versioned schema migrations. The service then validates its existing `state.json` and imports the entire inventory, history and pending operations into `state.sqlite3` in one transaction. Invalid JSON is rejected; it is never replaced with empty inventory. No Dolibarr stock movements are created by migration.
+
+The original JSON remains unchanged as a migration backup. After migration, SQLite is authoritative and the JSON is no longer updated. Do not run an older JSON-based service against the same directory, edit the old JSON expecting changes to appear, or delete the database to force another import. To roll back, restore the coordinated pre-update backups described below. Keep the existing absolute `DataDirectory` and Docker volume.
+
+SQLite uses local disk storage and write-ahead logging. Use the stopped-service backup procedure above, preserving all files together. Network shares and multiple distributed service replicas are not supported.
 
 ## 3. Keep settings outside the release directory
 
