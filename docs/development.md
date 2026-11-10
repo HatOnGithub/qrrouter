@@ -56,7 +56,7 @@ python tools/build-frontend.py
 python tools/package.py
 ```
 
-The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.5.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
+The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.6.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
 
 Build the service separately:
 
