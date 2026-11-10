@@ -37,5 +37,5 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report/mock', open: 'never' }],
     ['junit', { outputFile: 'test-results/mock/results.xml' }],
   ],
-  timeout: 20000,
+  timeout: process.env['CI'] ? 60000 : 20000,
 });

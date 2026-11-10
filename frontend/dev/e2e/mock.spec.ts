@@ -506,7 +506,10 @@ test('mobile camera controls fill the screen, trap focus and return to scanning 
   await toggle.click();
   const panel = page.getByRole('dialog', { name: 'Camera mock', exact: true });
   await expect(panel).toHaveAttribute('aria-modal', 'true');
-  expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 });
+  const panelBox = await panel.boundingBox();
+  expect(panelBox).toMatchObject({ x: 0, y: 0, width: 390 });
+  // WebKit can round viewport units to a fractional CSS pixel.
+  expect(panelBox!.height).toBeCloseTo(844, 0);
   expect(await page.locator('.mock-main').evaluate(element => (element as HTMLElement).inert)).toBe(
     true
   );
