@@ -182,6 +182,10 @@ jobs:
           if [[ "$RELEASE_TAG" == *-beta.* ]]; then
             release_options+=(--prerelease --latest=false)
           fi
+          notes_file="docs/releases/${RELEASE_TAG}.md"
+          if [[ -f "$notes_file" ]]; then
+            release_options+=(--notes-file "$notes_file")
+          fi
           gh release create "$RELEASE_TAG" \
             "artifacts/module_qrrouter-${RELEASE_TAG}.zip" \
             "artifacts/qrrouter-service-${RELEASE_TAG}.zip" \

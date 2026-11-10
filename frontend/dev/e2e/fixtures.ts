@@ -46,8 +46,11 @@ export class MockApplication {
   }
 
   async select(label: string, option: string): Promise<void> {
+    const panel = this.page.locator('.cdk-overlay-pane [role="listbox"]');
+    await expect(panel).toHaveCount(0);
     await this.page.getByRole('combobox', { name: label, exact: true }).click();
     await this.page.getByRole('option', { name: option, exact: true }).click();
+    await expect(panel).toHaveCount(0);
   }
 
   async lookup(label: string, query: string, option: RegExp): Promise<void> {

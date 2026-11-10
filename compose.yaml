@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: qrrouter-api:0.3.5
+    image: qrrouter-api:0.3.6
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
