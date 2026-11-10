@@ -36,6 +36,33 @@ void Reject(Action action, string message)
     }
     throw new Exception("Expected rejection: " + message);
 }
+Check(!new AppSettings().HasPersistentDataDirectory(), "Explicit persistent directory is required");
+Check(
+    !new AppSettings { DataDirectory = "data" }.HasPersistentDataDirectory(),
+    "Relative data paths rejected"
+);
+Check(
+    !new AppSettings { DataDirectory = AppContext.BaseDirectory }.HasPersistentDataDirectory(),
+    "Application directory rejected"
+);
+Check(
+    !new AppSettings
+    {
+        DataDirectory = Path.Combine(AppContext.BaseDirectory, "data"),
+    }.HasPersistentDataDirectory(),
+    "Application child directory rejected"
+);
+Check(
+    new AppSettings { DataDirectory = directory }.HasPersistentDataDirectory(),
+    "External persistent directory accepted"
+);
+Check(
+    new AppSettings
+    {
+        DataDirectory = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory) + "-data",
+    }.HasPersistentDataDirectory(),
+    "Sibling directory accepted"
+);
 JsonObject Warehouses() => Object(("1", new { }), ("2", new { }), ("3", new { }));
 JsonObject Fields(string type = "box", int? qty = 10) =>
     Object(

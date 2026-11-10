@@ -18,6 +18,10 @@ QR-based inventory handling inside Dolibarr, originally developed as an internal
 
 Download the module ZIP and matching business service ZIP from [Releases](https://github.com/HatOnGithub/qrrouter/releases). Install the module through Dolibarr's external-module installer, then start and connect the service as described in the [installation guide](docs/installation.md).
 
+## Updating
+
+Follow the [update guide](docs/updating.md) to preserve existing inventory, configuration, thumbnails and native stock when installing a newer release.
+
 ## Usage
 
 1. Sign in to Dolibarr and open **QR Router**.

@@ -11,7 +11,7 @@
 - An internal Dolibarr administrator account for installation and setup.
 - HTTPS access to Dolibarr for camera scanning from phones and remote workstations. Manual / USB entry remains available without camera access.
 
-This version targets a clean QR Router installation. Install the module and business service from the same release.
+For a new installation, follow the steps below. For an existing installation, follow the [update guide](updating.md) to preserve its data. Install the module and business service from the same release.
 
 ## 1. Download a release
 
@@ -26,9 +26,19 @@ The filenames above illustrate v0.3.5-beta.1; use the matching files from your c
 ## 2. Start the business service
 
 1. Extract the service ZIP into a dedicated directory on the service machine.
-2. Open the extracted `appsettings.json`. Under `AppSettings`, set:
-   - `ApiKey`: a random secret of at least 32 characters. Keep it for the Dolibarr connection step.
-   - `DataDirectory`: an absolute path to a persistent, writable directory outside the extracted application directory. Keep this directory when upgrading the service.
+2. Create a JSON settings file **outside** the extracted application directory, for example `/etc/qrrouter/service.json` or `C:/ProgramData/QrRouter/service.json`. Its contents should include:
+
+   ```json
+   {
+     "AppSettings": {
+       "ApiKey": "REPLACE-WITH-A-RANDOM-SECRET-OF-AT-LEAST-32-CHARACTERS",
+       "DataDirectory": "/var/lib/qrrouter"
+     }
+   }
+   ```
+
+   Replace the key and data path with your own values. The data path must be absolute, writable by the service account, and outside the application directory; for Windows, use a path such as `C:/ProgramData/QrRouter/data`. Set `QRR_CONFIG_FILE` to the absolute settings-file path in the service environment, as shown in the [update guide](updating.md#3-keep-settings-outside-the-release-directory). Keep both settings and data when installing future releases. For the earlier v0.3.5-beta.1 service, which does not yet support `QRR_CONFIG_FILE`, set these values in its `appsettings.json` and preserve that file until updating.
+
 3. From the extracted service directory, start it:
 
    ```sh
