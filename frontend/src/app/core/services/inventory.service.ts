@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { Bootstrap, Level, Lookup } from '@core/models/inventory';
+import { Bootstrap, Item, Level, Lookup } from '@core/models/inventory';
 
 @Injectable({ providedIn: 'root' })
 export class InventoryService {
@@ -14,6 +14,14 @@ export class InventoryService {
   readonly items = computed(() => Object.values(this.context()?.state.items || {}));
   readonly loading = signal(false);
   readonly error = signal('');
+  itemName(item: Item | undefined, fallback = ''): string {
+    return (
+      item?.label ||
+      (item?.type === 'generic' ? this.context()?.products[item.product_id]?.label : '') ||
+      item?.code ||
+      fallback
+    );
+  }
 
   async refresh(): Promise<void> {
     this.loading.set(true);

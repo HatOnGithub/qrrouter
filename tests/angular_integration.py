@@ -117,6 +117,7 @@ $GLOBALS['user']=new class($role) {
   if($a===['qrrouter','read'])return $this->role!=='no-qr';
   if($a===['produit','lire'])return $this->role!=='no-product';
   if($a===['service','lire'])return true;
+  if($a===['categorie','lire'])return $this->role!=='no-tags';
   if($a===['stock','lire'])return $this->role!=='no-stock';
   if($a===['binloc','read'])return $this->role!=='no-binloc';
   if($a===['commande','lire'])return $this->role!=='operator';
@@ -153,6 +154,8 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
     product = product.replace('$this->id=(int)$id;', "$this->id=(int)$id;$this->entity=(int)($this->db->state()['product_entities'][$id]??1);")
     product = product.replace('public function hasbatch(){return false;}', 'public function hasbatch(){return $this->id===4;}'+native_contract.PRODUCT_METHOD)
     for target, content in {'main.inc.php': main, 'product/class/product.class.php': product,
+                            'core/class/extrafields.class.php': fixture.EXTRAFIELDS,
+                            'categories/class/categorie.class.php': fixture.CATEGORIES,
                             'product/stock/class/entrepot.class.php': fixture.WAREHOUSE.replace('public $status=1', 'public $id; public $status=1').replace('public function fetch($wid){', 'public function fetch($wid){$this->id=(int)$wid;'),
                             'product/stock/class/productlot.class.php': native_contract.LOT,
                             'custom/binloc/class/binlocwarehouselevel.class.php': native_contract.LEVELS,
@@ -181,6 +184,7 @@ $module=new modQrrouter($db);
 echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'=>eval('return '.$module->menu[1]['perms'].';')]);
 """,
                             'core/lib/admin.lib.php': admin}.items():
+        (webroot / target).parent.mkdir(parents=True, exist_ok=True)
         (webroot / target).write_text(content, encoding='utf-8')
     native_path = data / 'native.json'
     native_path.write_text(json.dumps({'warehouses': {'1': {'ref': 'MAIN', 'lieu': 'Main', 'status': 1}, '2': {'ref': 'OTHER', 'lieu': 'Other', 'status': 1}},
@@ -305,6 +309,20 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             result = request(action='register', payload={'type': kind, 'codes': [code], 'label': 'Fixture ' + kind, 'serial': 'SN-REGISTER' if kind == 'tracked' else '', 'details': 'Inspect seals annually; keep dry.' if kind == 'tracked' else '', 'product_id': 3 if kind == 'generic' else 4, 'warehouse_id': 1, 'qty': qty, 'levels': {'1': 'A'}})
             assert result['codes'] == [code]
         native = lambda: json.loads(native_path.read_text())
+        search_products = request()['products']
+        assert search_products['4']['tags'] == ['Hydraulics', 'Service parts']
+        assert search_products['4']['extrafields']['material'] == {'label': 'Material', 'value': 'Stainless steel'}
+        assert search_products['4']['extrafields']['zero']['value'] == '0'
+        assert search_products['4']['extrafields']['description']['value'] == 'Heat resistant'
+        assert search_products['4']['extrafields']['admin_only']['value'] == 'ADMIN-ALLOY'
+        assert 'product_only' not in search_products['3']['extrafields']
+        assert search_products['4']['extrafields']['product_only']['value'] == 'Product-specific'
+        reader_products = request(role='reader')['products']
+        assert 'admin_only' not in reader_products['4']['extrafields']
+        assert request(role='no-tags')['products']['4']['tags'] == []
+        assert request(role='disabled-category')['products']['4']['tags'] == []
+        for secret in ['EXTRA_PASSWORD_SECRET', 'EXTRA_HIDDEN_SECRET', 'EXTRA_DISABLED_SECRET', 'EXTRA_HIDDEN_ATTRIBUTE_SECRET', 'EXTRA_UNKNOWN_SECRET', 'FOREIGN_TAG_SECRET']:
+            assert secret not in json.dumps(search_products)
         def native_entries(kind, identifier, role='admin', expected=200, **params):
             url = base + 'native.php?' + urlencode({'kind': kind, 'id': identifier, 'role': role, **params})
             try:
@@ -575,7 +593,67 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         registered_auto = request()['state']['items'][blank]
         assert registered_auto['serial'].startswith('PART-003-GENERATED-REGISTRATION-')
         assert registered_auto['product_lot_id'] > 0 and registered_auto['qty'] == 1
-        print('Native integration PASS: automatic and named serials, box lots, Binloc writes, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
+        # Assigned serial batches stage all identities and receive one unit per label atomically.
+        bulk_fields = {'type': 'tracked', 'label': 'Bulk native', 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'BULK'}, 'count': 3}
+        for use_labels in [False, True]:
+            supplied = ['Exact serial A', 'Exact serial B', 'Exact serial C']
+            payload = dict(bulk_fields, label_as_serial=use_labels, labels=supplied)
+            stock_before_bulk = native()['stock']['4']['1']
+            batch_id = request(action='bulk', payload=payload)
+            state = request()['state']
+            bulk_codes = state['batches'][batch_id]['codes']
+            assert len(bulk_codes) == len(set(bulk_codes)) == 3
+            serials = [state['items'][code]['serial'] for code in bulk_codes]
+            assert len(set(serials)) == 3
+            assert native()['stock']['4']['1'] == stock_before_bulk + 3
+            for index, code in enumerate(bulk_codes):
+                item = state['items'][code]
+                assert native()['lots'][str(item['product_lot_id'])]['batch'] == item['serial']
+                assert item['qty'] == 1 and item['bin_values'] == {'1': 'BULK'}
+                if use_labels:
+                    assert item['serial'] == item['label'] == supplied[index]
+                else:
+                    assert item['label'] == supplied[index] and item['serial'] != supplied[index]
+            if use_labels:
+                before_duplicate = native_path.read_bytes()
+                request(action='bulk', payload=payload, expected=400)
+                assert native_path.read_bytes() == before_duplicate
+                assert not request()['state'].get('pending_native')
+        # Reject malformed lists before staging or writing native stock.
+        before_malformed = native_path.read_bytes()
+        for labels in [{'wrong': 'name'}, [['nested'], 'B', 'C'], [None, 'B', 'C'], [' ', 'B', 'C'], []]:
+            request(action='bulk', payload=dict(bulk_fields, labels=labels), expected=400)
+            assert native_path.read_bytes() == before_malformed
+            assert not request()['state'].get('pending_native')
+        duplicate_payload = dict(bulk_fields, count=2, label_as_serial=True, labels=['DUPLICATE', 'duplicate'])
+        native_before = native_path.read_bytes()
+        request(action='bulk', payload=duplicate_payload, expected=400)
+        assert native_path.read_bytes() == native_before and not request()['state'].get('pending_native')
+        exact_code = request(action='create', payload={'type': 'tracked', 'label': 'Exact single label', 'label_as_serial': True, 'product_id': 4, 'warehouse_id': 1})
+        assert request()['state']['items'][exact_code]['serial'] == 'Exact single label'
+        box_payload = {'type': 'box', 'labels': ['Bulk box east', 'Bulk box west'], 'count': 2, 'qty': 5, 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'BOXES'}}
+        stock_before_boxes = native()['stock']['4']['1']
+        box_batch = request(action='bulk', payload=box_payload)
+        box_state = request()['state']
+        for index, code in enumerate(box_state['batches'][box_batch]['codes']):
+            item = box_state['items'][code]
+            assert item['native_batch'] == item['label'] == box_payload['labels'][index]
+            assert item['serial'] == '' and item['qty'] == 5 and item['bin_values'] == {'1': 'BOXES'}
+            assert native()['lots'][str(item['product_lot_id'])]['batch'] == item['label']
+        assert native()['stock']['4']['1'] == stock_before_boxes + 10
+        request(action='bulk', payload=box_payload, expected=400)
+        assert native()['stock']['4']['1'] == stock_before_boxes + 10 and not request()['state'].get('pending_native')
+        before_text_limits = native_path.read_bytes()
+        for payload in [
+            {'type': 'generic', 'label': 'x' * 141, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
+            {'type': 'tracked', 'label': 'Prefix', 'serial': 'x' * 101, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
+            {'type': 'tracked', 'labels': ['é' * 71], 'count': 1, 'product_id': 4, 'warehouse_id': 1},
+            {'type': 'tracked', 'labels': ['é' * 51], 'label_as_serial': True, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
+            {'type': 'box', 'labels': ['é' * 51], 'qty': 1, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
+        ]:
+            request(action='bulk', payload=payload, expected=400)
+            assert native_path.read_bytes() == before_text_limits and not request()['state'].get('pending_native')
+        print('Native integration PASS: bulk assigned serials, exact label serials, automatic and named serials, box lots, Binloc writes, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
         print('Gateway integration PASS: native workflows, real C# state, CSRF, permissions, trusted facts, product/order lookups, Angular hosting and no API-key exposure.', flush=True)
         if args.browser:
             env = dict(os.environ, QRR_E2E_URL=base, QRR_E2E_ITEM=tracked, QRR_E2E_BOX=box)

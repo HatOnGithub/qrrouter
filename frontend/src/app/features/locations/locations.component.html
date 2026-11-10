@@ -47,7 +47,7 @@
           @for (item of data.summary.tracked; track item.code) {
             <tr>
               <td>
-                <a [routerLink]="['/items', item.code]">{{ item.label || item.code }}</a>
+                <a [routerLink]="['/items', item.code]">{{ api.itemName(item) }}</a>
               </td>
               <td>
                 <qrr-native-link

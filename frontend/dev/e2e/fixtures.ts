@@ -107,6 +107,8 @@ export const test = base.extend<{ mock: MockApplication }>({
         });
         page.on('console', message => {
           if (message.type() === 'warning') warnings.push(message.text());
+          if (message.type() === 'error' && message.text().startsWith('ERROR '))
+            errors.push(message.text());
         });
       };
       watch(page);

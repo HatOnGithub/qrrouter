@@ -195,6 +195,80 @@ test('camera controls list current fixtures and generate bounded custom QR paylo
   assert.deepEqual((await (await fetch(base + '/__mock/camera/items')).json()).items, []);
 });
 
+test('generic mock labels follow the product short name until a QR override is supplied', async () => {
+  const initial = await read('bootstrap');
+  const item = Object.values(initial.state.items).find(
+    item => item.type === 'generic' && !item.label
+  );
+  assert.ok(item, 'The sample inventory includes a generic item without an override');
+  const payload = {
+    type: 'generic',
+    product_id: item.product_id,
+    warehouse_id: item.warehouse_id,
+    label: 'Bench fasteners',
+  };
+  const created = await command('create', payload);
+  assert.equal(created.status, 200);
+  const overrideCode = (await created.json()).result;
+  store.data.products[item.product_id].label = 'Updated product short name';
+  const catalog = await (await fetch(base + '/__mock/camera/items')).json();
+  assert.equal(
+    catalog.items.find(row => row.code === item.code).label,
+    'Updated product short name'
+  );
+  assert.equal(catalog.items.find(row => row.code === overrideCode).label, 'Bench fasteners');
+  assert.equal((await read('bootstrap')).state.items[item.code].label, '');
+  for (const format of ['a4', 'dymo-25x54', 'dymo-32x57', 'dymo-36x89', 'dymo-54x101']) {
+    const defaultLabel = await (
+      await fetch(`${base}/custom/qrrouter/label.php?code=${item.code}&format=${format}`)
+    ).text();
+    assert.ok(defaultLabel.includes('<span>Updated product short name</span>'));
+    const overrideLabel = await (
+      await fetch(`${base}/custom/qrrouter/label.php?code=${overrideCode}&format=${format}`)
+    ).text();
+    assert.ok(overrideLabel.includes('<span>Bench fasteners</span>'));
+    assert.ok(!overrideLabel.includes('Updated product short name'));
+  }
+  const bins = await (
+    await fetch(`${base}/custom/qrrouter/bin_print.php?warehouse_id=${item.warehouse_id}`)
+  ).text();
+  assert.ok(bins.includes('Updated product short name') && bins.includes('Bench fasteners'));
+  assert.equal(
+    (await command('update', { ...payload, code: overrideCode, label: '' })).status,
+    200
+  );
+  const cleared = await (
+    await fetch(`${base}/custom/qrrouter/label.php?code=${overrideCode}`)
+  ).text();
+  assert.ok(cleared.includes('<span>Updated product short name</span>'));
+});
+
+test('mock bulk individuals keep entered names and generate separate serials for the shared product', async () => {
+  const names = ['Workshop pump', 'Spare pump', 'Spare pump'];
+  const response = await command('bulk', {
+    type: 'tracked',
+    product_id: 2,
+    warehouse_id: 1,
+    labels: names,
+    count: names.length,
+  });
+  assert.equal(response.status, 200);
+  const { result: batch } = await response.json();
+  const { state } = await read('bootstrap');
+  const items = state.batches[batch].codes.map(code => state.items[code]);
+  assert.deepEqual(
+    items.map(item => item.label),
+    names
+  );
+  assert.equal(new Set(items.map(item => item.serial)).size, names.length);
+  assert.ok(
+    items.every(
+      item =>
+        item.product_id === 2 && item.serial !== item.label && item.native_batch === item.serial
+    )
+  );
+});
+
 test('QR images and printable previews stay local and escape labels', async () => {
   const bootstrap = await read('bootstrap');
   const item = Object.values(bootstrap.state.items).find(item => item.type === 'tracked');
@@ -211,4 +285,28 @@ test('QR images and printable previews stay local and escape labels', async () =
   assert.ok(markup.includes('&lt;img'));
   assert.ok(!markup.includes('<img src=x'));
   assert.ok(markup.includes('<svg'));
+});
+
+test('malformed bulk names are rejected without changing state', () => {
+  const before = structuredClone(store.data);
+  for (const labels of [
+    { wrong: 'name' },
+    [['nested'], 'B', 'C'],
+    [null, 'B', 'C'],
+    [' ', 'B', 'C'],
+    [],
+  ]) {
+    assert.throws(
+      () =>
+        store.command('bulk', {
+          type: 'tracked',
+          product_id: 2,
+          warehouse_id: 1,
+          count: 3,
+          labels,
+        }),
+      /Enter one label/
+    );
+    assert.deepEqual(store.data, before);
+  }
 });

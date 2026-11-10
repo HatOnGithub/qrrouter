@@ -35,14 +35,48 @@ export class InventoryComponent {
           (!this.loans || !!item.checkout) &&
           (!this.warehouse() || item.warehouse_id === this.warehouse()) &&
           (!this.type() || item.type === this.type()) &&
-          `${item.code} ${item.label} ${item.serial} ${item.bin} ${this.api.context()?.products[item.product_id]?.ref || ''}`
-            .toLowerCase()
-            .includes(this.query().toLowerCase())
+          this.matchesSearch(item)
       )
       .sort((a, b) =>
-        (a.label || a.code).localeCompare(b.label || b.code, undefined, { numeric: true })
+        this.api.itemName(a).localeCompare(this.api.itemName(b), undefined, { numeric: true })
       )
   );
+  // Product metadata is shared by many items; rebuild it only when inventory refreshes.
+  private productSearch = computed(() =>
+    Object.fromEntries(
+      Object.entries(this.api.context()?.products || {}).map(([id, product]) => [
+        id,
+        [
+          product.ref,
+          product.label,
+          ...(product.tags || []),
+          ...Object.entries(product.extrafields || {}).flatMap(([key, field]) => [
+            key,
+            field.label,
+            field.value,
+          ]),
+        ]
+          .join(' ')
+          .toLowerCase(),
+      ])
+    )
+  );
+  private matchesSearch(item: Item): boolean {
+    const query = this.query().trim().toLowerCase();
+    if (!query) return true;
+    return [
+      item.code,
+      this.api.itemName(item),
+      item.serial,
+      item.native_batch,
+      item.bin,
+      item.details,
+      this.productSearch()[item.product_id],
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(query);
+  }
   protected stats = computed(() => ({
     labels: this.api.items().length,
     unassigned: this.api.items().filter(i => i.type === 'unassigned').length,

@@ -81,6 +81,10 @@ class Product {
  public function __construct($db){$this->db=$db;}
  public function fetch($id){$this->id=(int)$id;return in_array((int)$id,[3,4],true)?1:-1;}
  public function hasbatch(){return false;}
+ public $array_options=[];
+ public function fetch_optionals(){
+  $this->array_options=['options_description'=>'<p>Heat</p><p>resistant</p>','options_material'=>'2','options_supplier_code'=>'ACME-204','options_zero'=>'0','options_admin_only'=>'ADMIN-ALLOY','options_product_only'=>'Product-specific','options_password'=>'EXTRA_PASSWORD_SECRET','options_hidden'=>'EXTRA_HIDDEN_SECRET','options_disabled'=>'EXTRA_DISABLED_SECRET','options_hidden_attribute'=>'EXTRA_HIDDEN_ATTRIBUTE_SECRET','options_unknown'=>'EXTRA_UNKNOWN_SECRET'];return 1;
+ }
  public function load_stock($mode=''){return 1;}
  public function correct_stock($user,$wid,$qty,$movement,$label='',$price=0,$inventorycode=''){
    return $this->db->movement($this->id,(int)$wid,(int)$qty,(int)$movement===1,$inventorycode);
@@ -113,4 +117,45 @@ class QrrHttpLangs {
  public function trans($key){return $this->map[$key]??$key;}
 }
 $GLOBALS['langs']=new QrrHttpLangs($_GET['testlang']??'en_US');
+'''
+
+EXTRAFIELDS = r'''<?php
+class ExtraFields {
+ public $attributes=[];
+ public function __construct($db){}
+ public function fetch_name_optionals_label($type){
+  $keys=['description','material','supplier_code','zero','admin_only','product_only','password','hidden','disabled','hidden_attribute'];
+  $this->attributes['product']=[
+   'label'=>array_combine($keys,['Description','Material','Supplier code','Zero value','Admin field','Product field','Password','Hidden','Disabled','Hidden attribute']),
+   'type'=>array_fill_keys($keys,'varchar'), 'list'=>array_fill_keys($keys,'1'),
+   'enabled'=>array_fill_keys($keys,'1'), 'perms'=>array_fill_keys($keys,'1')
+  ];
+  $this->attributes['product']['type']['material']='select';
+  $this->attributes['product']['type']['password']='password';
+  $this->attributes['product']['list']['hidden']='0';
+  $this->attributes['product']['enabled']['disabled']='0';
+  $this->attributes['product']['hidden']['hidden_attribute']=1;
+  $this->attributes['product']['perms']['admin_only']='$user->admin';
+  $this->attributes['product']['perms']['product_only']='$object->id == 4';
+  return count($keys);
+ }
+ public function showOutputField($key,$value,$param='',$type='',$langs=null,$object=null){return $key==='material'?'<span>Stainless steel</span>':$value;}
+}
+function dol_eval($expression,$return=1,$hide=1,$safe='2'){
+ global $user,$object;
+ if(is_numeric($expression))return (int)$expression;
+ if($expression==='$user->admin')return (int)$user->admin;
+ if($expression==='$object->id == 4')return (int)($object->id===4);
+ throw new RuntimeException('Unexpected expression in extra-field fixture');
+}
+'''
+
+CATEGORIES = r'''<?php
+class Categorie {
+ const TYPE_PRODUCT=0;
+ public function __construct($db){}
+ public function containing($id,$type){
+  return [(object)['label'=>$id===4?'Hydraulics':'Electrical','entity'=>1],(object)['label'=>'Service parts','entity'=>1],(object)['label'=>'FOREIGN_TAG_SECRET','entity'=>2]];
+ }
+}
 '''

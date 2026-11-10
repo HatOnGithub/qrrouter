@@ -8,7 +8,7 @@ function qrr_internal_user($user) {
     return is_object($user) &&
         (int) ($user->id ?? 0) > 0 &&
         empty($user->socid) &&
-        (!isset($user->status) && !isset($user->statut) ||
+        ((!isset($user->status) && !isset($user->statut)) ||
             (int) ($user->status ?? $user->statut) === 1);
 }
 function qrr_module_enabled() {
@@ -60,8 +60,7 @@ function qrr_user_visible($user, $id) {
     if ((int) $id === (int) $user->id) {
         return true;
     }
-    return qrr_users_read_all($user) &&
-        qrr_native_read_access($user, 'user', $id, 'user', 'user');
+    return qrr_users_read_all($user) && qrr_native_read_access($user, 'user', $id, 'user', 'user');
 }
 function qrr_reference_right($user, $type) {
     if (!qrr_inventory_right($user)) {
@@ -88,13 +87,7 @@ function qrr_reference_visible($user, $type, $id) {
         $type
     ];
     // Native object checks include entity sharing, customer assignments and subordinate visibility.
-    return qrr_native_read_access(
-        $user,
-        $feature,
-        (int) $id,
-        qrr_reference_schema($type),
-        '',
-    );
+    return qrr_native_read_access($user, $feature, (int) $id, qrr_reference_schema($type), '');
 }
 function qrr_item_visible($db, $item, $warehouses = null, $products = null) {
     if (!is_array($item)) {

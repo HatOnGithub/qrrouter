@@ -10,6 +10,8 @@ if (!$res) {
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
 require_once __DIR__ . '/lib/qrrouter_labels.lib.php';
+require_once __DIR__ . '/lib/qrrouter_creation.lib.php';
+require_once __DIR__ . '/lib/qrrouter_product_search.lib.php';
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -18,69 +20,6 @@ function qrr_api_permit($allowed) {
     if (!$allowed) {
         throw new DomainException('Missing Dolibarr permission');
     }
-}
-function qrr_api_int($data, $key, $default = 0) {
-    $value = $data[$key] ?? $default;
-    if (filter_var($value, FILTER_VALIDATE_INT) === false) {
-        throw new InvalidArgumentException('Invalid ' . $key);
-    }
-    return (int) $value;
-}
-function qrr_api_fields($data, $existing = null) {
-    global $db, $user;
-    $type = (string) ($data['type'] ?? 'generic');
-    $pid = qrr_api_int($data, 'product_id');
-    $wid = qrr_api_int($data, 'warehouse_id');
-    $qty =
-        $type === 'box'
-            ? (($data['qty'] ?? null) === null
-                ? null
-                : qrr_api_int($data, 'qty'))
-            : ($type === 'unassigned'
-                ? 0
-                : 1);
-    if (!qrr_locations_right($user) && (!empty($data['levels']) || !empty($data['keep_legacy']))) {
-        throw new DomainException('Missing Binloc read permission');
-    }
-    $choice = qrr_binloc_choice(
-        $db,
-        $wid,
-        $data['levels'] ?? [],
-        $existing,
-        !empty($data['keep_legacy']),
-    );
-    if (!qrr_locations_right($user) && $existing && $wid === (int) $existing['warehouse_id']) {
-        $choice = array_intersect_key($existing, array_flip(['bin', 'bin_key', 'bin_values']));
-    }
-    $label = trim(strip_tags((string) ($data['label'] ?? '')));
-    $serial = trim(strip_tags((string) ($data['serial'] ?? '')));
-    if ($type === 'tracked' && $serial === '') {
-        if (!empty($existing['product_lot_id'])) {
-            $serial = (string) $existing['serial'];
-        } else {
-            $serial = qrr_native_generate_serial($db, $pid, $label);
-        }
-    }
-    $nativeBatch = $type === 'box' ? $label : ($type === 'tracked' ? $serial : '');
-    if (
-        in_array($type, ['box', 'tracked'], true) &&
-        ($nativeBatch === '' || strlen($nativeBatch) > 100)
-    ) {
-        throw new InvalidArgumentException(
-            'Enter a serial number or box name of at most 100 bytes',
-        );
-    }
-    return qrr_service_fields(
-        $type,
-        $label,
-        $pid,
-        $wid,
-        $choice,
-        $qty,
-        trim(strip_tags((string) ($data['details'] ?? ''))),
-        $serial,
-        $nativeBatch,
-    );
 }
 function qrr_api_translations() {
     global $langs;
@@ -112,6 +51,7 @@ function qrr_api_get($resource) {
     global $db, $user, $langs;
     if ($resource === 'bootstrap') {
         $inventory = qrr_browser_inventory($db);
+        $inventory['products'] = qrr_product_search_metadata($db, $inventory['products']);
         $state = $inventory['state'];
         foreach (['items', 'batches', 'personal_warehouses', 'binloc_label_settings'] as $map) {
             $state[$map] = (object) ($state[$map] ?? []);
@@ -327,12 +267,10 @@ function qrr_api_post($action, $data) {
             $existing = qrr_load_state()['items'][$code] ?? null;
             qrr_require_item_visible($db, $existing);
         }
-        $fields = qrr_api_fields($data, $existing);
+        $fields =
+            $action === 'bulk' ? qrr_api_bulk_fields($data) : qrr_api_fields($data, $existing);
         if ($action === 'update') {
             $fields['code'] = $code;
-        }
-        if ($action === 'bulk') {
-            $fields['count'] = qrr_api_int($data, 'count');
         }
         if ($action === 'register') {
             $codes = qrr_workflow_codes($data['codes'] ?? []);

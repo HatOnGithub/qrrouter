@@ -69,6 +69,14 @@ export class MockStore {
     return item;
   }
 
+  itemName(item) {
+    return (
+      item.label ||
+      (item.type === 'generic' ? this.data.products[item.product_id]?.label : '') ||
+      item.code
+    );
+  }
+
   warehouse(id) {
     requireValue(this.data.warehouses[id], 'Unknown warehouse');
     return Number(id);
@@ -315,7 +323,7 @@ export class MockStore {
           : type === 'unassigned'
             ? 0
             : 1,
-      serial: String(payload.serial || '').trim(),
+      serial: String(payload.label_as_serial ? payload.label || '' : payload.serial || '').trim(),
       native_batch: '',
       details: String(payload.details || ''),
       warehouse_id: 0,
@@ -325,7 +333,10 @@ export class MockStore {
       created_at: existing?.created_at || new Date().toISOString(),
     };
     if (type === 'unassigned') return item;
-    requireValue(item.label.length <= (type === 'box' ? 100 : 140), 'Item label is too long');
+    requireValue(
+      Buffer.byteLength(item.label, 'utf8') <= (type === 'box' ? 100 : 140),
+      'Item label is too long'
+    );
     if (type === 'box') requireValue(item.label, 'Enter a box name / Dolibarr lot');
     requireValue(this.data.products[item.product_id], 'Choose a product');
     Object.assign(item, this.location(payload.warehouse_id, payload.levels));
@@ -336,6 +347,8 @@ export class MockStore {
         bin_values: existing.bin_values,
       });
     if (type === 'tracked' || type === 'box') {
+      if (type === 'tracked')
+        requireValue(Buffer.byteLength(item.serial, 'utf8') <= 100, 'Serial number is too long');
       item.serial = type === 'tracked' ? item.serial || `MOCK-SERIAL-${code}` : '';
       item.native_batch = type === 'tracked' ? item.serial : item.label;
       const collision = Object.values(this.data.state.items).some(
@@ -393,14 +406,59 @@ export class MockStore {
     if (action === 'bulk' || action === 'create') {
       const count = action === 'bulk' ? quantity(payload.count, 1) : 1;
       requireValue(count <= 200, 'Maximum 200 labels per batch');
-      requireValue(
-        count === 1 || !['tracked', 'box'].includes(payload.type),
-        'Create one native lot or serial at a time'
-      );
+      const namedItems =
+        payload.type === 'box' ||
+        (payload.type === 'tracked' &&
+          (payload.label_as_serial || Object.hasOwn(payload, 'labels')));
+      if (action === 'bulk' && namedItems) {
+        requireValue(
+          Array.isArray(payload.labels) &&
+            payload.labels.length === count &&
+            payload.labels.every(label => typeof label === 'string' && label.trim()),
+          'Enter one label per individual item.'
+        );
+      }
+      if (action === 'bulk' && payload.type === 'tracked')
+        requireValue(
+          typeof (payload.serial ?? '') === 'string' &&
+            Buffer.byteLength(payload.serial || '', 'utf8') <= 100,
+          'Serial prefixes must be at most 100 bytes'
+        );
       const codes = [];
       for (let index = 0; index < count; index++) {
         const code = makeCode(++this.data.sequence);
-        state.items[code] = this.fields(payload, code);
+        let fields = payload;
+        if (action === 'bulk' && ['tracked', 'box'].includes(payload.type)) {
+          const label = namedItems ? String(payload.labels[index]).trim() : payload.label;
+          const prefix =
+            `${this.data.products[payload.product_id]?.ref}-${payload.serial || label || 'SN'}`
+              .toUpperCase()
+              .replace(/[^A-Z0-9]+/g, '-')
+              .slice(0, 60);
+          const serial =
+            payload.type === 'box' || payload.label_as_serial
+              ? String(payload.labels[index]).trim()
+              : `${prefix}-${code}`;
+          requireValue(
+            serial && Buffer.byteLength(serial, 'utf8') <= 100,
+            'Invalid or too long serial'
+          );
+          requireValue(
+            !this.data.lots.some(
+              lot =>
+                lot.product_id === payload.product_id &&
+                lot.serial.toLowerCase() === serial.toLowerCase()
+            ),
+            'A serial number in this batch already exists in Dolibarr: ' + serial
+          );
+          fields = {
+            ...payload,
+            serial,
+            label,
+            label_as_serial: false,
+          };
+        }
+        state.items[code] = this.fields(fields, code);
         codes.push(code);
       }
       if (action === 'create') return codes[0];

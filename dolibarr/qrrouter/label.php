@@ -39,13 +39,18 @@ print '<div class="qrr-noprint"><button class="qrr-btn" onclick="window.print()"
     '">' .
     qrr_h(qrr_t('DYMO label sizes')) .
     '</a></div>';
-print '<style>@page{size:A4;margin:8mm}.qrr-qr-label{border:1px dashed #888;width:65mm;min-height:65mm;padding:5mm;margin:15mm auto;text-align:center;box-sizing:border-box;background:white;color:black;font:12pt Arial}.qrr-qr-label img{width:40mm;height:40mm}.qrr-qr-label .qrr-printed-name{display:block;font-size:15pt;font-weight:700;overflow-wrap:anywhere}.qrr-qr-label .qrr-printed-code{display:block;font:9pt monospace;color:#555;overflow-wrap:anywhere}@media print{.qrr-qr-label{margin:0}}</style>';
+print '<link rel="stylesheet" href="' . qrr_h(qrr_base() . 'assets/a4-labels.css') . '">';
+$products = qrr_products_index($db, [(int) $item['product_id']]);
+$printedName =
+    ($item['type'] ?? '') === 'unassigned'
+        ? $code
+        : qrr_item_display_name($item, $products[(int) $item['product_id']] ?? []);
 print '<div class="qrr-qr-label"><span class="qrr-printed-name">' .
-    qrr_h(qrr_item_display_name($item)) .
+    qrr_h($printedName) .
     '</span><div><img src="' .
     qrr_h($img) .
     '" alt="QR code"></div>' .
-    (qrr_item_display_name($item) !== $code
+    ($printedName !== $code
         ? '<small class="qrr-printed-code">QR ' . qrr_h($code) . '</small>'
         : '') .
     '</div>';

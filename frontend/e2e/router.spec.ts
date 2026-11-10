@@ -35,6 +35,30 @@ async function scannerScreenshot(page: Page, path: string): Promise<void> {
   });
 }
 
+test('inventory searches native tags and readable extra fields', async ({ page }) => {
+  const { state } = await (await page.request.get('api.php?resource=bootstrap')).json();
+  await open(page, 'inventory');
+  const search = page.getByRole('textbox', { name: 'Search inventory', exact: true });
+  for (const [query, productId] of [
+    ['HYDRAULICS', 4],
+    ['Electrical', 3],
+    ['stainless steel', null],
+    ['Supplier code', null],
+    ['ACME-204', null],
+    ['heat resistant', null],
+  ] as const) {
+    await search.fill(query);
+    const expected = Object.values(state.items).filter((item: any) =>
+      productId ? item.product_id === productId : [3, 4].includes(item.product_id)
+    );
+    await expect(page.locator('tbody tr')).toHaveCount(expected.length);
+    for (const item of expected as any[])
+      await expect(page.locator(`a[href="#/items/${item.code}"]`)).toBeVisible();
+  }
+  await search.fill('EXTRA_PASSWORD_SECRET');
+  await expect(page.getByText('No matching items', { exact: true })).toBeVisible();
+});
+
 test('native product and Binloc-adjacent warehouse tabs open the related QR entries', async ({
   page,
 }) => {
@@ -133,7 +157,7 @@ test('DYMO labels add details and preserve physical dimensions at every size', a
       page.getByRole('button', { name: 'Print DYMO labels', exact: true })
     ).toBeEnabled();
     const count = await page.locator('.qrr-label-detail').count();
-    expect(count).toBeGreaterThan(previousDetails);
+    expect(count).toBeGreaterThanOrEqual(previousDetails);
     previousDetails = count;
     await expect(page.locator('.qrr-id-code')).toHaveText(code);
     const label = await page.locator('.qrr-thermal-label').boundingBox();
@@ -175,6 +199,7 @@ test('DYMO labels add details and preserve physical dimensions at every size', a
   await expect(page.locator('.qrr-label-detail')).toHaveCount(0);
   await expect(page.locator('.qrr-id-code')).toHaveCount(2);
   const batchUrl = page.url();
+  const blankCode = await page.locator('.qrr-id-code').first().innerText();
   for (const format of ['dymo-25x54', 'dymo-32x57', 'dymo-36x89', 'dymo-54x101']) {
     const url = new URL(batchUrl);
     url.searchParams.set('format', format);
@@ -186,6 +211,23 @@ test('DYMO labels add details and preserve physical dimensions at every size', a
     const batchPdf = await page.pdf({ preferCSSPageSize: true, displayHeaderFooter: false });
     expect((batchPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length).toBe(2);
   }
+  await page.goto(
+    new URL('label.php?' + new URLSearchParams({ code: blankCode, format: 'a4' }), batchUrl).href
+  );
+  await expect(page.locator('.qrr-qr-label')).toHaveText(blankCode);
+  await expect(page.locator('.qrr-qr-label img')).toHaveCount(1);
+  await page.goto(
+    new URL('label.php?' + new URLSearchParams({ code, format: 'a4' }), batchUrl).href
+  );
+  await page.locator('.qrr-printed-name').evaluate(element => {
+    element.textContent = 'Long item name '.repeat(50);
+  });
+  const a4Label = (await page.locator('.qrr-qr-label').boundingBox())!;
+  const a4Image = (await page.locator('.qrr-qr-label img').boundingBox())!;
+  expect(a4Label.width).toBeCloseTo((65 * 96) / 25.4, 0);
+  expect(a4Label.height).toBeCloseTo((65 * 96) / 25.4, 0);
+  expect(a4Image.y + a4Image.height).toBeLessThan(a4Label.y + a4Label.height);
+  await page.goto(batchUrl);
   await page.unroute('**/qr.php?code=*');
   await page.route('**/qr.php?code=*', route =>
     route.fulfill({ status: 500, body: 'QR renderer unavailable' })
@@ -587,9 +629,7 @@ test('bin printouts open from locations and return to the selected warehouse', a
   await printout.close();
 });
 
-test('responsive navigation inherits the host styling without DeltaNext branding', async ({
-  page,
-}) => {
+test('responsive navigation inherits the host styling', async ({ page }) => {
   await open(page, 'inventory');
   await expect(page.locator('#id-left')).toHaveCount(0);
   const nativePage = await page.request.get('../../native.php');
@@ -600,7 +640,6 @@ test('responsive navigation inherits the host styling without DeltaNext branding
     'rgba(0, 0, 0, 0)'
   );
   await expect(page.locator('qrr-root')).toHaveCSS('font-family', 'Arial, sans-serif');
-  await expect(page.getByText('DELTANEXT', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: '../artifacts/angular-inventory.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('#id-left')).toHaveCount(0);

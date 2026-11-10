@@ -23,6 +23,7 @@
     <mat-form-field appearance="outline">
       <mat-label>{{ 'Search inventory' | t }}</mat-label>
       <input matInput [ngModel]="query()" (ngModelChange)="query.set($event)" />
+      <mat-hint>{{ 'Also searches product tags and extra fields.' | t }}</mat-hint>
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>{{ 'Warehouse' | t }}</mat-label>
@@ -59,7 +60,7 @@
         @for (item of rows(); track item.code) {
           <tr>
             <td>
-              <a [routerLink]="['/items', item.code]">{{ item.label || item.code }}</a>
+              <a [routerLink]="['/items', item.code]">{{ api.itemName(item) }}</a>
               <small>{{ item.code }} · {{ item.type }}</small>
             </td>
             <td>

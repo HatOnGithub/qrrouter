@@ -172,9 +172,12 @@ function qrr_translate_markup($html) {
 /** A saved item label is the primary identifier in the UI. Raw QR codes remain
  * the stable machine keys (form values, URLs, printing and integrations).
  */
-function qrr_item_display_name($item) {
+function qrr_item_display_name($item, $product = []) {
     $code = (string) ($item['code'] ?? '');
     $label = trim((string) ($item['label'] ?? ''));
+    if ($label === '' && ($item['type'] ?? '') === 'generic') {
+        $label = trim((string) ($product['label'] ?? ''));
+    }
     return $label !== '' && ($item['type'] ?? '') !== 'unassigned' ? $label : $code;
 }
 /** Render a labelled item consistently in lists and confirmation screens.

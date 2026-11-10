@@ -26,9 +26,24 @@ label_check(
     array_column($details, 'kind') === ['serial', 'name', 'ref'],
     'Serial, product name, reference priority',
 );
+label_check($details[1]['value'] === 'Named item', 'Individual labels use their own short name');
+$generic = ['code' => '23456X', 'type' => 'generic', 'label' => ''];
 label_check(
-    $details[1]['value'] === 'Short product name',
-    'Prefer the actual Dolibarr product name',
+    qrr_label_details($generic, $product)[0]['value'] === 'Short product name',
+    'Generic labels default to the product short name',
+);
+label_check(
+    qrr_item_display_name($generic, $product) === 'Short product name',
+    'Generic A4 names default to the product short name',
+);
+$generic['label'] = 'QR name override';
+label_check(
+    qrr_label_details($generic, $product)[0]['value'] === 'QR name override',
+    'Generic labels allow a QR-specific name override',
+);
+label_check(
+    qrr_item_display_name($generic, $product) === 'QR name override',
+    'Generic A4 names use the override',
 );
 $item['serial'] = '';
 label_check(

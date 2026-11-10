@@ -47,6 +47,10 @@ function qrr_label_details($item, $product = [], $format = 'dymo-25x54', $wareho
         $serial = trim((string) ($item['native_batch'] ?? ''));
     }
     $name = trim((string) ($product['label'] ?? ''));
+    $override = trim((string) ($item['label'] ?? ''));
+    if (in_array($item['type'] ?? '', ['generic', 'tracked'], true) && $override !== '') {
+        $name = $override;
+    }
     if ($name === '') {
         $name = trim((string) ($item['label'] ?? ''));
     }

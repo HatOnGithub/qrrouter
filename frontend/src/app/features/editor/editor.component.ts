@@ -22,7 +22,9 @@ export class EditorComponent {
   private route = inject(ActivatedRoute);
   protected editing = this.route.snapshot.routeConfig?.path === 'edit/:code';
   protected registering = this.route.snapshot.routeConfig?.path === 'register/details';
-  protected bulkAssigned = this.route.snapshot.queryParamMap.get('bulk') === 'assigned';
+  protected bulkAssigned =
+    this.route.snapshot.routeConfig?.path === 'create' &&
+    this.route.snapshot.queryParamMap.get('bulk') === 'assigned';
   protected code = this.route.snapshot.paramMap.get('code') || '';
   protected codes = signal<string[]>(
     this.route.snapshot.queryParamMap.get('codes')
@@ -39,6 +41,36 @@ export class EditorComponent {
   private serialRequest = 0;
   private serialTimer?: ReturnType<typeof setTimeout>;
   protected count = 1;
+  protected bulkLabels = '';
+  protected individualLabels(): string[] {
+    return this.bulkLabels
+      .split(/\r?\n/)
+      .map(value => value.trim())
+      .filter(Boolean);
+  }
+  protected namedItems(): boolean {
+    return this.bulkAssigned && (this.model.type === 'box' || this.model.type === 'tracked');
+  }
+  protected duplicateLabels(): boolean {
+    if (this.model.type === 'tracked' && !this.model.label_as_serial) return false;
+    const labels = this.individualLabels().map(value => value.toLowerCase());
+    return new Set(labels).size !== labels.length;
+  }
+  protected textTooLong(): boolean {
+    const length = (value: string) => new TextEncoder().encode(value.trim()).length;
+    const limit =
+      this.model.type === 'box' || (this.model.type === 'tracked' && this.model.label_as_serial)
+        ? 100
+        : 140;
+    const labels = this.namedItems() ? this.individualLabels() : [this.model.label];
+    return (
+      this.model.type !== 'unassigned' &&
+      (labels.some(label => length(label) > limit) ||
+        (this.model.type === 'tracked' &&
+          !this.model.label_as_serial &&
+          length(this.model.serial) > 100))
+    );
+  }
   protected model: {
     type: ItemType;
     label: string;
@@ -46,6 +78,7 @@ export class EditorComponent {
     warehouse_id: number;
     qty: number | null;
     serial: string;
+    label_as_serial: boolean;
     native_batch: string;
     details: string;
     levels: Record<string, string | number>;
@@ -57,6 +90,7 @@ export class EditorComponent {
     warehouse_id: 0,
     qty: 1,
     serial: '',
+    label_as_serial: false,
     native_batch: '',
     details: '',
     levels: {},
@@ -88,6 +122,7 @@ export class EditorComponent {
         warehouse_id: source.warehouse_id,
         qty: source.qty,
         serial: this.editing ? source.serial : '',
+        label_as_serial: false,
         native_batch: this.editing ? source.native_batch : '',
         details: this.editing ? source.details : '',
         levels: { ...source.bin_values },
@@ -116,12 +151,13 @@ export class EditorComponent {
 
   protected typeChanged(type: ItemType): void {
     this.model.type = type;
-    if (type === 'tracked' || type === 'box') this.count = 1;
+    if (!this.bulkAssigned && (type === 'tracked' || type === 'box')) this.count = 1;
     if (type !== 'generic' && this.codes().length > 1) this.codes.set([]);
     this.thumbnail = '';
     this.model.qty = type === 'box' ? null : type === 'unassigned' ? 0 : 1;
     if (type !== 'tracked') {
       this.model.serial = '';
+      this.model.label_as_serial = false;
       this.model.native_batch = '';
       this.model.details = '';
     }
@@ -138,10 +174,11 @@ export class EditorComponent {
     clearTimeout(this.serialTimer);
     const request = ++this.serialRequest;
     this.serialWarning.set('');
-    const serial = this.model.serial.trim();
+    const serial = (this.model.label_as_serial ? this.model.label : this.model.serial).trim();
     const product = this.model.product_id;
     if (
       !serial ||
+      this.bulkAssigned ||
       !product ||
       (this.editing && this.original?.product_lot_id) ||
       this.model.type !== 'tracked'
@@ -178,13 +215,24 @@ export class EditorComponent {
     try {
       if (this.bulkAssigned && (!this.model.product_id || !this.model.warehouse_id))
         throw new Error('Choose a product and warehouse for the assigned batch.');
+      if (this.textTooLong())
+        throw new Error(
+          'Label text exceeds the size limit: 140 UTF-8 bytes for item names, 100 for serial numbers and box names.'
+        );
+      if (this.namedItems() && this.duplicateLabels())
+        throw new Error(
+          this.model.type === 'box'
+            ? 'Each box name must be unique.'
+            : 'Each label must be unique when used as a serial number.'
+        );
+      const count = this.namedItems() ? this.individualLabels().length : this.count;
       if (this.editing && !this.original) throw new Error('Item not found');
       const payload =
         this.model.type === 'unassigned'
           ? {
               type: 'unassigned',
               code: this.code,
-              count: this.count,
+              count,
               product_id: 0,
               warehouse_id: 0,
               qty: 0,
@@ -193,7 +241,8 @@ export class EditorComponent {
             }
           : {
               ...this.model,
-              count: this.count,
+              count,
+              labels: this.namedItems() ? this.individualLabels() : [],
               code: this.code,
               codes: this.codes(),
               thumbnail: this.thumbnail,

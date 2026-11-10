@@ -63,9 +63,33 @@ export function createFixture(scenario = 'populated') {
       history: [],
     },
     products: {
-      1: { ref: 'BOLT-M8', label: 'M8 stainless bolt' },
-      2: { ref: 'DRILL-18V', label: 'Cordless drill' },
-      3: { ref: 'CABLE-CAT6', label: 'Network patch cable' },
+      1: {
+        ref: 'BOLT-M8',
+        label: 'M8 stainless bolt',
+        tags: ['Fasteners', 'Workshop supplies'],
+        extrafields: {
+          material: { label: 'Material', value: 'Stainless steel' },
+          diameter: { label: 'Diameter', value: '8 mm' },
+        },
+      },
+      2: {
+        ref: 'DRILL-18V',
+        label: 'Cordless drill',
+        tags: ['Power tools', 'Maintenance'],
+        extrafields: {
+          voltage: { label: 'Voltage', value: '18 V' },
+          brand: { label: 'Brand', value: 'Makita' },
+        },
+      },
+      3: {
+        ref: 'CABLE-CAT6',
+        label: 'Network patch cable',
+        tags: ['Networking', 'Electrical'],
+        extrafields: {
+          cable_category: { label: 'Cable category', value: 'Cat6' },
+          length: { label: 'Length', value: '2 m' },
+        },
+      },
     },
     warehouses: {
       1: { ref: 'MAIN', label: 'Main warehouse' },
@@ -154,6 +178,8 @@ export function createFixture(scenario = 'populated') {
     bin_values: { 1: 102, 2: '2' },
   });
   add(5, { type: 'box', label: 'Uncounted container', qty: null });
+  // No QR-specific override: the UI and print previews follow the product short name.
+  add(11, { type: 'generic', product_id: 1, label: '' });
   add(6, {
     label: 'Consumed cable',
     product_id: 3,

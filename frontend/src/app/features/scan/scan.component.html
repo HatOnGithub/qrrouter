@@ -114,7 +114,7 @@
           <div class="scanned-product">
             @if (api.context()!.state.items[code]; as item) {
               <div class="product-identity">
-                <strong>{{ item.label || code }}</strong>
+                <strong>{{ api.itemName(item) }}</strong>
                 <span>
                   <qrr-native-link
                     type="product"

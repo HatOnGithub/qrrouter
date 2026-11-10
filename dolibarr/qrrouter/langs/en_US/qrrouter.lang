@@ -1,4 +1,5 @@
 # QR Product Router UI translations; generated keys are derived from the source English phrase.
+QRRUI_d3c7366db5a3=Assigned labels show product details. Unassigned labels show only the QR code and QR ID.
 Module503871Name=QR Product Router
 Module503871Desc=QR item management, counted containers, Binloc locations and warehouse workflows
 Qrrouter=QR Product Router

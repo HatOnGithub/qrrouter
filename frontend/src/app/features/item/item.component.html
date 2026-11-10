@@ -1,5 +1,5 @@
 @if (item(); as item) {
-  <h1>{{ item.label || item.code }}</h1>
+  <h1>{{ api.itemName(item) }}</h1>
   <p class="subtitle">QR {{ item.code }} · {{ item.type }}</p>
   @if (error()) {
     <p class="alert" role="alert">{{ error() }}</p>

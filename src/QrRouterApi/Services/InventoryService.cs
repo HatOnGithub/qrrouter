@@ -433,9 +433,24 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
     {
         var count = data.I("count");
         Require(count is >= 1 and <= 200, "Batch size must be between 1 and 200");
+        var entries = data["entries"] as JsonArray;
+        Require(entries is null || entries.Count == count, "Invalid batch entry count");
+        if (data.S("type") is "tracked" or "box")
+            Require(
+                entries?.Count == count,
+                "Bulk native items require a distinct identity for every label"
+            );
         var codes = new JsonArray();
         for (var i = 0; i < count; i++)
-            codes.Add(Create(state, data).GetValue<string>());
+        {
+            var fields = entries is null ? data : entries[i] as JsonObject;
+            Require(
+                fields is not null
+                    && fields.S("type", "unassigned") == data.S("type", "unassigned"),
+                "Invalid batch entry"
+            );
+            codes.Add(Create(state, fields!).GetValue<string>());
+        }
         string id;
         do
         {

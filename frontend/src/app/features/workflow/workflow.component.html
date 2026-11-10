@@ -52,7 +52,7 @@
               <tr>
                 <td>
                   <a [routerLink]="['/items', result.code]">
-                    {{ api.context()!.state.items[result.code]?.label || result.code }}
+                    {{ api.itemName(api.context()!.state.items[result.code], result.code) }}
                   </a>
                   <small>{{ result.code }}</small>
                 </td>
@@ -114,7 +114,7 @@
                       />
                     </td>
                     <td [attr.data-label]="'Item / QR' | t">
-                      <strong>{{ row.item?.label || row.code }}</strong>
+                      <strong>{{ api.itemName(row.item, row.code) }}</strong>
                       @if (row.item?.native_batch) {
                         <small>
                           {{ 'Dolibarr lot/serial' | t }}:

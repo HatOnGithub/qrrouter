@@ -1,0 +1,50 @@
+@page {
+  size: A4;
+  margin: 8mm;
+}
+.qrr-qr-label {
+  border: 1px dashed #888;
+  width: 65mm;
+  height: 65mm;
+  padding: 5mm;
+  margin: 15mm auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 40mm 4mm;
+  gap: 0.5mm;
+  text-align: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: white;
+  color: black;
+  font: 12pt Arial;
+  break-inside: avoid;
+}
+.qrr-qr-label img {
+  width: 40mm;
+  height: 40mm;
+}
+.qrr-qr-label > div {
+  line-height: 0;
+}
+.qrr-qr-label .qrr-printed-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 12pt;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.qrr-qr-label .qrr-printed-code {
+  display: block;
+  overflow: hidden;
+  font: 9pt monospace;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+@media print {
+  .qrr-qr-label {
+    margin: 0;
+  }
+}

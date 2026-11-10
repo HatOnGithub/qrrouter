@@ -1,6 +1,41 @@
 import { expect, test } from './fixtures';
 import type { Bootstrap } from '../../src/app/core/models/inventory';
 
+test('inventory search matches product tags and extra-field names and values', async ({
+  page,
+  mock,
+}) => {
+  const bootstrap = await mock.bootstrap();
+  await page.goto('/#/inventory');
+  const search = page.getByRole('textbox', { name: 'Search inventory', exact: true });
+  for (const [query, productId] of [
+    ['POWER TOOLS', 2],
+    ['makita', 2],
+    ['Voltage', 2],
+    ['Networking', 3],
+    ['cable_category', 3],
+    ['stainless steel', 1],
+  ] as const) {
+    await search.fill(query);
+    const expected = Object.values(bootstrap.state.items).filter(
+      item => item.product_id === productId
+    );
+    await expect(page.locator('tbody tr')).toHaveCount(expected.length);
+    for (const item of expected) {
+      await expect(page.locator(`a[href="#/items/${item.code}"]`)).toBeVisible();
+    }
+  }
+  await mock.select('Warehouse', 'MAIN');
+  await search.fill('Networking');
+  await expect(page.locator('tbody tr')).toHaveCount(
+    Object.values(bootstrap.state.items).filter(
+      item => item.product_id === 3 && item.warehouse_id === 1
+    ).length
+  );
+  await search.fill('no-such-tag-or-extra-field');
+  await expect(page.getByText('No matching items', { exact: true })).toBeVisible();
+});
+
 test('assigned batches share product and location and open printable labels', async ({
   page,
   mock,
@@ -36,6 +71,164 @@ test('assigned batches share product and location and open printable labels', as
   await expect(popup.locator('.label')).toHaveCount(3);
   await expect(popup.getByText('Bulk drills', { exact: true })).toHaveCount(3);
   await popup.close();
+});
+
+test('bulk individuals generate serials or use unique labels exactly as entered', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/create?bulk=assigned');
+  await mock.select('QR type', 'Tracked Individual');
+  await mock.lookup('Dolibarr product', 'DRILL', /DRILL-18V/);
+  await mock.select('Warehouse', 'MAIN');
+  await page
+    .getByRole('textbox', { name: 'Individual labels (one per line)', exact: true })
+    .fill('Workshop drill\nSpare drill\nSpare drill');
+  await page.getByRole('button', { name: 'Create assigned batch', exact: true }).click();
+  await expect(page).toHaveURL(/#\/labels\?batch=/);
+  let state = await mock.bootstrap();
+  const generatedBatch = new URL(page.url().split('#')[1], 'http://mock').searchParams.get(
+    'batch'
+  )!;
+  const generated = state.state.batches[generatedBatch].codes.map(code => state.state.items[code]);
+  expect(generated).toHaveLength(3);
+  expect(generated.map(item => item.label)).toEqual([
+    'Workshop drill',
+    'Spare drill',
+    'Spare drill',
+  ]);
+  expect(new Set(generated.map(item => item.serial)).size).toBe(3);
+  expect(generated.every(item => item.product_id === 2 && item.serial !== item.label)).toBeTruthy();
+  expect(generated.every(item => item.product_lot_id && item.qty === 1)).toBeTruthy();
+  await page.getByRole('link', { name: 'Create assigned QR batch', exact: true }).click();
+  await mock.select('QR type', 'Tracked Individual');
+  await mock.lookup('Dolibarr product', 'DRILL', /DRILL-18V/);
+  await mock.select('Warehouse', 'MAIN');
+  await page.getByRole('checkbox', { name: 'Use label as serial number', exact: true }).check();
+  const labels = page.getByRole('textbox', {
+    name: 'Individual labels (one per line)',
+    exact: true,
+  });
+  await labels.fill('Tool A\ntool a');
+  await expect(page.getByRole('alert')).toHaveText(
+    'Each label must be unique when used as a serial number.'
+  );
+  const create = page.getByRole('button', { name: 'Create assigned batch', exact: true });
+  await expect(create).toBeDisabled();
+  await labels.fill('EXISTING-DRILL-01\nTool B');
+  await create.click();
+  await expect(page.getByRole('alert')).toContainText('already exists in Dolibarr');
+  await labels.fill('Tool A\nTool B');
+  await create.click();
+  await expect(page).toHaveURL(/#\/labels\?batch=/);
+  state = await mock.bootstrap();
+  for (const label of ['Tool A', 'Tool B']) {
+    const item = Object.values(state.state.items).find(item => item.label === label)!;
+    expect(item.serial).toBe(label);
+    expect(item.qty).toBe(1);
+  }
+});
+
+test('bulk containers create distinct named lots with a quantity per box', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/create?bulk=assigned');
+  await mock.select('QR type', 'Counted Container');
+  await mock.lookup('Dolibarr product', 'BOLT', /BOLT/);
+  await mock.select('Warehouse', 'MAIN');
+  await page.getByRole('spinbutton', { name: 'Dolibarr lot quantity', exact: true }).fill('5');
+  const names = page.getByRole('textbox', { name: 'Box names (one per line)', exact: true });
+  await names.fill('Box East\nbox east');
+  await expect(page.getByRole('alert')).toHaveText('Each box name must be unique.');
+  await expect(
+    page.getByRole('button', { name: 'Create assigned batch', exact: true })
+  ).toBeDisabled();
+  await names.fill('Box East\nBox West');
+  await page.getByRole('button', { name: 'Create assigned batch', exact: true }).click();
+  await expect(page).toHaveURL(/#\/labels\?batch=/);
+  for (const label of ['Box East', 'Box West']) {
+    const item = await mock.item(label);
+    expect(item).toMatchObject({ type: 'box', native_batch: label, qty: 5, serial: '' });
+    expect(item.product_lot_id).toBeTruthy();
+  }
+});
+
+test('bulk text limits count UTF-8 bytes and keep automatic serials independent of names', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/create?bulk=assigned');
+  await mock.select('QR type', 'Tracked Individual');
+  await mock.lookup('Dolibarr product', 'DRILL', /DRILL-18V/);
+  await mock.select('Warehouse', 'MAIN');
+  const labels = page.getByRole('textbox', {
+    name: 'Individual labels (one per line)',
+    exact: true,
+  });
+  const create = page.getByRole('button', { name: 'Create assigned batch', exact: true });
+  await labels.fill('é'.repeat(71));
+  await expect(page.getByRole('alert')).toContainText('size limit');
+  await expect(create).toBeDisabled();
+  await labels.fill('é'.repeat(70));
+  await expect(create).toBeEnabled();
+  await page.getByRole('checkbox', { name: 'Use label as serial number', exact: true }).check();
+  await expect(create).toBeDisabled();
+  await labels.fill('é'.repeat(50));
+  await expect(create).toBeEnabled();
+  await create.click();
+  await expect(page).toHaveURL(/#\/labels\?batch=/);
+});
+
+test('generic labels default to the Dolibarr product short name and support an override', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/inventory');
+  await expect(page.getByRole('link', { name: 'M8 stainless bolt', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Network cable', exact: true })).toBeVisible();
+  await page.goto('/#/create?bulk=assigned');
+  await mock.lookup('Dolibarr product', 'DRILL', /DRILL-18V/);
+  await mock.select('Warehouse', 'MAIN');
+  await page.getByRole('spinbutton', { name: 'Number of labels', exact: true }).fill('1');
+  await page.getByRole('button', { name: 'Create assigned batch', exact: true }).click();
+  await expect(page).toHaveURL(/#\/labels\?batch=/);
+  const batch = new URL(page.url().split('#')[1], 'http://mock').searchParams.get('batch')!;
+  const state = await mock.bootstrap();
+  const code = state.state.batches[batch].codes[0];
+  await page.goto('/#/items/' + code);
+  await expect(page.getByRole('heading', { name: 'Cordless drill', exact: true })).toBeVisible();
+  await page.goto('/custom/qrrouter/label.php?code=' + code + '&format=dymo-25x54');
+  await expect(page.locator('.label span')).toHaveText('Cordless drill');
+  await page.goto('/#/edit/' + code);
+  await page
+    .getByRole('textbox', { name: 'Item name / label', exact: true })
+    .fill('Local short name');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Local short name', exact: true })).toBeVisible();
+  await page.goto('/custom/qrrouter/label.php?code=' + code + '&format=dymo-25x54');
+  await expect(page.locator('.label span')).toHaveText('Local short name');
+});
+
+test('a single label can be used as its serial and retains availability warnings', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/create');
+  await mock.select('QR type', 'Tracked Individual');
+  await mock.lookup('Dolibarr product', 'DRILL', /DRILL-18V/);
+  await mock.select('Warehouse', 'MAIN');
+  await page.getByRole('checkbox', { name: 'Use label as serial number', exact: true }).check();
+  const label = page.getByRole('textbox', { name: 'Item name / label', exact: true });
+  await label.fill('EXISTING-DRILL-01');
+  await expect(page.locator('qrr-editor [role="status"]')).toContainText(
+    'already exists in Dolibarr'
+  );
+  await label.fill('Exact single browser label');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page).toHaveURL(/#\/items\//);
+  const item = await mock.item('Exact single browser label');
+  expect(item.serial).toBe('Exact single browser label');
 });
 
 test('a direct camera link starts muted without a user gesture', async ({ page }) => {
@@ -87,13 +280,11 @@ test('edits persist across refresh and real QR label previews open', async ({ pa
   const popup = await popupPromise;
   await expect(popup.getByRole('heading', { name: 'QR label batch' })).toBeVisible();
   await expect(popup.locator('svg')).toHaveCount(3);
+  await expect(popup.locator('.label span, .label small')).toHaveCount(0);
   await popup.close();
 });
 
-test('the 3.4 serial check and warehouse move work through the dev proxy', async ({
-  page,
-  request,
-}) => {
+test('serial checks and warehouse moves work through the dev proxy', async ({ page, request }) => {
   const bootstrap: Bootstrap = await (
     await request.get('/custom/qrrouter/api.php?resource=bootstrap')
   ).json();

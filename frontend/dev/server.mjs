@@ -75,7 +75,7 @@ async function printPage(store, url) {
     const rows = items
       .map(
         item =>
-          `<tr><td>${escape(item.bin)}</td><td>${escape(item.label || item.code)}</td><td>${escape(store.data.products[item.product_id]?.ref)}</td><td>${escape(item.code)}</td><td>${escape(item.qty ?? '?')}</td></tr>`
+          `<tr><td>${escape(item.bin)}</td><td>${escape(store.itemName(item))}</td><td>${escape(store.data.products[item.product_id]?.ref)}</td><td>${escape(item.code)}</td><td>${escape(item.qty ?? '?')}</td></tr>`
       )
       .join('');
     return page(
@@ -99,12 +99,12 @@ async function printPage(store, url) {
       const details =
         item.type === 'unassigned'
           ? ''
-          : `<span>${escape(item.label)}</span><small>${escape(item.serial || item.native_batch)}</small><small>${escape(product?.ref)} ${escape(product?.label)}</small>`;
+          : `<span>${escape(store.itemName(item))}</span><small>${escape(item.serial || item.native_batch)}</small><small>${escape(product?.ref)}</small>`;
       return `<section class="label">${qr}<div><strong>${escape(code)}</strong>${details}</div></section>`;
     })
   );
   const css = profile
-    ? `@media print{@page{size:${profile.width}mm ${profile.height}mm;margin:0}h1{display:none}.label{box-sizing:border-box;width:${profile.width}mm;height:${profile.height}mm;margin:0;break-after:page}.label svg{width:${Math.min(profile.height - 4, 25)}mm;height:auto}.label strong{font-size:10pt}.label small{font-size:7pt}}`
+    ? `@media print{@page{size:${profile.width}mm ${profile.height}mm;margin:0}html,body{width:${profile.width}mm;margin:0;padding:0}h1{display:none}.label{display:flex;box-sizing:border-box;width:${profile.width}mm;height:${profile.height}mm;overflow:hidden;margin:0;padding:1mm;gap:1mm;break-after:page}.label:last-child{break-after:auto}.label svg{flex:0 0 ${profile.qr}mm;width:${profile.qr}mm;height:${profile.qr}mm}.label>div{min-width:0;max-height:100%;overflow:hidden}.label strong{font-size:10pt}.label span,.label small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7pt}}`
     : '';
   return page(batch ? 'QR label batch' : 'QR label', labels.join(''), css);
 }
@@ -133,10 +133,10 @@ export function createMockServer(store = new MockStore()) {
       }
       if (url.pathname === '/__mock/camera/items' && method === 'GET') {
         send(response, 200, {
-          items: Object.values(store.data.state.items).map(({ code, label, type }) => ({
-            code,
-            label,
-            type,
+          items: Object.values(store.data.state.items).map(item => ({
+            code: item.code,
+            label: item.type === 'unassigned' ? '' : store.itemName(item),
+            type: item.type,
           })),
         });
         return;

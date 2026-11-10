@@ -70,7 +70,9 @@
                 />
               </td>
               <td>
-                <a [routerLink]="['/items', row.code]">{{ row.label || row.code }}</a>
+                <a [routerLink]="['/items', row.code]">
+                  {{ api.itemName(api.context()!.state.items[row.code], row.code) }}
+                </a>
                 <small>{{ row.code }}</small>
               </td>
               <td>{{ row.take }}</td>

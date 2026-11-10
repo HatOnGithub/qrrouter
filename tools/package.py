@@ -1,10 +1,27 @@
 """Build a Dolibarr module ZIP with portable, forward-slash entry names."""
 from pathlib import Path
+import json
+import re
+import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
 module = root / 'dolibarr/qrrouter'
-output = root / 'artifacts/module_qrrouter-3.4.0.zip'
+version = json.loads((root / 'frontend/package.json').read_text(encoding='utf-8'))['version']
+if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
+    raise SystemExit('Project version must use major.minor.incremental.')
+lock = json.loads((root / 'frontend/package-lock.json').read_text(encoding='utf-8'))
+descriptor = (module / 'core/modules/modQrrouter.class.php').read_text(encoding='utf-8')
+module_version = re.search(r"\$this->version\s*=\s*'([^']+)'", descriptor)
+service = ET.parse(root / 'src/QrRouterApi/QrRouterApi.csproj')
+if not module_version or any(value != version for value in [
+    lock['version'],
+    lock['packages']['']['version'],
+    module_version.group(1),
+    service.findtext('.//Version'),
+]) or service.findtext('.//InformationalVersion') != 'v' + version:
+    raise SystemExit('Frontend, lockfile, Dolibarr module and service versions must match.')
+output = root / f'artifacts/module_qrrouter-v{version}.zip'
 output.parent.mkdir(parents=True, exist_ok=True)
 if not (module / 'spa/index.html').is_file():
     raise SystemExit('Build the Angular frontend first: python tools/build-frontend.py')

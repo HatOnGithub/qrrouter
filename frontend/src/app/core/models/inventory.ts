@@ -77,6 +77,8 @@ export interface Warehouse {
 export interface Product {
   ref: string;
   label: string;
+  tags?: string[];
+  extrafields?: Record<string, { label: string; value: string }>;
 }
 export interface Lookup {
   id: number;
