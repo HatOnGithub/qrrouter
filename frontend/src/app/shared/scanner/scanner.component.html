@@ -1,0 +1,98 @@
+<div class="scanner">
+  <div class="scanner-status" role="status">
+    <span class="camera-state" [class.live]="camera()">
+      <fa-icon class="camera-state-icon" [icon]="icons.status" aria-hidden="true" />
+      {{
+        (camera()
+          ? 'Camera running'
+          : starting()
+            ? 'Starting camera…'
+            : manualMode()
+              ? 'Manual / hardware scanner ready'
+              : 'Camera is off'
+        ) | t
+      }}
+    </span>
+    <span class="scan-count">{{ codes().length }} {{ 'scanned' | t }}</span>
+  </div>
+  <div class="scanner-workspace" [class.camera-mode]="!manualMode()">
+    <div class="camera-preview" [hidden]="manualMode()">
+      <video
+        #video
+        playsinline
+        [muted]="true"
+        [hidden]="!camera()"
+        [attr.aria-label]="'QR camera' | t"
+      ></video>
+      @if (camera()) {
+        <div class="viewfinder" aria-hidden="true"></div>
+        <span class="camera-caption">{{ 'Place a QR label inside the frame' | t }}</span>
+      } @else {
+        <div class="camera-placeholder" [attr.aria-busy]="starting()">
+          <fa-icon [icon]="icons.camera" aria-hidden="true" />
+          <span>{{ (starting() ? 'Starting camera…' : 'Camera is off') | t }}</span>
+        </div>
+      }
+    </div>
+    @if (manualMode()) {
+      <div class="scanner-entry">
+        <h3>{{ 'Manual / USB entry' | t }}</h3>
+        <p class="entry-hint">
+          {{ 'Use your camera, a USB scanner, or enter QR identifiers below.' | t }}
+        </p>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>{{ 'QR identifiers' | t }}</mat-label>
+          <textarea
+            matInput
+            rows="2"
+            [(ngModel)]="manual"
+            [ngModelOptions]="{ standalone: true }"
+            (keydown.enter)="$event.preventDefault(); add()"
+            [attr.aria-label]="'QR identifiers' | t"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+          ></textarea>
+        </mat-form-field>
+        <button class="add-codes" type="button" mat-flat-button (click)="add()">
+          <fa-icon [icon]="icons.add" aria-hidden="true" />
+          {{ 'Add codes' | t }}
+        </button>
+      </div>
+    }
+  </div>
+  <div class="camera-actions">
+    <button type="button" mat-stroked-button (click)="switchInput()">
+      <fa-icon [icon]="manualMode() ? icons.camera : icons.manual" aria-hidden="true" />
+      {{ (manualMode() ? 'QR camera' : 'Manual / USB entry') | t }}
+    </button>
+    @if (!manualMode()) {
+      <button type="button" mat-stroked-button (click)="start()" [disabled]="starting()">
+        <fa-icon [icon]="camera() ? icons.restart : icons.camera" aria-hidden="true" />
+        {{ (camera() ? 'Restart camera' : 'Start camera') | t }}
+      </button>
+      @if (camera() || starting()) {
+        <button type="button" mat-button (click)="stop()">
+          <fa-icon [icon]="icons.stop" aria-hidden="true" />
+          {{ 'Stop camera' | t }}
+        </button>
+      }
+    }
+  </div>
+  @if (error()) {
+    <p class="alert" role="alert">{{ error() }}</p>
+  }
+  <div class="codes" aria-live="polite" [attr.aria-label]="'Scanned labels' | t">
+    @for (code of codes(); track code) {
+      <button
+        type="button"
+        mat-stroked-button
+        (click)="remove(code)"
+        [attr.aria-label]="('Remove' | t) + ' ' + code"
+      >
+        {{ code }}
+        <fa-icon [icon]="icons.remove" aria-hidden="true" />
+      </button>
+    }
+  </div>
+</div>

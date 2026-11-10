@@ -1,0 +1,340 @@
+<section class="scanner-page workflow-scanner">
+  <h1>{{ title() | t }}</h1>
+  <p class="subtitle">{{ 'Scan, review and confirm. Each item is committed separately.' | t }}</p>
+  <nav class="scanner-steps" [attr.aria-label]="'Operation progress' | t">
+    <span
+      [class.current]="!review() && !results().length"
+      [attr.aria-current]="!review() && !results().length ? 'step' : null"
+    >
+      <b>1</b>
+      {{ 'Scan items' | t }}
+    </span>
+    <span
+      [class.current]="review() && !results().length"
+      [attr.aria-current]="review() && !results().length ? 'step' : null"
+    >
+      <b>2</b>
+      {{ 'Review and confirm' | t }}
+    </span>
+    <span [class.current]="results().length" [attr.aria-current]="results().length ? 'step' : null">
+      <b>3</b>
+      {{ 'Operation results' | t }}
+    </span>
+  </nav>
+  <div class="scanner-context">
+    <strong>{{ 'Operation' | t }}: {{ title() | t }}</strong>
+    <span>{{ 'Selected' | t }}: {{ codes().length }}</span>
+  </div>
+  @if (kind() === 'checkout' && !(api.context()!.users | keyvalue).length) {
+    <p class="alert">
+      {{
+        'No employees yet. Create active employee users in Dolibarr before checking out items.' | t
+      }}
+    </p>
+  }
+  @if (!api.context()!.permissions.manage) {
+    <p class="alert">{{ 'QR management permission required' | t }}</p>
+  } @else {
+    @if (error()) {
+      <p class="alert" role="alert">{{ error() | t }}</p>
+    }
+    @if (results().length) {
+      <qrr-card [title]="'Operation results' | t">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ 'Item / QR' | t }}</th>
+              <th>{{ 'Result' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (result of results(); track result.code) {
+              <tr>
+                <td>
+                  <a [routerLink]="['/items', result.code]">
+                    {{ api.itemName(api.context()!.state.items[result.code], result.code) }}
+                  </a>
+                  <small>{{ result.code }}</small>
+                </td>
+                <td [class.alert]="!result.ok">{{ result.message | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p>
+          {{
+            'Failed operations do not undo previously completed items. Open an item to reconcile pending stock movements.'
+              | t
+          }}
+        </p>
+        <button action class="scanner-primary" mat-flat-button (click)="restart()">
+          <fa-icon [icon]="icons.restart" aria-hidden="true" />
+          {{ 'Start another round' | t }}
+        </button>
+      </qrr-card>
+    } @else if (!review()) {
+      <qrr-card class="capture-card" [title]="'Scan items' | t">
+        <qrr-capture [initial]="codes()" (changed)="codes.set($event)" />
+        <button
+          action
+          class="scanner-primary"
+          mat-flat-button
+          (click)="prepare()"
+          [disabled]="!codes().length"
+        >
+          <fa-icon [icon]="icons.review" aria-hidden="true" />
+          {{ 'Review selected items' | t }}
+        </button>
+      </qrr-card>
+    } @else {
+      <qrr-card [title]="'Review and confirm' | t">
+        <form (ngSubmit)="perform()" #form="ngForm">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ 'Selected' | t }}</th>
+                  <th>{{ 'Item / QR' | t }}</th>
+                  <th>{{ 'Location' | t }}</th>
+                  <th>{{ 'Available quantity' | t }}</th>
+                  @if (['consume', 'return', 'correct', 'transfer'].includes(kind())) {
+                    <th>{{ 'Quantity' | t }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows(); track row.code; let i = $index) {
+                  <tr class="review-product">
+                    <td [attr.data-label]="'Selected' | t">
+                      <mat-checkbox
+                        [name]="'select-' + row.code"
+                        [(ngModel)]="selected[row.code]"
+                        [disabled]="!row.item || busy()"
+                        [attr.aria-label]="('Select' | t) + ' ' + row.code"
+                      />
+                    </td>
+                    <td [attr.data-label]="'Item / QR' | t">
+                      <strong>{{ api.itemName(row.item, row.code) }}</strong>
+                      @if (row.item?.native_batch) {
+                        <small>
+                          {{ 'Dolibarr lot/serial' | t }}:
+                          <qrr-native-link
+                            type="lot"
+                            [id]="row.item.product_lot_id"
+                            [label]="row.item.native_batch"
+                          />
+                        </small>
+                      }
+                      <small>
+                        {{ row.code }}
+                        @if (kind() === 'transfer') {
+                          · {{ (i === 0 ? 'Source' : 'Destination') | t }}
+                        }
+                      </small>
+                      @if (!row.item) {
+                        <span class="alert">{{ 'Unknown QR label' | t }}</span>
+                      }
+                    </td>
+                    <td [attr.data-label]="'Location' | t">
+                      <qrr-native-link
+                        type="warehouse"
+                        [id]="row.item?.warehouse_id"
+                        [label]="api.context()!.warehouses[row.item?.warehouse_id || 0]?.ref || '—'"
+                      />
+                      <small>{{ row.item?.bin }}</small>
+                    </td>
+                    <td [attr.data-label]="'Available quantity' | t">
+                      {{ row.item?.qty ?? '?' }}
+                      @if (row.item?.checkout) {
+                        <span class="badge">{{ 'On loan' | t }}</span>
+                      }
+                      @if (row.item?.pending_operation || row.item?.pending_handoff) {
+                        <span class="badge">{{ 'Pending' | t }}</span>
+                      }
+                    </td>
+                    @if (['consume', 'return', 'correct', 'transfer'].includes(kind())) {
+                      <td class="quantity-cell" [attr.data-label]="'Quantity' | t">
+                        <div class="quantity-control">
+                          <button
+                            type="button"
+                            mat-stroked-button
+                            [attr.aria-label]="('Decrease quantity' | t) + ' ' + row.code"
+                            (click)="adjustQuantity(row.code, -1)"
+                            [disabled]="
+                              busy() ||
+                              (kind() === 'transfer' && i === 1) ||
+                              quantities[row.code] <= (kind() === 'correct' ? 0 : 1)
+                            "
+                          >
+                            <fa-icon [icon]="icons.decrease" aria-hidden="true" />
+                          </button>
+                          <mat-form-field
+                            class="number"
+                            appearance="outline"
+                            subscriptSizing="dynamic"
+                          >
+                            <mat-label>{{ 'Quantity' | t }}</mat-label>
+                            <input
+                              matInput
+                              type="number"
+                              [name]="'quantity-' + row.code"
+                              [(ngModel)]="quantities[row.code]"
+                              [min]="kind() === 'correct' ? 0 : 1"
+                              max="100000000"
+                              step="1"
+                              required
+                              [disabled]="busy() || (kind() === 'transfer' && i === 1)"
+                            />
+                          </mat-form-field>
+                          <button
+                            type="button"
+                            mat-stroked-button
+                            [attr.aria-label]="('Increase quantity' | t) + ' ' + row.code"
+                            (click)="adjustQuantity(row.code, 1)"
+                            [disabled]="
+                              busy() ||
+                              (kind() === 'transfer' && i === 1) ||
+                              quantities[row.code] >= 100000000
+                            "
+                          >
+                            <fa-icon [icon]="icons.increase" aria-hidden="true" />
+                          </button>
+                        </div>
+                        @if (kind() === 'correct' && row.item && row.item.qty !== null) {
+                          <div
+                            class="quantity-difference"
+                            [class.negative]="quantities[row.code] < (row.item.qty || 0)"
+                          >
+                            <span>{{ 'Difference' | t }}</span>
+                            <strong>
+                              {{ quantities[row.code] - (row.item.qty || 0) > 0 ? '+' : ''
+                              }}{{ quantities[row.code] - (row.item.qty || 0) }}
+                            </strong>
+                          </div>
+                        }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="grid workflow-fields">
+            @if (kind() === 'move' || kind() === 'return') {
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Destination warehouse' | t }}</mat-label>
+                <mat-select
+                  name="warehouse"
+                  [(ngModel)]="warehouse"
+                  (ngModelChange)="levels = {}"
+                  required
+                >
+                  <mat-option [value]="0">—</mat-option>
+                  @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+                    <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+            @if (kind() === 'checkout') {
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Employee' | t }}</mat-label>
+                <mat-select name="person" [(ngModel)]="person" required>
+                  @for (person of api.context()!.users | keyvalue; track person.key) {
+                    <mat-option [value]="+person.key">{{ person.value }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'Reason / purpose' | t }}</mat-label>
+              <input matInput name="reason" [(ngModel)]="reason" maxlength="200" />
+            </mat-form-field>
+          </div>
+          @if (kind() === 'move' || kind() === 'return') {
+            <qrr-location-fields [warehouse]="warehouse" (selected)="levels = $event" />
+          }
+          @if (kind() === 'consume') {
+            <div class="grid">
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Transaction reference' | t }}</mat-label>
+                <mat-select
+                  name="referenceType"
+                  [(ngModel)]="referenceType"
+                  (ngModelChange)="referenceId = 0"
+                >
+                  @if (api.context()!.permissions.orders) {
+                    <mat-option value="salesorder">{{ 'Customer order' | t }}</mat-option>
+                  }
+                  @if (api.context()!.permissions.references?.production) {
+                    <mat-option value="production">{{ 'Manufacturing order' | t }}</mat-option>
+                  }
+                  @if (api.context()!.permissions.references?.shipment) {
+                    <mat-option value="shipment">{{ 'Shipment' | t }}</mat-option>
+                  }
+                  <mat-option value="">{{ 'None' | t }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+              @if (referenceType) {
+                <qrr-lookup
+                  resource="references"
+                  [type]="referenceType"
+                  label="Select an exact record"
+                  (selected)="referenceId = $event?.id || 0"
+                />
+              }
+            </div>
+          }
+          @if (kind() === 'consume' || kind() === 'return') {
+            <mat-checkbox
+              name="stock"
+              [(ngModel)]="postStock"
+              [disabled]="!api.context()!.permissions.stock || nativeLinked()"
+            >
+              {{ 'Post native Dolibarr stock movement' | t }}
+            </mat-checkbox>
+            <p class="muted">
+              {{
+                (nativeLinked()
+                  ? 'Linked serials and boxes update Dolibarr stock. Changes made directly in Dolibarr appear after refresh.'
+                  : 'Disable only when the native transaction has already adjusted stock.'
+                ) | t
+              }}
+            </p>
+          }
+          <p class="alert">
+            {{
+              (establishing()
+                ? 'This establishes an unknown QR container count only. Native stock will not change.'
+                : kind() === 'transfer'
+                  ? 'Contents move between Dolibarr lots. Both containers must share a product and warehouse; the warehouse total stays the same.'
+                  : 'Confirm the selected items and quantities before applying this operation. Native stock may change.'
+              ) | t
+            }}
+          </p>
+          <div class="actions">
+            <button
+              class="scanner-primary"
+              type="submit"
+              mat-flat-button
+              [disabled]="
+                busy() ||
+                form.invalid ||
+                (!!referenceType && !referenceId) ||
+                (kind() === 'checkout' && !person) ||
+                ((kind() === 'move' || kind() === 'return') && !warehouse)
+              "
+            >
+              <fa-icon [icon]="icons.confirm" aria-hidden="true" />
+              {{ (busy() ? 'Working…' : 'Confirm operation') | t }}
+            </button>
+            <button type="button" mat-button (click)="review.set(false)" [disabled]="busy()">
+              <fa-icon [icon]="icons.back" aria-hidden="true" />
+              {{ 'Back to scanning' | t }}
+            </button>
+          </div>
+        </form>
+      </qrr-card>
+    }
+  }
+</section>

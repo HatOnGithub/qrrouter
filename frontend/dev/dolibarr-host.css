@@ -1,0 +1,148 @@
+/* Loaded only by the mock build configuration. */
+:root {
+  color-scheme: light;
+  --mock-surface: #f6f7f8;
+  --mock-text: #283038;
+  --mock-input: #fff;
+  --mock-action: #536575;
+  --mock-border: #d2d7dc;
+  --colortextlink: #365c79;
+}
+:root[data-mock-theme='dark'] {
+  color-scheme: dark;
+  --mock-surface: #202124;
+  --mock-text: #eee;
+  --mock-input: #2d2e30;
+  --mock-action: #557382;
+  --mock-border: #50545a;
+  --colortextlink: #a7cce4;
+}
+body {
+  margin: 0;
+  background: var(--mock-surface);
+  color: var(--mock-text);
+  font:
+    14px Arial,
+    sans-serif;
+}
+.butAction {
+  background: var(--mock-action);
+  color: white;
+  border: 1px solid var(--mock-border);
+  border-radius: 3px;
+}
+.flat {
+  background: var(--mock-input);
+  color: var(--mock-text);
+}
+.ok {
+  color: #287638;
+}
+.error {
+  color: #b3332c;
+}
+:root[data-mock-theme='dark'] .ok {
+  color: #88c798;
+}
+:root[data-mock-theme='dark'] .error {
+  color: #eea6a1;
+}
+/* Native Dolibarr badge classes used by the inventory screen. */
+.badge-success {
+  background-color: #317641;
+  color: white;
+}
+.badge-warning {
+  background-color: #f3cc72;
+  color: #382d14;
+}
+.badge-info {
+  background-color: #3c6d91;
+  color: white;
+}
+.badge-secondary {
+  background-color: #e0e4e8;
+  color: #38434d;
+}
+.badge-dark {
+  background-color: #56616b;
+  color: white;
+}
+:root[data-mock-theme='dark'] .badge-success {
+  background-color: #345b3e;
+  color: #d2efd7;
+}
+:root[data-mock-theme='dark'] .badge-warning {
+  background-color: #6c542a;
+  color: #ffebb9;
+}
+:root[data-mock-theme='dark'] .badge-info {
+  background-color: #345269;
+  color: #d8ebfa;
+}
+:root[data-mock-theme='dark'] .badge-secondary {
+  background-color: #44494e;
+  color: #e4e7eb;
+}
+:root[data-mock-theme='dark'] .badge-dark {
+  background-color: #303438;
+  color: #d9dfe5;
+}
+.mock-topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 14px 20px;
+  background: var(--mock-action);
+  color: white;
+}
+.mock-topbar strong {
+  font-size: 20px;
+}
+.mock-topbar b {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.mock-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--mock-border);
+  font-size: 12px;
+}
+.mock-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mock-controls select,
+.mock-controls button {
+  padding: 6px;
+  border: 1px solid var(--mock-border);
+  border-radius: 3px;
+  background: var(--mock-input);
+  color: var(--mock-text);
+  font: inherit;
+}
+.mock-main {
+  margin: 16px 20px 0;
+}
+@media (max-width: 600px) {
+  .mock-topbar,
+  .mock-controls {
+    padding: 10px;
+  }
+  .mock-main {
+    margin: 12px 10px 0;
+  }
+}
+@media print {
+  .mock-topbar,
+  .mock-controls {
+    display: none;
+  }
+}

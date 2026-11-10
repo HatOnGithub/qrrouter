@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "projects": {
+    "qrrouter": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "qrr",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "index": "src/index.html",
+            "tsConfig": "tsconfig.app.json",
+            "outputPath": { "base": "dist/qrrouter", "browser": "browser" },
+            "styles": ["src/styles.scss"],
+            "baseHref": "./",
+            "allowedCommonJsDependencies": ["jsqr"]
+          },
+          "configurations": {
+            "production": {
+              "optimization": {
+                "scripts": true,
+                "styles": { "minify": true, "inlineCritical": false },
+                "fonts": false
+              },
+              "outputHashing": "all",
+              "budgets": [
+                { "type": "initial", "maximumWarning": "1mb", "maximumError": "2mb" },
+                { "type": "anyComponentStyle", "maximumWarning": "8kb", "maximumError": "12kb" }
+              ]
+            },
+            "development": { "optimization": false, "sourceMap": true, "extractLicenses": false },
+            "mock": {
+              "optimization": false,
+              "sourceMap": true,
+              "extractLicenses": false,
+              "index": "dev/index.html",
+              "styles": ["src/styles.scss", "dev/dolibarr-host.css", "dev/camera-mock.css"],
+              "assets": [{ "glob": "*.js", "input": "dev", "output": "mock" }],
+              "outputPath": { "base": "dist/mock", "browser": "browser" }
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": { "buildTarget": "qrrouter:build:development" },
+          "configurations": {
+            "mock": {
+              "buildTarget": "qrrouter:build:mock",
+              "prebundle": false,
+              "proxyConfig": "dev/proxy.conf.cjs",
+              "host": "127.0.0.1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "cli": { "analytics": false }
+}

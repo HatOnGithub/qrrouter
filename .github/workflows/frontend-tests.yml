@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  frontend-mocks:
+    name: Dolibarr and camera mocks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      CI: 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check end-to-end test types
+        run: npm run typecheck:e2e:mock
+
+      - name: Test mock API
+        run: npm run test:mock
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run mock end-to-end tests
+        run: npm run e2e:mock
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: Upload test reports and diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: frontend-mock-test-results
+          path: |
+            frontend/playwright-report/mock/
+            frontend/test-results/mock/
+            artifacts/camera-mock-*.png
+            artifacts/inventory-*-theme.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  gateway-authorization:
+    name: PHP and C# authorization
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install PHP integration dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes php-cli php-curl php-gd php-mbstring
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Deploy frontend into module fixture
+        run: python3 tools/build-frontend.py --skip-build
+
+      - name: Build and test business service
+        run: dotnet run --project tests/QrRouterApi.Tests -c Release
+
+      - name: Verify service authentication and entity isolation
+        run: python3 tests/http_smoke.py
+
+      - name: Verify PHP gateway authorization and field privacy
+        run: python3 tests/angular_integration.py --php php
+
+  release:
+    name: Build and publish release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [frontend-mocks, gateway-authorization]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build production module
+        run: |
+          python3 tools/build-frontend.py
+          python3 tools/package.py --tag "$RELEASE_TAG"
+
+      - name: Publish portable business service
+        run: dotnet publish src/QrRouterApi/QrRouterApi.csproj -c Release -p:UseAppHost=false --output artifacts/service
+
+      - name: Archive service and checksum release files
+        shell: bash
+        run: |
+          cd artifacts/service
+          zip -qr "../qrrouter-service-${RELEASE_TAG}.zip" .
+          cd ..
+          sha256sum "module_qrrouter-${RELEASE_TAG}.zip" "qrrouter-service-${RELEASE_TAG}.zip" > SHA256SUMS
+
+      - name: Retain release files
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            artifacts/module_qrrouter-*.zip
+            artifacts/qrrouter-service-*.zip
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "artifacts/module_qrrouter-${RELEASE_TAG}.zip" \
+            "artifacts/qrrouter-service-${RELEASE_TAG}.zip" \
+            artifacts/SHA256SUMS \
+            --verify-tag --generate-notes --title "QR Router ${RELEASE_TAG}"

@@ -1,0 +1,229 @@
+:host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.scanner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.scanner-status {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--qrr-text, currentColor) 6%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  font-size: 0.9em;
+}
+.camera-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.camera-state-icon {
+  font-size: 8px;
+  opacity: 0.5;
+}
+.camera-state.live .camera-state-icon {
+  color: var(--qrr-success-color, currentColor);
+  opacity: 1;
+}
+.scan-count {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.scanner-workspace {
+  display: grid;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.scanner-workspace.camera-mode {
+  flex: 1;
+  min-height: 72px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(72px, 1fr);
+}
+.camera-preview {
+  position: relative;
+  min-height: 72px;
+  container-type: size;
+  background: var(--qrr-surface, Canvas);
+  overflow: hidden;
+}
+.camera-preview[hidden],
+video[hidden] {
+  display: none;
+}
+video {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+  color: var(--qrr-text, currentColor);
+  background: color-mix(in srgb, var(--qrr-text, currentColor) 6%, var(--qrr-surface, Canvas));
+}
+.camera-placeholder fa-icon {
+  font-size: 2em;
+  opacity: 0.55;
+}
+.viewfinder {
+  position: absolute;
+  top: calc(50% - 18px);
+  left: 50%;
+  width: min(70cqw, calc(100cqh - 52px), 240px);
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.camera-caption {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  text-align: center;
+  padding: 5px 8px;
+  background: #000b;
+  color: #fff;
+  font-size: 0.85em;
+}
+@container (max-height: 120px) {
+  .camera-placeholder {
+    flex-direction: row;
+    gap: 8px;
+    padding: 8px;
+  }
+  .camera-placeholder fa-icon {
+    font-size: 1.2em;
+  }
+  .viewfinder {
+    top: 50%;
+    width: min(70cqw, calc(100cqh - 16px), 240px);
+  }
+  .camera-caption {
+    display: none;
+  }
+}
+.scanner-entry {
+  min-width: 0;
+  padding: 20px;
+}
+h3 {
+  font-size: 1.05em;
+  margin: 0 0 8px;
+  color: var(--qrr-text, inherit);
+}
+.entry-hint {
+  margin: 0 0 18px;
+  opacity: 0.75;
+  line-height: 1.5;
+}
+textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 1.1em;
+}
+.add-codes {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 14px;
+  background: var(--qrr-action-background, ButtonFace);
+  color: var(--qrr-action-text, ButtonText);
+  --mat-button-filled-container-color: var(--qrr-action-bg, ButtonFace);
+  --mat-button-filled-label-text-color: var(--qrr-action-text, ButtonText);
+}
+.camera-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 14px;
+  margin-top: auto;
+}
+.camera-actions button {
+  min-height: 44px;
+}
+.codes {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.codes:has(button) {
+  padding-bottom: 16px;
+}
+.codes button {
+  min-height: 44px;
+  font-family: ui-monospace, monospace;
+}
+.alert {
+  flex-shrink: 0;
+  margin: 0 16px 16px;
+}
+@media (max-width: 700px) {
+  .scanner-workspace.camera-mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .scanner-entry {
+    padding: 10px 0;
+  }
+  .scanner-entry h3,
+  .entry-hint {
+    display: none;
+  }
+  .add-codes {
+    margin-top: 8px;
+  }
+  .scanner-status {
+    padding: 8px 0;
+  }
+  .camera-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 8px 0;
+    gap: 4px;
+  }
+  .camera-actions button {
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 0.85em;
+  }
+  .camera-actions button:first-child {
+    grid-column: 1 / -1;
+  }
+  .codes {
+    padding-inline: 0;
+    max-height: 52px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .codes button {
+    flex-shrink: 0;
+  }
+}

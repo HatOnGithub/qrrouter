@@ -1,0 +1,11 @@
+# Use with: docker compose -f compose.yaml -f compose.dolibarr.yaml up -d --build
+# Attach to the network already used by your Dolibarr container.
+services:
+  qrrouter-api:
+    networks:
+      - dolibarr
+
+networks:
+  dolibarr:
+    external: true
+    name: ${DOLIBARR_NETWORK:?Set DOLIBARR_NETWORK to the existing Dolibarr network name}

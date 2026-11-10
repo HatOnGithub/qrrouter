@@ -1,0 +1,8 @@
+:host {
+  display: block;
+  position: relative;
+}
+small {
+  display: block;
+  margin-bottom: 12px;
+}

@@ -1,0 +1,25 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.ts]
+quote_type = single
+
+[*.{cs,php,py}]
+indent_size = 4
+
+[*.cs]
+csharp_new_line_before_open_brace = all
+csharp_preserve_single_line_blocks = false
+csharp_preserve_single_line_statements = false
+
+[*.md]
+trim_trailing_whitespace = false
+
+[**/reference/**]
+generated_code = true

@@ -1,0 +1,17 @@
+**/bin
+**/obj
+.git
+.vs
+.env
+data
+artifacts
+reference
+tests
+tools
+**/node_modules
+**/.angular
+**/dist
+**/test-results
+**/playwright-report
+**/.env*
+dolibarr/qrrouter/spa

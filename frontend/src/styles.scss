@@ -1,0 +1,211 @@
+@use '@angular/material' as mat;
+@include mat.core();
+
+// Angular Material supplies accessible controls; Dolibarr supplies the visual theme.
+$controls: mat.m2-define-light-theme(
+  (
+    color: (
+      primary: mat.m2-define-palette(mat.$m2-gray-palette, 700),
+      accent: mat.m2-define-palette(mat.$m2-gray-palette, 600),
+    ),
+    density: -2,
+  )
+);
+qrr-root,
+.cdk-overlay-container.qrr-theme {
+  @include mat.all-component-themes($controls);
+  @include mat.form-field-density(-4);
+}
+.qrr-theme {
+  --qrr-control-gap: 16px;
+  --qrr-button-padding: 12px;
+  --qrr-control-radius: 8px;
+  --mat-form-field-container-text-font: var(--qrr-font, inherit);
+  --mat-form-field-container-text-size: var(--qrr-font-size, inherit);
+  --mat-form-field-outlined-label-text-font: var(--qrr-font, inherit);
+  --mat-form-field-outlined-label-text-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-input-text-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-disabled-input-text-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 50%,
+    transparent
+  );
+  --mat-form-field-outlined-outline-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 30%,
+    transparent
+  );
+  --mat-form-field-outlined-hover-outline-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-focus-outline-color: var(--qrr-action-bg, currentColor);
+  --mat-form-field-outlined-focus-label-text-color: var(--qrr-text, currentColor);
+  --mat-form-field-outlined-container-shape: var(--qrr-control-radius);
+  --mat-select-trigger-text-font: var(--qrr-font, inherit);
+  --mat-select-enabled-trigger-text-color: var(--qrr-text, currentColor);
+  --mat-select-enabled-arrow-color: var(--qrr-text, currentColor);
+  --mat-select-panel-background-color: var(--qrr-surface, Canvas);
+  --mat-autocomplete-background-color: var(--qrr-surface, Canvas);
+  --mat-option-label-text-font: var(--qrr-font, inherit);
+  --mat-option-label-text-color: var(--qrr-text, currentColor);
+  --mat-option-selected-state-label-text-color: var(--qrr-text, currentColor);
+  --mat-option-selected-state-layer-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 8%,
+    transparent
+  );
+  --mat-button-filled-container-color: var(--qrr-action-bg, ButtonFace);
+  --mat-button-filled-horizontal-padding: var(--qrr-button-padding);
+  --mat-button-outlined-horizontal-padding: calc(var(--qrr-button-padding) - 1px);
+  --mat-button-text-horizontal-padding: var(--qrr-button-padding);
+  --mat-button-text-with-icon-horizontal-padding: var(--qrr-button-padding);
+  --mat-button-filled-label-text-color: var(--qrr-action-text, ButtonText);
+  --mat-button-filled-container-shape: var(--qrr-control-radius);
+  --mat-button-outlined-container-shape: var(--qrr-control-radius);
+  --mat-button-text-container-shape: var(--qrr-control-radius);
+  --mat-button-outlined-label-text-color: var(--qrr-text, currentColor);
+  --mat-button-outlined-outline-color: color-mix(
+    in srgb,
+    var(--qrr-text, currentColor) 30%,
+    transparent
+  );
+  --mat-button-text-label-text-color: var(--qrr-text, currentColor);
+  --mat-button-filled-label-text-font: var(--qrr-font, inherit);
+  --mat-button-outlined-label-text-font: var(--qrr-font, inherit);
+  --mat-button-text-label-text-font: var(--qrr-font, inherit);
+  --mat-checkbox-label-text-font: var(--qrr-font, inherit);
+  --mat-checkbox-label-text-color: var(--qrr-text, currentColor);
+}
+// Shared layout and typography used across routed screens.
+.cdk-overlay-container.qrr-theme * {
+  box-sizing: border-box;
+}
+qrr-root {
+  fa-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    margin-inline: 0.2em;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  a {
+    color: var(--colortextlink, inherit);
+  }
+  h1 {
+    font-size: 1.4em;
+    margin: 0 0 6px;
+  }
+  .subtitle {
+    opacity: 0.75;
+    margin: 0 0 20px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    gap: var(--qrr-control-gap);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .alert {
+    padding: 12px;
+    border: 1px solid currentColor;
+    border-left-width: 3px;
+    margin-bottom: 16px;
+    overflow-wrap: anywhere;
+  }
+  .success {
+    border-left-width: 5px;
+  }
+  mat-form-field {
+    width: 100%;
+  }
+  // Material internals and overlays cannot be styled through component encapsulation.
+  .mat-mdc-text-field-wrapper {
+    background: var(--qrr-input-background, var(--qrr-input-bg, transparent));
+    border-radius: var(--qrr-control-radius);
+  }
+  .mat-mdc-form-field-flex,
+  .mat-mdc-text-field-wrapper .mat-mdc-input-element {
+    background: transparent;
+    box-shadow: none;
+  }
+  .mat-mdc-form-field-infix {
+    display: flex;
+    align-items: center;
+  }
+  // The field supplies the spacing; native input styles must not add a second inset.
+  .mat-mdc-text-field-wrapper .mat-mdc-input-element {
+    margin: 0;
+    padding: 0;
+    line-height: inherit;
+  }
+  .mat-mdc-text-field-wrapper input.mat-mdc-input-element {
+    height: auto;
+    min-height: 0;
+  }
+  .mat-mdc-unelevated-button {
+    background: var(--qrr-action-background, ButtonFace);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+  th {
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  td,
+  th {
+    padding: 9px;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+    vertical-align: middle;
+  }
+  td small {
+    display: block;
+    opacity: 0.7;
+  }
+  .table-scroll {
+    overflow: auto;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-radius: 3px;
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+  .muted {
+    opacity: 0.7;
+  }
+  .empty {
+    text-align: center;
+    opacity: 0.7;
+    padding: 28px;
+  }
+}
+@media print {
+  .no-print,
+  #id-top,
+  #id-left,
+  .side-nav,
+  .tmenu {
+    display: none !important;
+  }
+  qrr-root {
+    a {
+      color: black;
+    }
+    td,
+    th {
+      border-color: gray;
+    }
+  }
+}

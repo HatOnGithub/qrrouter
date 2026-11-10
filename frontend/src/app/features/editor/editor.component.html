@@ -1,0 +1,312 @@
+<div [class.scanner-page]="registering">
+  <h1>
+    {{
+      (editing
+        ? 'Edit QR item'
+        : registering
+          ? 'Register items'
+          : bulkAssigned
+            ? 'Create assigned QR batch'
+            : 'Create QR item'
+      ) | t
+    }}
+  </h1>
+  <p class="subtitle">
+    {{
+      (bulkAssigned
+        ? 'Create multiple QR labels with the same product and location. Each label receives its own QR ID.'
+        : registering
+          ? 'Assign product details and location. New serials receive one unit; existing serial stock is preserved.'
+          : 'Creating a serial or box creates a Dolibarr lot and receives the entered quantity into stock.'
+      ) | t
+    }}
+  </p>
+  @if (!api.context()!.permissions.manage) {
+    <p class="alert">{{ 'QR management permission required' | t }}</p>
+  } @else {
+    @if (error()) {
+      <p class="alert" role="alert">{{ error() }}</p>
+    }
+    @if (notice()) {
+      <p class="alert success" role="status">{{ notice() }}</p>
+    }
+    @if (textTooLong()) {
+      <p class="alert" role="alert">
+        {{
+          'Label text exceeds the size limit: 140 UTF-8 bytes for item names, 100 for serial numbers and box names.'
+            | t
+        }}
+      </p>
+    }
+    <qrr-card [title]="'Item registration' | t">
+      <form (ngSubmit)="save()" #form="ngForm">
+        <fieldset [disabled]="busy()">
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'QR type' | t }}</mat-label>
+            <mat-select
+              name="type"
+              [ngModel]="model.type"
+              (ngModelChange)="typeChanged($event)"
+              [disabled]="editing && original?.type !== 'unassigned'"
+            >
+              <mat-option value="tracked">{{ 'Tracked Individual' | t }}</mat-option>
+              <mat-option value="generic">{{ 'Tracked Generic' | t }}</mat-option>
+              <mat-option value="box">{{ 'Counted Container' | t }}</mat-option>
+              @if (!registering && !bulkAssigned) {
+                <mat-option value="unassigned">{{ 'Unassigned printable label' | t }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          @if (registering) {
+            <p>{{ 'Selected' | t }}: {{ codes().join(', ') }}</p>
+            <button type="button" mat-button (click)="changeSelection()">
+              <fa-icon [icon]="icons.back" aria-hidden="true" />
+              {{ 'Change selection' | t }}
+            </button>
+          }
+          @if (model.type !== 'unassigned') {
+            <div class="grid">
+              @if (!namedItems()) {
+                <mat-form-field appearance="outline">
+                  <mat-label>
+                    {{
+                      (model.type === 'box' ? 'Box name / Dolibarr lot' : 'Item name / label') | t
+                    }}
+                  </mat-label>
+                  <input
+                    matInput
+                    name="label"
+                    [(ngModel)]="model.label"
+                    (ngModelChange)="checkSerial()"
+                    [maxlength]="model.type === 'box' ? 100 : 140"
+                    [required]="model.type === 'box'"
+                    [readonly]="
+                      editing &&
+                      !!original?.product_lot_id &&
+                      (model.type === 'box' || model.label_as_serial)
+                    "
+                  />
+                  @if (model.type === 'generic') {
+                    <mat-hint>
+                      {{
+                        'Leave blank to use the Dolibarr product short name, or enter an override.'
+                          | t
+                      }}
+                    </mat-hint>
+                  }
+                </mat-form-field>
+              }
+              <div>
+                <qrr-lookup
+                  [label]="'Dolibarr product'"
+                  (selected)="model.product_id = $event?.id || 0; checkSerial()"
+                  [disabled]="editing && !!original?.product_id"
+                />
+                <p class="muted">
+                  {{ 'Selected product' | t }}:
+                  <qrr-native-link
+                    type="product"
+                    [id]="model.product_id"
+                    [label]="
+                      api.context()!.products[model.product_id]?.ref || model.product_id || '—'
+                    "
+                  />
+                </p>
+              </div>
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Warehouse' | t }}</mat-label>
+                <mat-select
+                  name="warehouse"
+                  [ngModel]="model.warehouse_id"
+                  (ngModelChange)="warehouseChanged($event)"
+                  [disabled]="editing && !!original?.product_id && !!original.warehouse_id"
+                  required
+                >
+                  <mat-option [value]="0">—</mat-option>
+                  @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+                    <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              @if (model.type === 'box') {
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ 'Dolibarr lot quantity' | t }}</mat-label>
+                  <input
+                    matInput
+                    type="number"
+                    name="qty"
+                    [(ngModel)]="model.qty"
+                    min="0"
+                    max="100000000"
+                    step="1"
+                    required
+                    [readonly]="editing && original?.type === 'box'"
+                  />
+                  @if (bulkAssigned) {
+                    <mat-hint>{{ 'Quantity per box' | t }}</mat-hint>
+                  }
+                </mat-form-field>
+              }
+            </div>
+            <qrr-location-fields
+              [warehouse]="model.warehouse_id"
+              [initial]="initialLevels"
+              (selected)="model.levels = $event"
+            />
+            @if (model.keep_legacy) {
+              <mat-checkbox name="keepLegacy" [(ngModel)]="model.keep_legacy">
+                {{ 'Preserve legacy bin location' | t }}: {{ original?.bin }}
+              </mat-checkbox>
+            }
+            @if (model.type === 'tracked') {
+              <div class="grid">
+                @if (!model.label_as_serial) {
+                  <mat-form-field appearance="outline">
+                    <mat-label>
+                      {{
+                        (bulkAssigned ? 'Serial prefix (optional)' : 'Dolibarr serial number') | t
+                      }}
+                    </mat-label>
+                    <input
+                      matInput
+                      name="serial"
+                      [(ngModel)]="model.serial"
+                      (ngModelChange)="checkSerial()"
+                      maxlength="100"
+                      [readonly]="editing && !!original?.product_lot_id"
+                    />
+                    @if (!editing) {
+                      <mat-hint>
+                        {{
+                          (bulkAssigned
+                            ? 'A new serial number is generated for every label, using this prefix when supplied.'
+                            : 'Leave blank to generate a new Dolibarr serial number.'
+                          ) | t
+                        }}
+                      </mat-hint>
+                    }
+                  </mat-form-field>
+                }
+                @if (serialWarning()) {
+                  <p class="alert" role="status">{{ serialWarning() | t }}</p>
+                }
+              </div>
+              <mat-checkbox
+                name="labelAsSerial"
+                [(ngModel)]="model.label_as_serial"
+                (ngModelChange)="checkSerial()"
+                [disabled]="editing && !!original?.product_lot_id"
+              >
+                {{ 'Use label as serial number' | t }}
+              </mat-checkbox>
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Tracked-item details' | t }}</mat-label>
+                <textarea
+                  matInput
+                  name="details"
+                  [(ngModel)]="model.details"
+                  maxlength="2000"
+                  rows="3"
+                ></textarea>
+              </mat-form-field>
+            }
+            @if (namedItems()) {
+              <mat-form-field appearance="outline">
+                <mat-label>
+                  {{
+                    (model.type === 'box'
+                      ? 'Box names (one per line)'
+                      : 'Individual labels (one per line)'
+                    ) | t
+                  }}
+                </mat-label>
+                <textarea
+                  matInput
+                  name="bulkLabels"
+                  [(ngModel)]="bulkLabels"
+                  rows="5"
+                  required
+                ></textarea>
+                <mat-hint>
+                  {{
+                    (model.type === 'box'
+                      ? 'Box names are used exactly as entered. Lot names must be unique.'
+                      : model.label_as_serial
+                        ? 'Labels are used exactly as entered. Serial numbers must be unique.'
+                        : 'A new serial number is generated for each entered label.'
+                    ) | t
+                  }}
+                </mat-hint>
+              </mat-form-field>
+              <p>{{ 'Number of labels' | t }}: {{ individualLabels().length }} / 200</p>
+              @if (duplicateLabels()) {
+                <p class="alert" role="alert">
+                  {{
+                    (model.type === 'box'
+                      ? 'Each box name must be unique.'
+                      : 'Each label must be unique when used as a serial number.'
+                    ) | t
+                  }}
+                </p>
+              }
+            }
+            @if (model.type === 'tracked' || model.type === 'box') {
+              <p class="muted">
+                {{
+                  'Choose a Dolibarr product with lot/serial tracking enabled. The serial or box name is separate from the QR lookup ID. Locations are saved in Binloc.'
+                    | t
+                }}
+              </p>
+            }
+          }
+          @if (!editing && !registering && !namedItems()) {
+            <mat-form-field appearance="outline" class="number">
+              <mat-label>{{ 'Number of labels' | t }}</mat-label>
+              <input
+                matInput
+                type="number"
+                name="count"
+                [(ngModel)]="count"
+                min="1"
+                [max]="
+                  !bulkAssigned && (model.type === 'tracked' || model.type === 'box') ? 1 : 200
+                "
+                step="1"
+                required
+              />
+            </mat-form-field>
+          }
+          <div class="actions">
+            <button
+              type="submit"
+              [class.scanner-primary]="registering"
+              mat-flat-button
+              [disabled]="
+                busy() ||
+                textTooLong() ||
+                form.invalid ||
+                (registering && !codes().length) ||
+                (model.type === 'tracked' &&
+                  model.label_as_serial &&
+                  !bulkAssigned &&
+                  (!model.label.trim() || model.label.length > 100)) ||
+                (namedItems() &&
+                  (duplicateLabels() ||
+                    !individualLabels().length ||
+                    individualLabels().length > 200)) ||
+                (bulkAssigned && (!model.product_id || !model.warehouse_id))
+              "
+            >
+              <fa-icon [icon]="icons.save" aria-hidden="true" />
+              {{ (busy() ? 'Saving…' : bulkAssigned ? 'Create assigned batch' : 'Save') | t }}
+            </button>
+            <a mat-button routerLink="/inventory">
+              <fa-icon [icon]="icons.cancel" aria-hidden="true" />
+              {{ 'Cancel' | t }}
+            </a>
+          </div>
+        </fieldset>
+      </form>
+    </qrr-card>
+  }
+</div>

@@ -1,0 +1,59 @@
+body {
+  margin: 24px;
+  color: #283038;
+  background: white;
+  font:
+    14px Arial,
+    sans-serif;
+}
+a {
+  color: #385d7a;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+td,
+th {
+  padding: 8px;
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+}
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px;
+  padding: 8px;
+  border: 1px solid #bbb;
+  break-inside: avoid;
+}
+.label svg {
+  width: 100px;
+  height: 100px;
+}
+.label strong,
+.label small {
+  display: block;
+}
+.label small {
+  margin-top: 5px;
+}
+button {
+  padding: 8px 16px;
+}
+nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+@media print {
+  nav,
+  .mock-notice {
+    display: none;
+  }
+  .label {
+    border: 0;
+  }
+}

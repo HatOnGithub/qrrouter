@@ -1,0 +1,120 @@
+<h1>{{ (loans ? 'Loans' : 'Inventory') | t }}</h1>
+<p class="subtitle">{{ 'Track individual items, generic units and counted containers.' | t }}</p>
+<dl class="inventory-summary">
+  <div>
+    <dt>{{ 'QR labels' | t }}</dt>
+    <dd>{{ stats().labels }}</dd>
+  </div>
+  <div>
+    <dt>{{ 'Unassigned' | t }}</dt>
+    <dd>{{ stats().unassigned }}</dd>
+  </div>
+  <div>
+    <dt>{{ 'On loan' | t }}</dt>
+    <dd>{{ stats().loans }}</dd>
+  </div>
+  <div>
+    <dt>{{ 'Pending operations' | t }}</dt>
+    <dd>{{ stats().pending }}</dd>
+  </div>
+</dl>
+<qrr-card [title]="(loans ? 'Loaned items' : 'All items') | t">
+  <div class="grid no-print">
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Search inventory' | t }}</mat-label>
+      <input matInput [ngModel]="query()" (ngModelChange)="query.set($event)" />
+      <mat-hint>{{ 'Also searches product tags and extra fields.' | t }}</mat-hint>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Warehouse' | t }}</mat-label>
+      <mat-select [ngModel]="warehouse()" (ngModelChange)="warehouse.set($event)">
+        <mat-option [value]="0">{{ 'All warehouses' | t }}</mat-option>
+        @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+          <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Type' | t }}</mat-label>
+      <mat-select [ngModel]="type()" (ngModelChange)="type.set($event)">
+        <mat-option value="">{{ 'All types' | t }}</mat-option>
+        <mat-option value="tracked">{{ 'Tracked Individual' | t }}</mat-option>
+        <mat-option value="generic">{{ 'Tracked Generic' | t }}</mat-option>
+        <mat-option value="box">{{ 'Counted Container' | t }}</mat-option>
+        <mat-option value="unassigned">{{ 'Unassigned' | t }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ 'Item / QR' | t }}</th>
+          <th>{{ 'Product' | t }}</th>
+          <th>{{ 'Location' | t }}</th>
+          <th>{{ 'Quantity' | t }}</th>
+          <th>{{ 'Status' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of rows(); track item.code) {
+          <tr>
+            <td>
+              <a [routerLink]="['/items', item.code]">{{ api.itemName(item) }}</a>
+              <small>{{ item.code }} · {{ item.type }}</small>
+            </td>
+            <td>
+              <qrr-native-link
+                type="product"
+                [id]="item.product_id"
+                [label]="api.context()!.products[item.product_id]?.ref || '—'"
+              />
+              <small>
+                <qrr-native-link type="lot" [id]="item.product_lot_id" [label]="item.serial" />
+              </small>
+            </td>
+            <td>
+              <qrr-native-link
+                type="warehouse"
+                [id]="item.warehouse_id"
+                [label]="api.context()!.warehouses[item.warehouse_id]?.ref || '—'"
+              />
+              <small>{{ item.bin }}</small>
+            </td>
+            <td>{{ item.qty ?? '?' }}</td>
+            <td>
+              <span class="badge inventory-status" [ngClass]="statusClasses[status(item)]">
+                {{ status(item) | t }}
+                @if (item.checkout?.user_id; as borrower) {
+                  ·
+                  <qrr-native-link
+                    type="user"
+                    [id]="borrower"
+                    [label]="api.context()!.users[borrower] || borrower"
+                  />
+                } @else if (status(item) === 'Consumed') {
+                  ·
+                  @if (consumption.reference(consumption.latest(item)); as reference) {
+                    <a [href]="reference.url">{{ reference.ref }}</a>
+                  } @else {
+                    {{ consumption.destination(consumption.latest(item)) }}
+                  }
+                }
+              </span>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="empty">{{ 'No matching items' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <div class="actions" action>
+    @if (api.context()!.permissions.manage) {
+      <a mat-flat-button routerLink="/create">{{ 'Create QR item' | t }}</a>
+      <a mat-stroked-button routerLink="/register">{{ 'Register items' | t }}</a>
+    }
+  </div>
+</qrr-card>

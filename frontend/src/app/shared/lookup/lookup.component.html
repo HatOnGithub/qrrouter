@@ -1,0 +1,42 @@
+<mat-form-field appearance="outline">
+  <mat-label>{{ label() | t }}</mat-label>
+  <input
+    matInput
+    [value]="query"
+    (input)="search($any($event.target).value)"
+    (focus)="browse()"
+    [disabled]="disabled()"
+    [matAutocomplete]="results"
+    autocomplete="off"
+    [attr.aria-label]="label() | t"
+  />
+  <mat-autocomplete
+    #results="matAutocomplete"
+    [displayWith]="displayRow"
+    (optionSelected)="choose($event.option.value)"
+  >
+    @if (loading()) {
+      <mat-option disabled>{{ 'Searching…' | t }}</mat-option>
+    } @else {
+      @for (row of rows(); track row.id) {
+        <mat-option [value]="row">{{ row.text }}</mat-option>
+      }
+      @if (!rows().length && !error()) {
+        <mat-option disabled>{{ 'No matching records' | t }}</mat-option>
+      }
+    }
+  </mat-autocomplete>
+</mat-form-field>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+@if (selectedText()) {
+  <small>
+    {{ 'Selected' | t }}:
+    <qrr-native-link [type]="objectType()" [id]="selectedId()" [label]="selectedText()" />
+    <button type="button" mat-button (click)="clear()" [disabled]="disabled()">
+      <fa-icon [icon]="clearIcon" aria-hidden="true" />
+      {{ 'Clear' | t }}
+    </button>
+  </small>
+}

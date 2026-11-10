@@ -1,0 +1,81 @@
+<div class="app-shell">
+  <header class="toolbar no-print">
+    <strong>QR Router</strong>
+    <div>
+      <small>{{ 'Revision' | t }} {{ inventory.context()?.state?.revision ?? '—' }}</small>
+      <button mat-stroked-button (click)="inventory.refresh()" [disabled]="inventory.loading()">
+        <fa-icon [icon]="icons.refresh" aria-hidden="true" />
+        {{ 'Refresh' | t }}
+      </button>
+    </div>
+    <button
+      mat-button
+      class="menu-toggle"
+      (click)="menuOpen.set(!menuOpen())"
+      [attr.aria-expanded]="menuOpen()"
+    >
+      <fa-icon [icon]="icons.menu" aria-hidden="true" />
+      {{ 'Menu' | t }}
+    </button>
+  </header>
+  <div class="module-navigation no-print" [class.open]="menuOpen()">
+    <nav [attr.aria-label]="'QR Router navigation' | t">
+      @for (link of links; track link.path) {
+        @if (allowed(link.path)) {
+          <a [routerLink]="link.path" routerLinkActive="active" (click)="menuOpen.set(false)">
+            <fa-icon [icon]="link.icon" aria-hidden="true" />
+            {{ link.label | t }}
+          </a>
+        }
+      }
+    </nav>
+  </div>
+  <main>
+    @if (inventory.loading()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+    <div class="content">
+      @if (inventory.error()) {
+        <div class="alert" role="alert">
+          {{ inventory.error() }}
+          <button mat-button (click)="inventory.refresh()">
+            <fa-icon [icon]="icons.refresh" aria-hidden="true" />
+            {{ 'Retry' | t }}
+          </button>
+        </div>
+      }
+      @if (inventory.context()) {
+        @if (inventory.context()!.state.pending_native) {
+          <div class="alert" role="alert">
+            <p>
+              {{
+                'A Dolibarr synchronization is pending. Wait at least 30 seconds after the original request before recovery. Cancel is available only if no native changes committed.'
+                  | t
+              }}
+            </p>
+            @if (inventory.context()!.permissions.stock) {
+              <button mat-button (click)="recoverNative()" [disabled]="recovering()">
+                <fa-icon [icon]="icons.refresh" aria-hidden="true" />
+                {{ 'Recover synchronization' | t }}
+              </button>
+              <button mat-button (click)="recoverNative(true)" [disabled]="recovering()">
+                <fa-icon [icon]="icons.cancel" aria-hidden="true" />
+                {{ 'Cancel uncommitted synchronization' | t }}
+              </button>
+            }
+            @if (recoveryError()) {
+              <p>{{ recoveryError() }}</p>
+            }
+          </div>
+        }
+        <router-outlet />
+      } @else if (!inventory.loading()) {
+        <qrr-card [title]="'Session unavailable' | t">
+          <p>
+            {{ 'Check your Dolibarr session and service connection, then retry.' | t }}
+          </p>
+        </qrr-card>
+      }
+    </div>
+  </main>
+</div>

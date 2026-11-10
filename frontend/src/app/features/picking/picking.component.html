@@ -1,0 +1,85 @@
+<h1>{{ 'QR-aware picking sheet' | t }}</h1>
+<p class="subtitle">
+  {{
+    'Planning preview only. Requested quantities are not unshipped balances; this does not reserve or decrement stock.'
+      | t
+  }}
+</p>
+@if (!api.context()!.permissions.orders) {
+  <p class="alert">{{ 'Sales order permission required' | t }}</p>
+} @else {
+  @if (error()) {
+    <p class="alert" role="alert">{{ error() }}</p>
+  }
+  <qrr-card [title]="'Picking' | t">
+    <div class="grid no-print">
+      <qrr-lookup
+        resource="orders"
+        label="Customer order"
+        (selected)="order = $event?.id || 0; orderName = $event?.text || ''; rows.set([])"
+      />
+      <mat-form-field appearance="outline">
+        <mat-label>{{ 'Warehouse' | t }}</mat-label>
+        <mat-select [(ngModel)]="warehouse" (ngModelChange)="rows.set([])">
+          @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+            <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <div class="actions no-print">
+      <button mat-flat-button (click)="preview()" [disabled]="busy() || !warehouse || !order">
+        <fa-icon [icon]="icons.preview" aria-hidden="true" />
+        {{ 'Generate preview' | t }}
+      </button>
+      <button mat-stroked-button (click)="print()" [disabled]="!rows().length">
+        <fa-icon [icon]="icons.print" aria-hidden="true" />
+        {{ 'Print / Save as PDF' | t }}
+      </button>
+    </div>
+    @if (rows().length) {
+      <h2>
+        <qrr-native-link type="salesorder" [id]="order" [label]="orderName" />
+        ·
+        <qrr-native-link
+          type="warehouse"
+          [id]="warehouse"
+          [label]="api.context()!.warehouses[warehouse]?.ref"
+        />
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th>{{ 'Picked' | t }}</th>
+            <th>{{ 'Bin' | t }}</th>
+            <th>{{ 'Product' | t }}</th>
+            <th>{{ 'Item / QR' | t }}</th>
+            <th>{{ 'Quantity' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track $index) {
+            <tr>
+              <td><fa-icon [icon]="icons.unchecked" aria-hidden="true" /></td>
+              <td>{{ row.bin }}</td>
+              <td>
+                <qrr-native-link
+                  type="product"
+                  [id]="api.context()!.state.items[row.code]?.product_id"
+                  [label]="row.product.ref"
+                />
+              </td>
+              <td>
+                <a [routerLink]="['/items', row.code]">
+                  {{ api.itemName(api.context()!.state.items[row.code], row.code) }}
+                </a>
+                <small>{{ row.code }}</small>
+              </td>
+              <td>{{ row.take }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </qrr-card>
+}

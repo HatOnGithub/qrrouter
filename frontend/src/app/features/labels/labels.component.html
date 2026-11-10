@@ -1,0 +1,95 @@
+<h1>{{ 'Print QR labels' | t }}</h1>
+<p class="subtitle">
+  {{ 'Create assigned labels now, or print blank labels to register later.' | t }}
+</p>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+@if (api.context()!.permissions.manage) {
+  <qrr-card [title]="'Create printable batch' | t">
+    <a mat-stroked-button routerLink="/create" [queryParams]="{ bulk: 'assigned' }">
+      <fa-icon [icon]="icons.create" aria-hidden="true" />
+      {{ 'Create assigned QR batch' | t }}
+    </a>
+    <form class="batch-form" (ngSubmit)="create()" #form="ngForm">
+      <mat-form-field class="number" appearance="outline" subscriptSizing="dynamic">
+        <mat-label>{{ 'Number of QR codes (1–200)' | t }}</mat-label>
+        <input
+          matInput
+          type="number"
+          name="count"
+          [(ngModel)]="count"
+          min="1"
+          max="200"
+          step="1"
+          required
+        />
+      </mat-form-field>
+      <button mat-flat-button type="submit" [disabled]="busy() || form.invalid">
+        <fa-icon [icon]="icons.create" aria-hidden="true" />
+        {{ 'Create batch' | t }}
+      </button>
+    </form>
+  </qrr-card>
+}
+<qrr-card [title]="'Label batches' | t">
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'Printer / label format' | t }}</mat-label>
+    <mat-select [(ngModel)]="format">
+      @for (profile of api.context()!.label_formats; track profile.id) {
+        <mat-option [value]="profile.id">
+          DYMO LabelWriter 550 · {{ profile.height }} × {{ profile.width }} mm
+        </mat-option>
+      }
+      <mat-option value="a4">{{ 'A4 label sheet' | t }}</mat-option>
+    </mat-select>
+  </mat-form-field>
+  <p class="muted">
+    {{ 'Unassigned labels show only the QR code and QR ID.' | t }}
+  </p>
+  <p class="muted">
+    {{
+      'DYMO labels include the QR code, QR ID, and details in priority order: serial number, short product name, product reference.'
+        | t
+    }}
+  </p>
+  <p class="muted">
+    {{ 'Larger labels add lot, location, quantity, status and item details when available.' | t }}
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ 'Batch' | t }}</th>
+        <th>{{ 'Created' | t }}</th>
+        <th>{{ 'Labels' | t }}</th>
+        <th>{{ 'Unassigned' | t }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of batches(); track row.id) {
+        <tr>
+          <td>{{ row.id }}</td>
+          <td>{{ row.batch.created_at | date: 'medium' }}</td>
+          <td>{{ row.batch.codes.length }}</td>
+          <td>{{ row.unassigned }}</td>
+          <td>
+            <a
+              mat-stroked-button
+              [href]="api.link('batch_print.php', { batch: row.id, format })"
+              target="_blank"
+              rel="noopener"
+            >
+              <fa-icon [icon]="icons.print" aria-hidden="true" />
+              {{ 'Print' | t }}
+            </a>
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="5" class="empty">{{ 'No label batches yet' | t }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</qrr-card>
