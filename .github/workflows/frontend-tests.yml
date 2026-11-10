@@ -178,8 +178,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
+          release_options=()
+          if [[ "$RELEASE_TAG" == *-beta.* ]]; then
+            release_options+=(--prerelease --latest=false)
+          fi
           gh release create "$RELEASE_TAG" \
             "artifacts/module_qrrouter-${RELEASE_TAG}.zip" \
             "artifacts/qrrouter-service-${RELEASE_TAG}.zip" \
             artifacts/SHA256SUMS \
-            --verify-tag --generate-notes --title "QR Router ${RELEASE_TAG}"
+            --verify-tag --generate-notes --title "QR Router ${RELEASE_TAG}" \
+            "${release_options[@]}"

@@ -8,14 +8,15 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--tag', help='Require this release tag to match the project version (vmajor.minor.incremental).')
+parser.add_argument('--tag', help='Require a matching version tag, optionally ending in -beta.N.')
 args = parser.parse_args()
 module = root / 'dolibarr/qrrouter'
 version = json.loads((root / 'frontend/package.json').read_text(encoding='utf-8'))['version']
 if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
     raise SystemExit('Project version must use major.minor.incremental.')
-if args.tag is not None and args.tag != 'v' + version:
-    raise SystemExit(f'Release tag must match the project version: v{version}.')
+if args.tag is not None and not re.fullmatch(re.escape('v' + version) + r'(?:-beta\.[1-9]\d*)?', args.tag):
+    raise SystemExit(f'Release tag must match v{version}, optionally followed by -beta.N.')
+release_tag = args.tag or 'v' + version
 lock = json.loads((root / 'frontend/package-lock.json').read_text(encoding='utf-8'))
 descriptor = (module / 'core/modules/modQrrouter.class.php').read_text(encoding='utf-8')
 module_version = re.search(r"\$this->version\s*=\s*'([^']+)'", descriptor)
@@ -27,7 +28,7 @@ if not module_version or any(value != version for value in [
     service.findtext('.//Version'),
 ]) or service.findtext('.//InformationalVersion') != 'v' + version:
     raise SystemExit('Frontend, lockfile, Dolibarr module and service versions must match.')
-output = root / f'artifacts/module_qrrouter-v{version}.zip'
+output = root / f'artifacts/module_qrrouter-{release_tag}.zip'
 output.parent.mkdir(parents=True, exist_ok=True)
 if not (module / 'spa/index.html').is_file():
     raise SystemExit('Build the Angular frontend first: python tools/build-frontend.py')
