@@ -93,9 +93,7 @@ function qrr_transfer_evidence($db, $pending) {
     }
     return $proof;
 }
-function qrr_transfer_evidence_complete($e) {
-    return $e['out'] === 1 && $e['in'] === 1 && $e['extra'] === 0;
-}
+
 function qrr_transfer_evidence_none($e) {
     return $e['out'] === 0 && $e['in'] === 0 && $e['extra'] === 0;
 }

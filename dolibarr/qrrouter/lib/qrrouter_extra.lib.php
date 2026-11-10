@@ -4,42 +4,6 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
 
-/** Locate bins from Binloc assignments without updating any Binloc record. */
-function qrr_bin_suggestions($db, $wid) {
-    if ($wid < 1) {
-        return [];
-    }
-    $file = dol_buildpath('/binloc/class/binlocproductlocation.class.php', 0);
-    $helper = dol_buildpath('/binloc/lib/binloc.lib.php', 0);
-    if (!is_file($file) || !is_file($helper)) {
-        return [];
-    }
-    try {
-        require_once $helper;
-        require_once $file;
-        $levels = binloc_get_warehouse_levels($db, (int) $wid);
-        $loc = new BinlocProductLocation($db);
-        $rows = $loc->fetchAllByWarehouse((int) $wid);
-        $prefix = function_exists('binloc_get_warehouse_code')
-            ? binloc_get_warehouse_code($db, (int) $wid)
-            : '';
-        $out = [];
-        foreach ($rows as $row) {
-            if (empty($row->values)) {
-                continue;
-            }
-            $code = (string) $prefix . binloc_compact_code($levels, $row->values);
-            if ($code !== '' && qrr_bin_valid($code)) {
-                $out[$code] = $code;
-            }
-        }
-        natcasesort($out);
-        return array_values($out);
-    } catch (Throwable $e) {
-        dol_syslog('QR Router: Binloc read failed: ' . $e->getMessage(), LOG_WARNING);
-        return [];
-    }
-}
 /** Produce individual tracked rows, and one total per product for generic items and boxes.
  * Unknown box quantities have their own count and never contribute to summed totals.
  */

@@ -48,8 +48,11 @@ test('inventory searches native tags and readable extra fields', async ({ page }
     ['heat resistant', null],
   ] as const) {
     await search.fill(query);
-    const expected = Object.values(state.items).filter((item: any) =>
-      productId ? item.product_id === productId : [3, 4].includes(item.product_id)
+    const expected = Object.values(state.items).filter(
+      (item: any) =>
+        item.type !== 'unassigned' &&
+        item.status !== 'consumed' &&
+        (productId ? item.product_id === productId : [3, 4].includes(item.product_id))
     );
     await expect(page.locator('tbody tr')).toHaveCount(expected.length);
     for (const item of expected as any[])

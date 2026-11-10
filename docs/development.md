@@ -29,6 +29,12 @@ Use **Camera mock** to select an inventory label or enter QR content, then choos
 
 Use `npm run start:mock -- --port 4300` for another frontend port. Set `QRR_MOCK_PORT` if the default mock API port 8089 is occupied. Ctrl+C stops both servers. Restart after changing mock API code or fixtures. Mock tools are excluded from production builds.
 
+## Persistent service configuration
+
+Real service runs require an absolute `AppSettings.DataDirectory` outside the service application's directory. Set it and the API key through environment variables, or point `QRR_CONFIG_FILE` to an external JSON settings file. A configured file must exist. See the [update guide](updating.md) for storage layout and migration from earlier application-local data.
+
+The frontend mock remains temporary, in-memory sample data for development; it does not replace persistent service storage.
+
 ## Responsibility boundaries
 
 - `frontend/src/app/features`: interface pages and workflow interaction. Keep styles with the component that owns them.

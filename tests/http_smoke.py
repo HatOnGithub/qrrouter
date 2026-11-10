@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -38,8 +39,8 @@ def request(path, data=None, override=None, expected=200):
     return body
 
 
-def start(env, log):
-    process = subprocess.Popen(['dotnet', str(dll)], cwd=root, env=env, stdout=log, stderr=log)
+def start(env, log, application=dll, working_directory=root):
+    process = subprocess.Popen(['dotnet', str(application)], cwd=working_directory, env=env, stdout=log, stderr=log)
     for _ in range(100):
         if process.poll() is not None:
             raise RuntimeError('Service exited unexpectedly')
@@ -53,8 +54,12 @@ def start(env, log):
 
 
 with tempfile.TemporaryDirectory(prefix='qrrouter-http-') as directory:
-    env = dict(os.environ, AppSettings__ApiKey=key, AppSettings__DataDirectory=str(Path(directory) / 'data'),
-               ASPNETCORE_URLS=base, ASPNETCORE_ENVIRONMENT='Production')
+    config = Path(directory) / 'service.json'
+    data_directory = Path(directory) / 'data'
+    config.write_text(json.dumps({'AppSettings': {'ApiKey': key, 'DataDirectory': str(data_directory)}}), encoding='utf-8')
+    env = dict(os.environ, QRR_CONFIG_FILE=str(config), ASPNETCORE_URLS=base, ASPNETCORE_ENVIRONMENT='Production')
+    env.pop('AppSettings__ApiKey', None)
+    env.pop('AppSettings__DataDirectory', None)
     with open(Path(directory) / 'host.log', 'w', encoding='utf-8') as log:
         process = start(env, log)
         try:
@@ -82,12 +87,39 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-http-') as directory:
             op = request('/api/inventory/stage', data)['result']
             process.terminate()
             process.wait(timeout=15)
-            process = start(env, log)
+            # Replace the application directory and working directory, retaining external configuration and data.
+            upgraded = Path(directory) / 'release-2'
+            shutil.copytree(dll.parent, upgraded)
+            process = start(env, log, application=upgraded / dll.name, working_directory=upgraded)
+            restored = request('/api/inventory')
+            assert restored['batches'][batch] == state['batches'][batch]
+            assert len(restored['items']) == 2
             recovered = request('/api/inventory')['items'][code]
             assert recovered['qty'] == 5 and recovered['pending_operation']['id'] == op['id']
             request('/api/inventory/finish', {'code': code, 'id': op['id'], 'proof': {'seen': [1], 'other': 0}})
             assert request('/api/inventory')['items'][code]['qty'] == 3
-            print(f'Passed {passed} HTTP checks, including service restart with a pending stock operation.')
+            print(f'Passed {passed} HTTP checks, including application-directory replacement with external configuration, batches and a pending stock operation.')
         finally:
             process.terminate()
             process.wait(timeout=15)
+
+
+    # Misconfigured or missing storage must fail before silently creating a fresh local inventory.
+    for settings in [
+        {'AppSettings__DataDirectory': 'data'},
+        {'AppSettings__DataDirectory': str(dll.parent / 'data')},
+        {'QRR_CONFIG_FILE': str(Path(directory) / 'missing.json')},
+        {'QRR_CONFIG_FILE': 'relative-config.json'},
+    ]:
+        invalid = dict(env, **settings)
+        snapshot = (data_directory / 'entity-1/state.json').read_bytes()
+        with open(Path(directory) / 'rejected-startup.log', 'w', encoding='utf-8') as log:
+            rejected = subprocess.Popen(['dotnet', str(dll)], cwd=root, env=invalid, stdout=log, stderr=log)
+            try:
+                assert rejected.wait(timeout=15) != 0, 'Invalid persistent storage configuration accepted'
+            finally:
+                if rejected.poll() is None:
+                    rejected.terminate()
+                    rejected.wait(timeout=10)
+        assert (data_directory / 'entity-1/state.json').read_bytes() == snapshot
+    print('Storage validation PASS: unsafe paths and missing external settings reject startup without changing saved inventory.')

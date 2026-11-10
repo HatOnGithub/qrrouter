@@ -129,5 +129,6 @@
   "Change selection": "Selectie wijzigen",
   "Select labels": "Labels selecteren",
   "This serial number is already associated with a QR item.": "Dit serienummer is al gekoppeld aan een QR-item.",
-  "This serial number already exists in Dolibarr and can be assigned without adding stock.": "Dit serienummer bestaat al in Dolibarr en kan worden gekoppeld zonder voorraad toe te voegen."
+  "This serial number already exists in Dolibarr and can be assigned without adding stock.": "Dit serienummer bestaat al in Dolibarr en kan worden gekoppeld zonder voorraad toe te voegen.",
+  "Active items": "Actieve artikelen"
 }

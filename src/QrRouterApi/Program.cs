@@ -23,11 +23,24 @@ if (args is ["--healthcheck"])
 }
 
 var builder = WebApplication.CreateBuilder(args);
+var configFile = Environment.GetEnvironmentVariable("QRR_CONFIG_FILE");
+if (!string.IsNullOrEmpty(configFile))
+{
+    if (!Path.IsPathFullyQualified(configFile))
+        throw new InvalidOperationException("QRR_CONFIG_FILE must be an absolute path");
+    builder
+        .Configuration.AddJsonFile(configFile, optional: false, reloadOnChange: false)
+        .AddEnvironmentVariables()
+        .AddCommandLine(args);
+}
 builder
     .Services.AddOptions<AppSettings>()
     .BindConfiguration("AppSettings")
     .Validate(s => s.ApiKey.Length >= 32, "Set AppSettings:ApiKey to at least 32 characters")
-    .Validate(s => !string.IsNullOrWhiteSpace(s.DataDirectory), "Set a data directory")
+    .Validate(
+        s => s.HasPersistentDataDirectory(),
+        "Set AppSettings:DataDirectory to an absolute persistent directory outside the service application directory"
+    )
     .ValidateOnStart();
 builder.Services.AddControllers();
 builder.Services.AddSingleton<IStateRepository, StateRepository>();
