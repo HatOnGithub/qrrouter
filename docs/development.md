@@ -58,7 +58,7 @@ python tools/build-frontend.py
 python tools/package.py
 ```
 
-The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.6.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
+The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.7.1.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
 
 Build the service separately:
 
@@ -128,12 +128,17 @@ python tests/angular_integration.py --php artifacts/php-runtime/php.exe --extens
 
 ```sh
 cd frontend
+npx playwright install --with-deps chromium firefox webkit
 npm run test:mock
 npm run typecheck:e2e:mock
 npm run e2e:mock
 ```
 
-The browser suite starts and stops its own mock server. Finish source edits before running it: live reload can interrupt in-progress browser workflows.
+The browser suite runs Chromium, Firefox and WebKit with four workers locally and two per CI runner. Each test attempt sends an isolated mock-session header on browser and API requests so resets, inventory, settings and delayed requests cannot affect other tests. Session stores live until the mock server stops. Tests within files also run in parallel, and screenshots use per-test output directories. CI runs this suite on Linux, Windows and macOS, retaining separate reports for each OS. For a focused local run, use `npm run e2e:mock -- --project=firefox` (or `chromium` / `webkit`); override concurrency with `--workers=2`. Finish source edits before running it: live reload can interrupt in-progress browser workflows.
+
+The live gateway suite in `playwright.config.ts` remains serial because it mutates a shared service and Dolibarr fixture. Parallelizing it requires a separate service data directory, entity and fixture database per worker. Do not share its seeded item identifiers between workers.
+
+Virtual-camera tests are tagged `@virtual-camera` and skip on browser builds without `canvas.captureStream` (including Windows WebKit). A separate check verifies the unsupported-camera error on those builds; layout and other browser checks still run. Firefox's specific layout warning from Playwright's injected popup inspection is excluded from console-warning checks.
 
 ### Formatting
 

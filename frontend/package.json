@@ -1,6 +1,6 @@
 {
   "name": "qrrouter-web",
-  "version": "0.3.7",
+  "version": "0.3.7.1",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -44,6 +44,7 @@
     "@angular/compiler-cli": "22.2.5",
     "@playwright/test": "1.58.2",
     "@prettier/plugin-php": "0.26.0",
+    "@types/node": "24.19.2",
     "prettier": "3.9.10",
     "qrcode": "1.5.4",
     "typescript": "6.0.3"

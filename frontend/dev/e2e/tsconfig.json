@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.json",
-  "compilerOptions": { "noEmit": true, "types": [] },
+  "compilerOptions": { "noEmit": true, "types": ["node"] },
   "include": ["*.ts", "../../playwright.mock.config.ts"]
 }
