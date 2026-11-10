@@ -12,6 +12,7 @@ COPY --from=frontend /frontend/dist/qrrouter/3rdpartylicenses.txt /qrrouter/spa/
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /source
+COPY LICENSE ./
 COPY src/QrRouterApi/QrRouterApi.csproj src/QrRouterApi/
 RUN dotnet restore src/QrRouterApi/QrRouterApi.csproj
 COPY src/QrRouterApi/ src/QrRouterApi/
