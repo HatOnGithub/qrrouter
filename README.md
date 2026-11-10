@@ -15,6 +15,7 @@ Available under the [MIT License](LICENSE). Third-party dependencies retain thei
 - Individual and bulk QR label creation, including DYMO LabelWriter 550 printing.
 - Inventory search by name, QR ID, serial, product reference, tags and visible extra fields.
 - Links between QR entries and related Dolibarr records.
+- Persistent SQLite storage with automatic migration of existing JSON inventory.
 
 ## Installation
 

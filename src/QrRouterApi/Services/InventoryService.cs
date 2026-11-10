@@ -9,7 +9,7 @@ namespace QrRouterApi.Services;
 
 public interface IInventoryService
 {
-    JsonObject State(Actor actor);
+    JsonObject State(Actor actor, bool includeHistory = true);
     JsonNode? Execute(Actor actor, string action, JsonObject data);
 }
 
@@ -21,10 +21,10 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             throw new UnauthorizedAccessException("Missing Dolibarr permission");
     }
 
-    public JsonObject State(Actor actor)
+    public JsonObject State(Actor actor, bool includeHistory = true)
     {
         Permit(actor.Read || actor.Manage || actor.Admin);
-        return repository.Read(actor.EntityId, s => (JsonObject)s.DeepClone());
+        return repository.Read(actor.EntityId, s => (JsonObject)s.DeepClone(), includeHistory);
     }
 
     public JsonNode? Execute(Actor actor, string action, JsonObject data)
@@ -36,9 +36,24 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                 actor.EntityId,
                 s =>
                 {
-                    RefreshNative(s, data);
+                    RefreshNative(s, data, partial: true);
                     return InventoryQueries.Execute(s, action, data);
-                }
+                },
+                includeHistory: false,
+                selection: action
+                    is "query-bin-summary"
+                        or "query-warehouse-summary"
+                        or "query-known-bins"
+                        or "query-pick"
+                    ? new StateSelection(
+                        data.I("warehouse_id"),
+                        (data["native_items"] as JsonObject)
+                            ?.Where(pair => pair.Value.I("warehouse_id") == data.I("warehouse_id"))
+                            .Select(pair => pair.Key)
+                            .ToArray()
+                            ?? []
+                    )
+                    : null
             );
         }
         Permit(actor.Manage || actor.Admin);
@@ -63,7 +78,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                 {
                     RefreshNative(s, data);
                     return Plan(s, data, actor, action == "handoff-plan");
-                }
+                },
+                includeHistory: false
             );
         var context = AuditContext(data);
         return repository.Update(
@@ -107,12 +123,14 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
     }
 
     // These observations come only from the authenticated PHP adapter, never the browser.
-    private static void RefreshNative(JsonObject state, JsonObject data)
+    private static void RefreshNative(JsonObject state, JsonObject data, bool partial = false)
     {
         if (data["native_items"] is not JsonObject observations)
             return;
         foreach (var pair in observations)
         {
+            if (partial && !state.Map("items").ContainsKey(pair.Key))
+                continue;
             var item = Item(state, pair.Key);
             if (
                 item.I("product_lot_id") <= 0

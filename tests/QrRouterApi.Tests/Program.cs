@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using QrRouterApi.DTO;
 using QrRouterApi.Helpers;
@@ -15,7 +16,7 @@ void Check(bool condition, string message)
 {
     if (!condition)
         throw new Exception(message);
-    passed++;
+    Interlocked.Increment(ref passed);
 }
 void Reject(Action action, string message)
 {
@@ -333,7 +334,7 @@ try
             "Entity directories are owner-only"
         );
         Check(
-            File.GetUnixFileMode(Path.Combine(entityDirectory, "state.json"))
+            File.GetUnixFileMode(Path.Combine(entityDirectory, "state.sqlite3"))
                 == (UnixFileMode.UserRead | UnixFileMode.UserWrite),
             "Persisted inventory is owner-only"
         );
@@ -434,6 +435,124 @@ try
             ).Execute(admin, "bulk", Object(("count", 1)))
     );
     Check(State().Map("items").Count == before + 20, "Concurrent writers retain all mutations");
+    // Migrate real schema-2 state without losing history, unknown metadata or recovery data.
+    var migrationDirectory = Path.Combine(directory, "entity-50");
+    Directory.CreateDirectory(migrationDirectory);
+    var original = State();
+    original["pending_native"] = Object(
+        ("id", "migration-recovery"),
+        ("changes", new JsonObject())
+    );
+    original["custom_metadata"] = "Preserve future fields";
+    var legacyPath = Path.Combine(migrationDirectory, "state.json");
+    var legacyJson = original.ToJsonString();
+    File.WriteAllText(legacyPath, legacyJson);
+    Parallel.For(
+        0,
+        8,
+        _ =>
+            Check(
+                JsonNode.DeepEquals(original, repository.Read(50, s => s)),
+                "Concurrent first access imports a complete, consistent snapshot"
+            )
+    );
+    Check(File.ReadAllText(legacyPath) == legacyJson, "Migration preserves original JSON backup");
+    var migrated = repository.Read(50, s => s);
+    using (
+        var db = new InventoryDbContext(
+            InventoryDbContext.OptionsFor(Path.Combine(migrationDirectory, "state.sqlite3"))
+        )
+    )
+    {
+        Check(
+            !Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.HasPendingModelChanges(
+                db.Database
+            ),
+            "EF model matches its committed migration snapshot"
+        );
+        Check(
+            Microsoft
+                .EntityFrameworkCore.RelationalDatabaseFacadeExtensions.GetAppliedMigrations(
+                    db.Database
+                )
+                .Count() == 1,
+            "Initial EF migration is applied exactly once"
+        );
+    }
+    Reject(
+        () =>
+            repository.Update<int>(
+                50,
+                7,
+                "fail",
+                new JsonObject(),
+                s =>
+                {
+                    s.Map("items").Clear();
+                    throw new ArgumentException("Cancel transaction");
+                }
+            ),
+        "Failed command rolls back all changes"
+    );
+    Check(
+        JsonNode.DeepEquals(migrated, repository.Read(50, s => s)),
+        "Rejected transaction leaves inventory, revision and history intact"
+    );
+    repository.Update(
+        50,
+        7,
+        "test",
+        new JsonObject(),
+        s =>
+        {
+            s.Remove("pending_native");
+            s.Map("items").Remove(s.Map("items").First().Key);
+            return 0;
+        }
+    );
+    var changedState = repository.Read(50, s => s);
+    Check(
+        changedState["pending_native"] is null
+            && changedState.Map("items").Count == original.Map("items").Count - 1
+            && ((JsonArray)changedState["history"]!).Count
+                == ((JsonArray)original["history"]!).Count + 1,
+        "Record deletion, metadata removal and audit append commit together"
+    );
+    Check(
+        File.ReadAllText(legacyPath) == legacyJson,
+        "SQLite updates never overwrite migration backup"
+    );
+    Check(
+        repository.Read(50, s => ((JsonArray)s["history"]!).Count, includeHistory: false) == 0,
+        "Operational reads omit accumulated audit history"
+    );
+    var observed = changedState.Map("items").First().Key;
+    var selected = repository.Read(
+        50,
+        s => s.Map("items"),
+        includeHistory: false,
+        selection: new StateSelection(-1, [observed])
+    );
+    Check(
+        selected.Count == 1 && selected.ContainsKey(observed),
+        "Warehouse selection retains observed native items from other warehouses"
+    );
+    using (
+        var db = new SqliteConnection(
+            $"Data Source={Path.Combine(migrationDirectory, "state.sqlite3")};Pooling=False"
+        )
+    )
+    {
+        db.Open();
+        using var query = db.CreateCommand();
+        query.CommandText =
+            "EXPLAIN QUERY PLAN SELECT document FROM records WHERE collection='items' AND warehouse_id=1";
+        using var rows = query.ExecuteReader();
+        Check(
+            rows.Read() && rows.GetString(3).Contains("records_warehouse"),
+            "Warehouse retrieval uses the database index"
+        );
+    }
     var path = Path.Combine(directory, "entity-4");
     Directory.CreateDirectory(path);
     File.WriteAllText(Path.Combine(path, "state.json"), "broken");
@@ -449,6 +568,59 @@ try
     Check(
         File.ReadAllText(Path.Combine(path, "state.json")) == "broken",
         "Corrupt state is never overwritten"
+    );
+    File.WriteAllText(Path.Combine(path, "state.json"), legacyJson);
+    Check(
+        JsonNode.DeepEquals(original, repository.Read(4, s => s)),
+        "Failed legacy import can retry without partially initialized state"
+    );
+    var movedIn = Codes.New();
+    var movedOut = Codes.New();
+    var outside = Codes.New();
+    repository.Update(
+        51,
+        7,
+        "seed",
+        new JsonObject(),
+        s =>
+        {
+            foreach (var (code, warehouse) in new[] { (movedIn, 2), (movedOut, 1), (outside, 3) })
+                s.Map("items")[code] = Object(
+                    ("code", code),
+                    ("type", "generic"),
+                    ("status", "in_stock"),
+                    ("product_id", 4),
+                    ("product_lot_id", 1),
+                    ("warehouse_id", warehouse)
+                );
+            return 0;
+        }
+    );
+    var liveSummary = service.Execute(
+        admin with
+        {
+            EntityId = 51,
+        },
+        "query-warehouse-summary",
+        Object(
+            ("warehouse_id", 1),
+            (
+                "native_items",
+                Object(
+                    (movedIn, Object(("warehouse_id", 1))),
+                    (movedOut, Object(("warehouse_id", 2))),
+                    (outside, Object(("warehouse_id", 3)))
+                )
+            )
+        )
+    )!;
+    Check(
+        liveSummary["4"]!.I("known") == 1,
+        "Indexed queries include native arrivals, exclude native departures and skip unrelated observations"
+    );
+    Check(
+        repository.Read(51, s => s.Map("items")[movedIn]!.I("warehouse_id")) == 2,
+        "Read-model observations do not mutate persistent stock snapshots"
     );
     var nativeActor = admin with { EntityId = 20 };
     JsonNode? Native(string action, JsonObject fields) =>

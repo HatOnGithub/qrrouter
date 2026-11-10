@@ -18,6 +18,7 @@ import tempfile
 import time
 import dolibarr_fixture as fixture
 import native_fixture as native_contract
+from sqlite_fixture import read_state, write_state
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, build_opener, HTTPCookieProcessor, urlopen
@@ -53,7 +54,7 @@ def wait(url, proc):
         try:
             with urlopen(url, timeout=1):
                 return
-        except (URLError, ConnectionError):
+        except (URLError, ConnectionError, TimeoutError):
             time.sleep(.1)
     raise TimeoutError('Fixture server did not start')
 
@@ -438,17 +439,17 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         assert all('reference_id' not in entry and 'reference_type' not in entry for entry in reader_history)
         assert request()['state']['history'] == []
         # Synthetic secrets and pending-operation internals must never survive browser projection.
-        state_file = data / 'qrrouter/entity-1/state.json'
-        original_state = state_file.read_bytes()
+        state_file = data / 'qrrouter/entity-1/state.sqlite3'
+        original_state = read_state(state_file)
         secret = 'PRIVATE-AUDIT-PATCH-DO-NOT-SERVE'
-        seeded = json.loads(original_state)
+        seeded = json.loads(json.dumps(original_state))
         seeded['server_only'] = secret
         seeded['items'][generic]['server_only'] = secret
         seeded['items'][tracked]['server_only'] = secret
         seeded['items'][generic]['pending_operation'] = {'id': 'test-pending', 'kind': 'move', 'at': '2026-01-01T00:00:00Z', 'patch': {'reason': secret}, 'effects': [{'price': secret}]}
         seeded['history'].append({'context': {'secret': secret}})
         try:
-            state_file.write_text(json.dumps(seeded))
+            write_state(state_file, seeded)
             for role in ['admin', 'reader', 'operator']:
                 view = request(role=role)
                 assert secret not in json.dumps(view)
@@ -471,7 +472,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
                     assert error.code == 404
             request(action='count', payload={'code': box, 'quantity': 5}, expected=403)
         finally:
-            state_file.write_bytes(original_state)
+            write_state(state_file, original_state)
             restored = native(); restored.pop('product_entities', None); native_path.write_text(json.dumps(restored))
         assert request()['state']['revision'] == before
         print('Authorization PASS: native read rights, external/disabled users, object scopes, restricted references, employee privacy, field projection and direct media access.', flush=True)
@@ -526,27 +527,27 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         count_before = len(native()['lots']); stock_before = native()['stock']['4']['1']
         request(action='create', payload={'type': 'box', 'label': 'RECOVER-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
         assert len(native()['lots']) == count_before and native()['stock']['4']['1'] == stock_before
-        pending_path = data / 'qrrouter/entity-1/state.json'
+        pending_path = data / 'qrrouter/entity-1/state.sqlite3'
         def assert_hidden_recovery():
             saved_native = native_path.read_bytes()
-            saved_pending = pending_path.read_bytes()
+            saved_pending = read_state(pending_path)
             try:
                 hidden = native(); hidden['product_entities'] = {'4': 2}; native_path.write_text(json.dumps(hidden))
                 hidden_native = native_path.read_bytes()
                 for action in ['native-recover', 'native-cancel']:
                     request(action=action, payload={}, expected=403)
-                    assert pending_path.read_bytes() == saved_pending
+                    assert read_state(pending_path) == saved_pending
                     assert native_path.read_bytes() == hidden_native
             finally:
                 native_path.write_bytes(saved_native)
-        pending_state = json.loads(pending_path.read_text()); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; pending_path.write_text(json.dumps(pending_state))
+        pending_state = read_state(pending_path); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; write_state(pending_path, pending_state)
         changed = native(); changed.pop('fail_location'); native_path.write_text(json.dumps(changed))
         assert_hidden_recovery()
         recovered = request(action='native-recover', payload={})
         assert request()['state']['items'][recovered]['qty'] == 3 and not request()['state'].get('pending_native')
         assert native()['stock']['4']['1'] == stock_before + 3
         # Lost service-finalization response: the same committed receipt finishes without reapplying stock.
-        pending_path.write_text(json.dumps(pending_state))
+        write_state(pending_path, pending_state)
         assert_hidden_recovery()
         lots_after = len(native()['lots']); movements_after = len(native()['movements'])
         assert request(action='native-recover', payload={}) == recovered
@@ -554,7 +555,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         assert native()['stock']['4']['1'] == stock_before + 3
         changed = native(); changed['fail_location'] = True; native_path.write_text(json.dumps(changed))
         request(action='create', payload={'type': 'box', 'label': 'CANCEL-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
-        pending_state = json.loads(pending_path.read_text()); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; pending_path.write_text(json.dumps(pending_state))
+        pending_state = read_state(pending_path); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; write_state(pending_path, pending_state)
         request(action='native-cancel', payload={})
         assert not request()['state'].get('pending_native')
         assert native()['stock']['4']['1'] == stock_before + 3
