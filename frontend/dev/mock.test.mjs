@@ -35,6 +35,36 @@ const command = (action, payload, tokens = {}) =>
     }),
   });
 
+test('parallel mock sessions isolate resets, settings and inventory from each other and manual use', async () => {
+  const headers = { 'x-qrr-mock-session': 'isolation-a' };
+  const otherHeaders = { 'x-qrr-mock-session': 'isolation-b' };
+  const reset = await fetch(`${base}/__mock/reset`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ scenario: 'empty', latency: 17 }),
+  });
+  assert.equal(reset.status, 200);
+  const bootstrap = async sessionHeaders => {
+    const response = await fetch(`${base}/custom/qrrouter/api.php?resource=bootstrap`, {
+      headers: sessionHeaders,
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const [empty, populated, manual] = await Promise.all([
+    bootstrap(headers),
+    bootstrap(otherHeaders),
+    read('bootstrap'),
+  ]);
+  assert.equal(Object.keys(empty.state.items).length, 0);
+  assert.ok(Object.keys(populated.state.items).length > 0);
+  assert.deepEqual(Object.keys(manual.state.items), Object.keys(populated.state.items));
+  const settings = async sessionHeaders =>
+    (await fetch(`${base}/__mock/state`, { headers: sessionHeaders })).json();
+  assert.equal((await settings(headers)).latency, 17);
+  assert.equal((await settings(otherHeaders)).latency, 0);
+});
+
 test('bootstrap matches the current frontend contract and contains valid sample identifiers', async () => {
   const bootstrap = await read('bootstrap');
   assert.ok(bootstrap.label_formats.some(format => format.id === 'dymo-25x54'));

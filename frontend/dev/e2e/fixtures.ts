@@ -98,8 +98,20 @@ export class MockApplication {
 }
 
 export const test = base.extend<{ mock: MockApplication }>({
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, use, info) => {
+    await use({
+      ...extraHTTPHeaders,
+      'x-qrr-mock-session': `${info.workerIndex}-${info.testId}-${info.retry}-${info.repeatEachIndex}`,
+    });
+  },
   mock: [
     async ({ page, request, context }, use, info) => {
+      if (info.tags.includes('@virtual-camera')) {
+        const supported = await page.evaluate(
+          () => typeof document.createElement('canvas').captureStream === 'function'
+        );
+        info.skip(!supported, 'This browser build does not support canvas.captureStream.');
+      }
       const warnings: string[] = [];
       const errors: string[] = [];
       const watch = (page: Page) => {
@@ -109,7 +121,12 @@ export const test = base.extend<{ mock: MockApplication }>({
             errors.push(`Script load failed: ${response.status()} ${response.url()}`);
         });
         page.on('console', message => {
-          if (message.type() === 'warning') warnings.push(message.text());
+          // Firefox can warn about Playwright's injected popup layout inspection.
+          const automationLayoutWarning =
+            message.text().includes('Layout was forced before the page was fully loaded.') &&
+            message.text().includes('file: "debugger eval code"');
+          if (message.type() === 'warning' && !automationLayoutWarning)
+            warnings.push(message.text());
           if (message.type() === 'error' && message.text().startsWith('ERROR '))
             errors.push(message.text());
         });

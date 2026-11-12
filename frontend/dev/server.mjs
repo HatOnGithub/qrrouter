@@ -109,9 +109,14 @@ async function printPage(store, url) {
   return page(batch ? 'QR label batch' : 'QR label', labels.join(''), css);
 }
 
-export function createMockServer(store = new MockStore()) {
+export function createMockServer(defaultStore = new MockStore()) {
+  const sessions = new Map();
   return createServer(async (request, response) => {
     try {
+      // Browser tests share the HTTP server, but never inventory or settings.
+      const session = request.headers['x-qrr-mock-session'];
+      if (session && !sessions.has(session)) sessions.set(session, new MockStore());
+      const store = session ? sessions.get(session) : defaultStore;
       const url = new URL(request.url, 'http://127.0.0.1');
       const method = request.method;
       if (!['GET', 'POST'].includes(method)) throw new MockError('Unsupported method', 405);

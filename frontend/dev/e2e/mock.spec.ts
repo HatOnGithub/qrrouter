@@ -1,6 +1,18 @@
 import { expect, test } from './fixtures';
 import type { Bootstrap } from '../../src/app/core/models/inventory';
 
+test('unsupported virtual camera streams show an actionable error', async ({ page }) => {
+  await page.goto('/#/scan?input=camera');
+  test.skip(
+    await page.evaluate(() => typeof document.createElement('canvas').captureStream === 'function'),
+    'This browser supports virtual camera streams.'
+  );
+  await expect(page.locator('qrr-scanner [role="alert"]')).toContainText(
+    'This browser cannot create a virtual camera stream.'
+  );
+  await expect(page.getByRole('button', { name: 'Start camera', exact: true })).toBeVisible();
+});
+
 test('inventory search matches product tags and extra-field names and values', async ({
   page,
   mock,
@@ -232,7 +244,9 @@ test('a single label can be used as its serial and retains availability warnings
   expect(item.serial).toBe('Exact single browser label');
 });
 
-test('a direct camera link starts muted without a user gesture', async ({ page }) => {
+test('a direct camera link starts muted without a user gesture @virtual-camera', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     (window as any).__physicalCameraRequests = 0;
     Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
@@ -414,7 +428,7 @@ test('restricted readers receive no manufacturing references or internal audit p
   await expect(page.locator('.content')).not.toContainText('MO-0019');
 });
 
-test('virtual camera decodes fixtures and custom URLs through the real scanner', async ({
+test('virtual camera decodes fixtures and custom URLs through the real scanner @virtual-camera', async ({
   page,
   request,
 }) => {
@@ -458,7 +472,7 @@ test('virtual camera decodes fixtures and custom URLs through the real scanner',
   await page.getByRole('button', { name: 'Show QR code', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Remove ' + box.code, exact: true })).toBeVisible();
   await expect(page.locator('.codes button')).toHaveCount(2);
-  await page.screenshot({ path: '../artifacts/camera-mock-desktop.png' });
+  await page.screenshot({ path: test.info().outputPath('camera-mock-desktop.png') });
   await page.getByRole('button', { name: 'Stop camera', exact: true }).click();
   await expect(page.locator('#mock-camera-status')).toContainText(
     '0 active virtual camera streams.'
@@ -477,7 +491,7 @@ test('virtual camera decodes fixtures and custom URLs through the real scanner',
   );
 });
 
-test('mobile camera controls fill the screen, trap focus and return to scanning', async ({
+test('mobile camera controls fill the screen, trap focus and return to scanning @virtual-camera', async ({
   page,
   request,
 }) => {
@@ -492,7 +506,10 @@ test('mobile camera controls fill the screen, trap focus and return to scanning'
   await toggle.click();
   const panel = page.getByRole('dialog', { name: 'Camera mock', exact: true });
   await expect(panel).toHaveAttribute('aria-modal', 'true');
-  expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 });
+  const panelBox = await panel.boundingBox();
+  expect(panelBox).toMatchObject({ x: 0, y: 0, width: 390 });
+  // WebKit can round viewport units to a fractional CSS pixel.
+  expect(panelBox!.height).toBeCloseTo(844, 0);
   expect(await page.locator('.mock-main').evaluate(element => (element as HTMLElement).inert)).toBe(
     true
   );
@@ -505,7 +522,7 @@ test('mobile camera controls fill the screen, trap focus and return to scanning'
   await page.getByLabel('Fixture QR code', { exact: true }).selectOption(code);
   await page.getByRole('button', { name: 'Show QR code', exact: true }).click();
   await expect(page.locator('#mock-camera-status')).toContainText('Showing QR code');
-  await page.screenshot({ path: '../artifacts/camera-mock-mobile.png' });
+  await page.screenshot({ path: test.info().outputPath('camera-mock-mobile.png') });
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();
   await expect(toggle).toBeFocused();
@@ -515,7 +532,7 @@ test('mobile camera controls fill the screen, trap focus and return to scanning'
   await expect(page.getByRole('button', { name: 'Remove ' + code, exact: true })).toBeVisible();
 });
 
-test('virtual camera is the default and failure modes never request a physical camera', async ({
+test('virtual camera is the default and failure modes never request a physical camera @virtual-camera', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -623,7 +640,7 @@ for (const theme of ['light', 'dark']) {
     expect(statusColors.size).toBe(5);
     expect(statusColors.has('rgba(0, 0, 0, 0)')).toBe(false);
     await mock.select('Status', 'Active items');
-    await page.screenshot({ path: `../artifacts/inventory-${theme}-theme.png` });
+    await page.screenshot({ path: test.info().outputPath(`inventory-${theme}-theme.png`) });
     await page.goto('/#/labels');
     const create = page.getByRole('button', { name: 'Create batch', exact: true });
     await expect(create).toHaveCSS('background-color', 'rgb(97, 74, 52)');

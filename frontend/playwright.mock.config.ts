@@ -1,18 +1,29 @@
 import { defineConfig } from '@playwright/test';
+import process from 'node:process';
 
 export default defineConfig({
   testDir: './dev/e2e',
-  workers: 1,
+  workers: process.env['CI'] ? 2 : 4,
+  fullyParallel: true,
   retries: 0,
   use: {
     baseURL: 'http://127.0.0.1:4300',
-    browserName: 'chromium',
-    launchOptions: { args: ['--autoplay-policy=user-gesture-required'] },
     headless: true,
     viewport: { width: 1440, height: 1000 },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        browserName: 'chromium',
+        launchOptions: { args: ['--autoplay-policy=user-gesture-required'] },
+      },
+    },
+    { name: 'firefox', use: { browserName: 'firefox' } },
+    { name: 'webkit', use: { browserName: 'webkit' } },
+  ],
   webServer: {
     command: 'node dev/start-mock.mjs --port 4300',
     url: 'http://127.0.0.1:4300',
@@ -26,5 +37,5 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report/mock', open: 'never' }],
     ['junit', { outputFile: 'test-results/mock/results.xml' }],
   ],
-  timeout: 20000,
+  timeout: process.env['CI'] ? 60000 : 20000,
 });

@@ -14,7 +14,7 @@ class modQrrouter extends DolibarrModules {
         $this->name = 'Qrrouter';
         $this->description =
             'QR item registration, scan-many warehouse workflows, native stock transfers, consumption, returns and Binloc integration.';
-        $this->version = '0.3.7';
+        $this->version = '0.3.8';
         $this->phpmin = [8, 0];
         $this->need_dolibarr_version = [21, 0, 2];
         $this->const_name = 'MAIN_MODULE_QRROUTER';

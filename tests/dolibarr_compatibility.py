@@ -35,7 +35,11 @@ TABLES = {
     'mrp_mo': ['rowid', 'entity', 'ref'],
     'expedition': ['rowid', 'entity', 'ref', 'fk_soc'],
 }
-FILES += [f'install/mysql/tables/llx_{table}.sql' for table in TABLES]
+TABLE_FILES = {
+    table: f'install/mysql/tables/llx_{table}{"-mrp" if table == "mrp_mo" else ""}.sql'
+    for table in TABLES
+}
+FILES += list(TABLE_FILES.values())
 
 
 def download(version):
@@ -69,7 +73,7 @@ if __name__ == '__main__':
         if not all((source / name).is_file() for name in FILES):
             raise SystemExit(f'Missing {version} sources; run with --download.')
         for table, columns in TABLES.items():
-            sql = (source / f'install/mysql/tables/llx_{table}.sql').read_text(encoding='utf-8')
+            sql = (source / TABLE_FILES[table]).read_text(encoding='utf-8')
             for column in columns:
                 if not re.search(r'^\s*' + re.escape(column) + r'\s+\w+', sql, re.MULTILINE):
                     raise SystemExit(f'{version}: native column missing: {table}.{column}')

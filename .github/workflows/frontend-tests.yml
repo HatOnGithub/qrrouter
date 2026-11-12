@@ -14,8 +14,12 @@ concurrency:
 
 jobs:
   frontend-mocks:
-    name: Dolibarr and camera mocks
-    runs-on: ubuntu-24.04
+    name: Dolibarr and camera mocks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     defaults:
       run:
@@ -44,8 +48,8 @@ jobs:
       - name: Test mock API
         run: npm run test:mock
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run mock end-to-end tests
         run: npm run e2e:mock
@@ -57,12 +61,10 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5
         with:
-          name: frontend-mock-test-results
+          name: frontend-mock-test-results-${{ matrix.os }}
           path: |
             frontend/playwright-report/mock/
             frontend/test-results/mock/
-            artifacts/camera-mock-*.png
-            artifacts/inventory-*-theme.png
           if-no-files-found: ignore
           retention-days: 14
 
@@ -114,6 +116,9 @@ jobs:
 
       - name: Verify PHP gateway authorization and field privacy
         run: python3 tests/angular_integration.py --php php
+
+      - name: Verify supported Dolibarr native APIs
+        run: python3 tests/dolibarr_compatibility.py --download --php php
 
   release:
     name: Build and publish release

@@ -58,7 +58,7 @@ python tools/build-frontend.py
 python tools/package.py
 ```
 
-The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.6.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
+The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.8.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
 
 Build the service separately:
 
@@ -82,9 +82,12 @@ The result is `artifacts/docker-module/qrrouter`. For installation from publishe
 dotnet run --project tests/QrRouterApi.Tests -c Release
 python tests/http_smoke.py
 python tests/angular_integration.py --php /path/to/php
+python tests/dolibarr_compatibility.py --download --php /path/to/php
 ```
 
 The service assertions run through a console runner, so use `dotnet run`. The gateway suite executes the PHP module against the real service and Dolibarr-shaped fixtures, including authorization, stock transactions and recovery.
+
+The Dolibarr compatibility suite downloads official sources for 21.0.2, 22.0.5, 23.0.4 and 24.0.2 and executes selected native method bodies, including warehouse fetching, against isolated database doubles. It also checks legacy-only and modern-only warehouse status properties. CI runs this suite; add new supported Dolibarr versions to `tests/dolibarr_compatibility.py` and verify them before claiming compatibility. New upstream releases are not automatically supported by a passing test against older versions.
 
 ### Database migrations
 
@@ -128,12 +131,17 @@ python tests/angular_integration.py --php artifacts/php-runtime/php.exe --extens
 
 ```sh
 cd frontend
+npx playwright install --with-deps chromium firefox webkit
 npm run test:mock
 npm run typecheck:e2e:mock
 npm run e2e:mock
 ```
 
-The browser suite starts and stops its own mock server. Finish source edits before running it: live reload can interrupt in-progress browser workflows.
+The browser suite runs Chromium, Firefox and WebKit with four workers locally and two per CI runner. Each test attempt sends an isolated mock-session header on browser and API requests so resets, inventory, settings and delayed requests cannot affect other tests. Session stores live until the mock server stops. Tests within files also run in parallel, and screenshots use per-test output directories. CI runs this suite on Linux, Windows and macOS, retaining separate reports for each OS. For a focused local run, use `npm run e2e:mock -- --project=firefox` (or `chromium` / `webkit`); override concurrency with `--workers=2`. Finish source edits before running it: live reload can interrupt in-progress browser workflows.
+
+The live gateway suite in `playwright.config.ts` remains serial because it mutates a shared service and Dolibarr fixture. Parallelizing it requires a separate service data directory, entity and fixture database per worker. Do not share its seeded item identifiers between workers.
+
+Virtual-camera tests are tagged `@virtual-camera` and skip on browser builds without `canvas.captureStream` (including Windows WebKit). A separate check verifies the unsupported-camera error on those builds; layout and other browser checks still run. Firefox's specific layout warning from Playwright's injected popup inspection is excluded from console-warning checks.
 
 ### Formatting
 

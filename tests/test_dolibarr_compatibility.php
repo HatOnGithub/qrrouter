@@ -70,7 +70,7 @@ contract($productFile, 'fetch', ['id']);
 contract($productFile, 'load_stock', ['option']);
 contract('product/stock/class/productlot.class.php', 'fetch', ['id', 'product_id', 'batch']);
 contract('product/stock/class/productlot.class.php', 'create', ['user']);
-contract('product/stock/class/entrepot.class.php', 'fetch', ['id']);
+$warehouseFetch = contract('product/stock/class/entrepot.class.php', 'fetch', ['id']);
 contract('product/stock/class/entrepot.class.php', 'create', ['user']);
 contract('user/class/user.class.php', 'hasRight', ['module', 'permlevel1', 'permlevel2']);
 contract('core/lib/admin.lib.php', 'dolibarr_set_const', ['db', 'name', 'value', 'type', 'visible', 'note', 'entity']);
@@ -168,4 +168,77 @@ $module = new modQrrouter(null);
 check($module->need_dolibarr_version === [21, 0, 2], 'Incorrect Dolibarr minimum');
 check($module->phpmin === [8, 0], 'Incorrect PHP minimum');
 check(empty($module->need_dolibarr_max_version), 'An upper version cap blocks incremental upgrades');
+
+// Run the real warehouse fetch: older releases populate statut without updating status.
+function dol_syslog($message, $level = 0) {}
+function getCountry($id, $mode) { return ['label' => 'Fixture', 'code' => 'XX']; }
+function qrr_stock_write_right($user) { return true; }
+function qrr_product($db, $id) {
+    return new class {
+        public $type = 0;
+        public function hasbatch() { return false; }
+    };
+}
+class WarehouseDatabase {
+    public $warehouseStatus = 1;
+    public $exists = true;
+    public function prefix() { return 'llx_'; }
+    public function query($sql) { return true; }
+    public function num_rows($result) { return $this->exists ? 1 : 0; }
+    public function fetch_object($result) {
+        return (object) (['statut' => $this->warehouseStatus] + array_fill_keys([
+            'rowid', 'entity', 'fk_parent', 'fk_project', 'label', 'description', 'lieu',
+            'address', 'zip', 'town', 'country_id', 'phone', 'fax', 'model_pdf', 'import_key',
+            'date_creation', 'date_modification', 'fk_departement', 'barcode', 'fk_barcode_type',
+            'warehouse_usage', 'user_creation_id',
+        ], 1));
+    }
+}
+eval('#[AllowDynamicProperties] class Entrepot {
+    const STATUS_CLOSED = 0;
+    public $db, $statut, $status, $error;
+    public function __construct($db) { $this->db = $db; }
+    public function fetch_optionals() {}
+    public ' . $warehouseFetch . "\n}");
+mkdir($fixture . '/core/lib', 0777, true);
+file_put_contents($fixture . '/core/lib/company.lib.php', '<?php /* getCountry supplied above. */');
+file_put_contents($fixture . '/product/stock/class/entrepot.class.php', '<?php /* Real fetch supplied above. */');
+eval(native_function(__DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_service.lib.php', 'qrr_warehouse_closed'));
+eval(native_function(__DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_service.lib.php', 'qrr_service_preflight'));
+foreach ([
+    [['statut' => 1, 'status' => 0], false],
+    [['statut' => 0, 'status' => 1], true],
+    [['status' => 1], false],
+    [['status' => 0], true],
+    [[], true],
+] as [$properties, $closed]) {
+    check(qrr_warehouse_closed((object) $properties) === $closed, 'Legacy, modern or unknown warehouse status mishandled');
+}
+$warehouseDb = new WarehouseDatabase();
+foreach ([1, 2, 0] as $warehouseStatus) {
+    $warehouseDb->warehouseStatus = $warehouseStatus;
+    $warehouse = new Entrepot($warehouseDb);
+    check($warehouse->fetch(12) === 1 && (int) $warehouse->statut === $warehouseStatus, 'Native warehouse status was not populated');
+    $rejected = false;
+    try {
+        qrr_service_preflight($warehouseDb, $user, [], [
+            'product_id' => 4,
+            'effects' => [['warehouse_id' => 12, 'delta' => 1]],
+        ]);
+    } catch (RuntimeException $error) {
+        check($error->getMessage() === 'Warehouse missing or closed', 'Unexpected warehouse preflight error');
+        $rejected = true;
+    }
+    check($rejected === ($warehouseStatus === 0), 'Open warehouse rejected or closed warehouse accepted');
+}
+$warehouseDb->exists = false;
+try {
+    qrr_service_preflight($warehouseDb, $user, [], [
+        'product_id' => 4,
+        'effects' => [['warehouse_id' => 12, 'delta' => 1]],
+    ]);
+    throw new LogicException('Missing warehouse accepted');
+} catch (RuntimeException $error) {
+    check($error->getMessage() === 'Warehouse missing or closed', 'Unexpected missing warehouse error');
+}
 echo 'Dolibarr ' . $version . ': passed ' . $checks . ' native API/stock/permission/descriptor checks.' . PHP_EOL;

@@ -1,8 +1,9 @@
 @import '../../shared/scanner/capture-page.css';
-fieldset {
+:host fieldset {
   display: grid;
   gap: var(--qrr-control-gap, 16px);
-  border: 0;
+  /* The host theme can mark its native fieldset border as important. */
+  border: 0 !important;
   padding: 0;
   min-width: 0;
 }

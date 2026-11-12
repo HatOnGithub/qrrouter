@@ -14,8 +14,8 @@ module = root / 'dolibarr/qrrouter'
 if (module / 'LICENSE').read_bytes() != (root / 'LICENSE').read_bytes():
     raise SystemExit('Project and Dolibarr module licenses must match.')
 version = json.loads((root / 'frontend/package.json').read_text(encoding='utf-8'))['version']
-if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
-    raise SystemExit('Project version must use major.minor.incremental.')
+if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?', version):
+    raise SystemExit('Project version must use major.minor.incremental, optionally followed by .hotfix.')
 if args.tag is not None and not re.fullmatch(re.escape('v' + version) + r'(?:-beta\.[1-9]\d*)?', args.tag):
     raise SystemExit(f'Release tag must match v{version}, optionally followed by -beta.N.')
 release_tag = args.tag or 'v' + version

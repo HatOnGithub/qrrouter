@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 
-test('print blank labels, register one through the virtual camera and preserve its draft and thumbnail', async ({
+test('print blank labels, register one through the virtual camera and preserve its draft and thumbnail @virtual-camera', async ({
   page,
   request,
   mock,
@@ -66,7 +66,7 @@ for (const destination of [
   { type: 'salesorder', id: 39, ref: 'SO-0039', label: 'Network cable', units: 1, original: 1 },
   { type: 'production', id: 19, ref: 'MO-0019', label: 'Bolts box A', units: 3, original: 25 },
 ]) {
-  test(`camera consumption against ${destination.type} saves its reference and can be returned`, async ({
+  test(`camera consumption against ${destination.type} saves its reference and can be returned @virtual-camera`, async ({
     page,
     mock,
   }) => {
@@ -147,7 +147,7 @@ for (const destination of [
   });
 }
 
-test('mobile camera checkout creates an employee warehouse and checkin restores the original stock', async ({
+test('mobile camera checkout creates an employee warehouse and checkin restores the original stock @virtual-camera', async ({
   page,
   mock,
 }) => {
@@ -183,7 +183,7 @@ test('mobile camera checkout creates an employee warehouse and checkin restores 
   await expect(page.locator('tbody tr').filter({ hasText: item.label })).toHaveCount(0);
 });
 
-test('camera container transfer rejects excess quantity without changes, then conserves the total', async ({
+test('camera container transfer rejects excess quantity without changes, then conserves the total @virtual-camera', async ({
   page,
   mock,
 }) => {
@@ -212,7 +212,7 @@ test('camera container transfer rejects excess quantity without changes, then co
   expect(after.revision).toBe(before.revision + 1);
 });
 
-test('an unknown container can be counted and later corrected with an audit reason', async ({
+test('an unknown container can be counted and later corrected with an audit reason @virtual-camera', async ({
   page,
   mock,
 }) => {
@@ -251,7 +251,7 @@ test('an unknown container can be counted and later corrected with an audit reas
   });
 });
 
-test('camera warehouse moves appear in bin printouts and picking previews without further mutations', async ({
+test('camera warehouse moves appear in bin printouts and picking previews without further mutations @virtual-camera', async ({
   page,
   mock,
 }) => {
@@ -331,7 +331,7 @@ test('read-only operators can inspect stock but cannot open management workflows
   expect((await mock.bootstrap()).state).toEqual(before);
 });
 
-test('an installation without employees blocks camera checkout without changing stock', async ({
+test('an installation without employees blocks camera checkout without changing stock @virtual-camera', async ({
   page,
   mock,
 }) => {
