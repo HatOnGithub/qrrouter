@@ -58,6 +58,9 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-http-') as directory:
     data_directory = Path(directory) / 'data'
     config.write_text(json.dumps({'AppSettings': {'ApiKey': key, 'DataDirectory': str(data_directory)}}), encoding='utf-8')
     env = dict(os.environ, QRR_CONFIG_FILE=str(config), ASPNETCORE_URLS=base, ASPNETCORE_ENVIRONMENT='Production')
+    # Invalid-startup checks must not invoke the Windows Event Log or crash-reporting UI.
+    env['Logging__EventLog__LogLevel__Default'] = 'None'
+    env['DOTNET_DbgEnableMiniDump'] = '0'
     env.pop('AppSettings__ApiKey', None)
     env.pop('AppSettings__DataDirectory', None)
     with open(Path(directory) / 'host.log', 'w', encoding='utf-8') as log:

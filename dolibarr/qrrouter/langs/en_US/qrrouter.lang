@@ -1,7 +1,9 @@
 # QR Product Router UI translations; generated keys are derived from the source English phrase.
 QRRUI_d3c7366db5a3=Assigned labels show product details. Unassigned labels show only the QR code and QR ID.
 Module503871Name=QR Product Router
-Module503871Desc=QR item management, counted containers, Binloc locations and warehouse workflows
+Module503871Desc=QR item management, counted containers, internal locations and warehouse workflows
+QRRSerialPrefix=QR serial number prefix
+QRRSerialPrefixHelp=Prefix for new QR Router individual serials, followed by 24 random hexadecimal characters. Blank uses SN-. Maximum 76 UTF-8 bytes; no whitespace or markup. Existing serials and container lot names stay unchanged.
 Qrrouter=QR Product Router
 # Module connection settings
 QRRUI_5e79c27833d2=QR Router setup

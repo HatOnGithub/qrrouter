@@ -8,12 +8,12 @@ If an update reports a missing native receipt table, a warehouse error or retain
 
 ## What to preserve
 
-| Store                               | Contents                                                                                                                                                                               | Keep across updates                                                                                 |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Service `AppSettings.DataDirectory` | Per-entity `entity-N/state.sqlite3` databases (older releases: `state.json`): QR identities, associations, batches, employee warehouse mappings, loans, history and pending operations | The complete data directory, outside the service application directory                              |
-| External service settings           | API key and absolute data directory, with any other service settings                                                                                                                   | An external JSON file referenced by `QRR_CONFIG_FILE`, or the existing service environment settings |
-| Dolibarr database                   | Products, serials/lots, stock, Binloc locations, permissions, module settings and native synchronization receipts                                                                      | The existing database, including QR Router tables and settings                                      |
-| Dolibarr documents                  | QR scan thumbnails under `DOL_DATA_ROOT/qrrouter/entity-N/thumbnails`                                                                                                                  | The existing Dolibarr documents directory                                                           |
+| Store                               | Contents                                                                                                                                                                                                                  | Keep across updates                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Service `AppSettings.DataDirectory` | Per-entity `entity-N/state.sqlite3` databases (older releases: `state.json`): QR identities, associations, batches, employee warehouse mappings, loans, location definitions, assignments, history and pending operations | The complete data directory, outside the service application directory                              |
+| External service settings           | API key and absolute data directory, with any other service settings                                                                                                                                                      | An external JSON file referenced by `QRR_CONFIG_FILE`, or the existing service environment settings |
+| Dolibarr database                   | Products, serials/lots, stock, optional legacy Binloc data, permissions, module settings and native synchronization receipts                                                                                              | The existing database, including QR Router tables and settings                                      |
+| Dolibarr documents                  | QR scan thumbnails under `DOL_DATA_ROOT/qrrouter/entity-N/thumbnails`                                                                                                                                                     | The existing Dolibarr documents directory                                                           |
 
 Do not rebuild QR associations by registering or importing the same inventory again. Reuse the saved service state. Current state files use schema 2; invalid or unsupported state is rejected rather than reset automatically.
 
@@ -45,6 +45,18 @@ When upgrading from a JSON-based release (through v0.3.6), stop the old service 
 The original JSON remains unchanged as a migration backup. After migration, SQLite is authoritative and the JSON is no longer updated. Do not run an older JSON-based service against the same directory, edit the old JSON expecting changes to appear, or delete the database to force another import. To roll back, restore the coordinated pre-update backups described below. Keep the existing absolute `DataDirectory` and Docker volume.
 
 SQLite uses local disk storage and write-ahead logging. Use the stopped-service backup procedure above, preserving all files together. Network shares and multiple distributed service replicas are not supported.
+
+### Moving locations from Binloc
+
+Current source stores location definitions and QR assignments in the service database. Binloc is no longer required for normal operation, and QR Router no longer writes its locations. Existing saved `bin`, `bin_key` and `bin_values` remain intact; the data migration preserves saved label-format preferences under their new name.
+
+1. Back up the service data and Dolibarr database together, and resolve pending stock operations before updating.
+2. Install the matching module and service, then disable/re-enable QR Router in module setup to refresh dependencies, hooks and native tabs.
+3. While Binloc is still available, an administrator can open **Bins and locations > Import existing locations** and select **Import Binloc locations**. This imports definitions and current assignments for QR-associated lots once per warehouse. Previously configured QR Router locations are not overwritten; resolve any reported stock/warehouse mismatch before retrying.
+4. Verify representative warehouse, product and serial/lot links and location values. You can then disable Binloc. Keep its database data in the backup.
+5. Make future location changes through QR Router. Changes made later in Binloc do not change QR Router locations.
+
+If Binloc has already been removed, saved location codes remain visible. A warehouse without imported definitions offers a single **Location** field; editing uses the complete saved code instead of displaying legacy option IDs. An external Dolibarr stock move to another warehouse clears the old warehouse's QR location until a new location is assigned.
 
 ## 3. Keep settings outside the release directory
 

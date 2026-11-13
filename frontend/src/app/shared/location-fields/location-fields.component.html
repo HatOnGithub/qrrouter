@@ -28,7 +28,7 @@
           [ngModelOptions]="{ standalone: true }"
           (ngModelChange)="change(level.id, $event)"
           [disabled]="disabled()"
-          maxlength="64"
+          [attr.maxlength]="levels().length === 1 ? 140 : 64"
         />
       }
     </mat-form-field>

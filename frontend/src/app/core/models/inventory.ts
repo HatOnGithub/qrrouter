@@ -67,7 +67,7 @@ export interface InventoryState {
   items: Record<string, Item>;
   batches: Record<string, Batch>;
   personal_warehouses: Record<string, number>;
-  binloc_label_settings?: Record<string, LabelSettings>;
+  location_label_settings?: Record<string, LabelSettings>;
   history: { at: string; user_id: number; action: string; revision: number }[];
 }
 export interface Warehouse {
@@ -77,12 +77,15 @@ export interface Warehouse {
 export interface Product {
   ref: string;
   label: string;
+  serial_prefix?: string;
   tags?: string[];
   extrafields?: Record<string, { label: string; value: string }>;
 }
 export interface Lookup {
   id: number;
   text: string;
+  label?: string;
+  ref?: string;
 }
 export interface Level {
   id: number;
@@ -110,6 +113,7 @@ export interface Bootstrap {
   token: string;
   locale: string;
   translations: Record<string, string>;
+  location_import_available?: boolean;
 }
 export interface OperationResult {
   code: string;

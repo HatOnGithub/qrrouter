@@ -1,0 +1,109 @@
+<h1>{{ 'CSV import and export' | t }}</h1>
+<p class="subtitle">{{ 'Transfer QR inventory using UTF-8 CSV files.' | t }}</p>
+<a mat-button routerLink="/inventory">{{ 'Back to inventory' | t }}</a>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+@if (notice()) {
+  <p class="alert success" role="status">{{ notice() | t }}</p>
+}
+<qrr-card [title]="'Export inventory' | t">
+  <p>{{ 'Exports include only items and fields you are permitted to view.' | t }}</p>
+  <div class="actions">
+    <button mat-stroked-button (click)="exportAll()">
+      {{ 'Export all accessible inventory' | t }}
+    </button>
+    <button mat-button (click)="template()">{{ 'Download CSV template' | t }}</button>
+  </div>
+</qrr-card>
+@if (api.context()!.permissions.manage) {
+  <qrr-card [title]="'Import CSV' | t">
+    <p>
+      {{
+        'Leave code blank to create a QR, or use an existing QR ID to register or update it. Review every row before importing.'
+          | t
+      }}
+    </p>
+    <p>
+      {{
+        'New individuals receive automatic serials. A supplied serial must already exist in Dolibarr and have no QR association. New serials and containers can receive stock.'
+          | t
+      }}
+    </p>
+    <p>
+      {{
+        'Assigned entries allow metadata and location updates. Use warehouse workflows to change quantities, warehouses or native identities.'
+          | t
+      }}
+    </p>
+    <label class="file-label" for="csv-file">{{ 'CSV file (UTF-8, up to 200 rows)' | t }}</label>
+    <input
+      id="csv-file"
+      type="file"
+      accept=".csv,text/csv"
+      [disabled]="busy()"
+      (change)="selectFile($event)"
+    />
+    @if (busy()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+    @if (rows().length) {
+      <p>{{ fileName() }} · {{ 'Ready to import' | t }}: {{ ready() }}</p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ 'Row' | t }}</th>
+              <th>{{ 'Item / QR' | t }}</th>
+              <th>{{ 'Action' | t }}</th>
+              <th>{{ 'Status' | t }}</th>
+              <th>{{ 'Details' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.line) {
+              <tr>
+                <td>{{ row.line }}</td>
+                <td>
+                  {{ row.source.label || row.source.product_ref }}
+                  <small>{{ row.code }}</small>
+                </td>
+                <td>{{ actionNames[row.action] | t }}</td>
+                <td>{{ statusNames[row.status] | t }}</td>
+                <td>{{ row.message | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (invalid()) {
+        <p class="alert">
+          {{ 'Correct every invalid row and upload the CSV again before importing.' | t }}
+        </p>
+      }
+      <p>
+        {{
+          'Imports run one row at a time and stop on the first server error. Keep this page open, then download the results before continuing.'
+            | t
+        }}
+      </p>
+      <div class="actions">
+        <button
+          mat-flat-button
+          [disabled]="busy() || invalid() || attempted() || !ready()"
+          (click)="apply()"
+        >
+          {{ 'Confirm CSV import' | t }}
+        </button>
+        @if (!attempted()) {
+          <button mat-button [disabled]="busy()" (click)="previewAgain()">
+            {{ 'Refresh preview' | t }}
+          </button>
+        }
+        <button mat-stroked-button [disabled]="busy()" (click)="report()">
+          {{ 'Download import results' | t }}
+        </button>
+      </div>
+    }
+  </qrr-card>
+}

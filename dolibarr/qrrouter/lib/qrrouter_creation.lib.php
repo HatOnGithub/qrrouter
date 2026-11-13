@@ -19,7 +19,18 @@ function qrr_api_int($data, $key, $default = 0) {
     }
     return (int) $value;
 }
-function qrr_api_fields($data, $existing = null) {
+/** Read the product-owned setting; never accept a serial prefix from the browser. */
+function qrr_creation_serial_prefix($db, $productId) {
+    $product = qrr_product($db, $productId);
+    if (!$product) {
+        throw new DomainException('Physical product inaccessible');
+    }
+    if ($product->fetch_optionals() < 0) {
+        throw new RuntimeException('Cannot read product serial prefix');
+    }
+    return (string) ($product->array_options['options_qrrouter_serial_prefix'] ?? '');
+}
+function qrr_api_fields($data, $existing = null, $prepared = null) {
     global $db, $user;
     $type = $data['type'] ?? 'generic';
     if (!is_string($type)) {
@@ -36,9 +47,9 @@ function qrr_api_fields($data, $existing = null) {
                 ? 0
                 : 1);
     if (!qrr_locations_right($user) && (!empty($data['levels']) || !empty($data['keep_legacy']))) {
-        throw new DomainException('Missing Binloc read permission');
+        throw new DomainException('Location access required');
     }
-    $choice = qrr_binloc_choice(
+    $choice = qrr_location_choice(
         $db,
         $wid,
         $data['levels'] ?? [],
@@ -48,112 +59,69 @@ function qrr_api_fields($data, $existing = null) {
     if (!qrr_locations_right($user) && $existing && $wid === (int) $existing['warehouse_id']) {
         $choice = array_intersect_key($existing, array_flip(['bin', 'bin_key', 'bin_values']));
     }
-    $label = qrr_creation_text($data, 'label');
-    $serial = qrr_creation_text($data, 'serial');
-    if (strlen($label) > 140 || strlen($serial) > 100) {
-        throw new InvalidArgumentException(
-            'Label text exceeds the size limit: 140 UTF-8 bytes for item names, 100 for serial numbers and box names.',
-        );
+    if ($prepared === null) {
+        $serial = qrr_creation_text($data, 'serial');
+        $linked =
+            $type === 'tracked' && $serial !== '' && qrr_native_serial_exists($db, $pid, $serial);
+        $prepared = qrr_service('POST', 'prepare-creation', [
+            'type' => $type,
+            'label' => $data['label'] ?? '',
+            'details' => $data['details'] ?? '',
+            'serial' => $serial,
+            'serial_prefix' => $type === 'tracked' ? qrr_creation_serial_prefix($db, $pid) : '',
+            'existing_serial' => !empty($existing['product_lot_id'])
+                ? (string) $existing['serial']
+                : ($linked
+                    ? $serial
+                    : ''),
+        ])['entries'][0];
     }
-    if ($type === 'tracked' && !empty($data['label_as_serial'])) {
-        if ($label === '') {
-            throw new InvalidArgumentException('Enter a label to use as the serial number.');
-        }
-        $serial = $label;
-    }
-    if ($type === 'tracked' && $serial === '') {
-        if (!empty($existing['product_lot_id'])) {
-            $serial = (string) $existing['serial'];
-        } else {
-            $serial = qrr_native_generate_serial($db, $pid, $label);
-        }
-    }
-    $nativeBatch = $type === 'box' ? $label : ($type === 'tracked' ? $serial : '');
     if (
-        in_array($type, ['box', 'tracked'], true) &&
-        ($nativeBatch === '' || strlen($nativeBatch) > 100)
+        !empty($prepared['generated_serial']) &&
+        qrr_native_serial_exists($db, $pid, $prepared['serial'])
     ) {
-        throw new InvalidArgumentException(
-            'Enter a serial number or box name of at most 100 bytes',
-        );
+        throw new InvalidArgumentException('Generated serial already exists; retry creation');
     }
     return qrr_service_fields(
         $type,
-        $label,
+        $prepared['label'],
         $pid,
         $wid,
         $choice,
         $qty,
-        qrr_creation_text($data, 'details'),
-        $serial,
-        $nativeBatch,
+        $prepared['details'],
+        $prepared['serial'],
+        $prepared['native_batch'],
     );
 }
 /** Prepare every native identity before staging so retries reuse the same serials. */
 function qrr_api_bulk_fields($data) {
     global $db;
-    $count = qrr_api_int($data, 'count');
-    if ($count < 1 || $count > 200) {
-        throw new InvalidArgumentException('Batch size must be between 1 and 200');
-    }
-    $type = $data['type'] ?? 'generic';
-    if (!in_array($type, ['tracked', 'box'], true)) {
-        return array_merge(qrr_api_fields($data), ['count' => $count]);
-    }
-    $hasLabels = array_key_exists('labels', $data);
-    if ($hasLabels || $type === 'box' || !empty($data['label_as_serial'])) {
-        $labels = $data['labels'] ?? null;
-        if (!is_array($labels) || array_keys($labels) !== range(0, $count - 1)) {
-            throw new InvalidArgumentException('Enter one label per individual item.');
-        }
-        foreach ($labels as $label) {
-            if (!is_string($label) || trim(strip_tags($label)) === '') {
-                throw new InvalidArgumentException('Enter one label per individual item.');
-            }
-        }
-    } else {
-        $labels = array_fill(0, $count, qrr_creation_text($data, 'label'));
-    }
-    $prefix = qrr_creation_text($data, 'serial');
-    if (strlen($prefix) > 100) {
-        throw new InvalidArgumentException('Serial prefixes must be at most 100 bytes');
-    }
+    $payload = array_intersect_key(
+        $data,
+        array_flip(['count', 'type', 'label', 'labels', 'details', 'serial']),
+    );
+    $payload['serial_prefix'] =
+        ($data['type'] ?? '') === 'tracked'
+            ? qrr_creation_serial_prefix($db, qrr_api_int($data, 'product_id'))
+            : '';
+    $prepared = qrr_service('POST', 'prepare-creation', array_merge($payload, ['bulk' => true]));
     $entries = [];
-    $seen = [];
-    foreach ($labels as $label) {
-        $entry = $data;
-        $entry['label'] = $label;
-        $entry['label_as_serial'] = false;
-        // Generate exactly one identity per entry; the mapper validates its length and native facts.
-        $entry['serial'] =
-            $type === 'tracked'
-                ? (!empty($data['label_as_serial'])
-                    ? trim(strip_tags($label))
-                    : qrr_native_generate_serial(
-                        $db,
-                        qrr_api_int($data, 'product_id'),
-                        $prefix !== '' ? $prefix : $label,
-                    ))
-                : '';
-        $fields = qrr_api_fields($entry);
-        $identity = $fields['native_batch'];
-        $key = strtolower($identity);
-        if (isset($seen[$key])) {
+    foreach ($prepared['entries'] as $entry) {
+        $fields = qrr_api_fields($data, null, $entry);
+        if (
+            in_array($fields['type'], ['tracked', 'box'], true) &&
+            qrr_native_serial_exists($db, $fields['product_id'], $fields['native_batch'])
+        ) {
             throw new InvalidArgumentException(
-                $type === 'box'
-                    ? 'Each box name must be unique.'
-                    : 'Each label must be unique when used as a serial number.',
-            );
-        }
-        $seen[$key] = true;
-        if (qrr_native_serial_exists($db, $fields['product_id'], $identity)) {
-            throw new InvalidArgumentException(
-                ($type === 'box'
-                    ? 'A box lot in this batch already exists in Dolibarr: '
-                    : 'A serial number in this batch already exists in Dolibarr: ') . $identity,
+                'A lot or serial in this batch already exists in Dolibarr',
             );
         }
         $entries[] = $fields;
     }
-    return array_merge($entries[0], ['count' => $count, 'entries' => $entries]);
+    return array_merge(
+        $entries[0],
+        ['count' => $prepared['count']],
+        in_array($entries[0]['type'], ['tracked', 'box'], true) ? ['entries' => $entries] : [],
+    );
 }

@@ -22,6 +22,7 @@ QUERIES = r'''
 PRODUCT_METHOD = r'''
  public function correct_stock_batch($user,$wid,$qty,$movement,$label='',$price=0,$eatby=0,$sellby=0,$batch='',$inventorycode='') {
    $s=$this->db->txn??$this->db->state();
+   if(!empty($s['fail_stock']))return -1;
    $current=$s['batches'][$this->id][$wid][$batch]??0;
    $delta=$movement===1?-$qty:$qty;
    if($current+$delta<0)return -1;

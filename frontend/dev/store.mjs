@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   createFixture,
   labelFormats,
@@ -86,7 +87,7 @@ export class MockStore {
     this.warehouse(id);
     const values = {};
     const parts = [];
-    for (const level of this.data.levels) {
+    for (const level of this.data.state.location_levels?.[id] || this.data.levels) {
       const value = levels[level.id];
       if (value === undefined || value === '') continue;
       const text = level.options.length
@@ -134,13 +135,15 @@ export class MockStore {
         Object.entries(data.products).map(([id, product]) => ({
           id: Number(id),
           text: `${product.ref} — ${product.label}`,
+          label: product.label,
+          ref: product.ref,
         }))
       );
     if (resource === 'orders') return matching(data.orders.map(({ id, text }) => ({ id, text })));
     if (resource === 'references') return matching(data.references[params.get('type')] || []);
     if (resource === 'levels') {
       this.warehouse(params.get('warehouse_id'));
-      return data.levels;
+      return data.state.location_levels?.[params.get('warehouse_id')] || data.levels;
     }
     if (resource === 'serial-check') {
       const product = Number(params.get('product_id'));
@@ -194,7 +197,7 @@ export class MockStore {
         'items',
         'batches',
         'personal_warehouses',
-        'binloc_label_settings',
+        'location_label_settings',
         'pending_native',
       ])
     );
@@ -323,7 +326,7 @@ export class MockStore {
           : type === 'unassigned'
             ? 0
             : 1,
-      serial: String(payload.label_as_serial ? payload.label || '' : payload.serial || '').trim(),
+      serial: String(payload.serial || '').trim(),
       native_batch: '',
       details: String(payload.details || ''),
       warehouse_id: 0,
@@ -349,7 +352,28 @@ export class MockStore {
     if (type === 'tracked' || type === 'box') {
       if (type === 'tracked')
         requireValue(Buffer.byteLength(item.serial, 'utf8') <= 100, 'Serial number is too long');
-      item.serial = type === 'tracked' ? item.serial || `MOCK-SERIAL-${code}` : '';
+      const linkedLot = [...this.data.lots, ...Object.values(this.data.state.items)].find(
+        lot =>
+          lot.product_id === item.product_id &&
+          item.serial &&
+          lot.serial?.toLowerCase() === item.serial.toLowerCase()
+      );
+      const prefix =
+        String(this.data.products[item.product_id].serial_prefix || '').trim() || 'SN-';
+      if (type === 'tracked' && !existing?.product_lot_id && !linkedLot) {
+        requireValue(
+          Buffer.byteLength(prefix, 'utf8') <= 76 && !/[\s\p{Cc}<>]/u.test(prefix),
+          'Serial prefix must be at most 76 UTF-8 bytes without whitespace or markup'
+        );
+      }
+      item.serial =
+        type !== 'tracked'
+          ? ''
+          : existing?.product_lot_id
+            ? existing.serial
+            : linkedLot
+              ? linkedLot.serial
+              : `${prefix}${randomBytes(12).toString('hex').toUpperCase()}`;
       item.native_batch = type === 'tracked' ? item.serial : item.label;
       const collision = Object.values(this.data.state.items).some(
         row =>
@@ -398,6 +422,30 @@ export class MockStore {
 
   mutate(action, payload) {
     const state = this.data.state;
+    if (action === 'delete-unassigned') {
+      const item = this.item(payload.code);
+      requireValue(
+        item.type === 'unassigned' &&
+          !item.product_id &&
+          !item.warehouse_id &&
+          !item.product_lot_id &&
+          !item.serial &&
+          !item.native_batch &&
+          !item.qty &&
+          !item.consumed_units &&
+          !item.checkout &&
+          !item.pending_operation &&
+          !item.pending_handoff,
+        'Only unassigned QR codes without inventory or pending operations can be deleted',
+        409
+      );
+      delete state.items[payload.code];
+      for (const [id, batch] of Object.entries(state.batches)) {
+        batch.codes = batch.codes.filter(code => code !== payload.code);
+        if (!batch.codes.length) delete state.batches[id];
+      }
+      return null;
+    }
     if (action === 'native-recover' || action === 'native-cancel') {
       requireValue(state.pending_native, 'No pending synchronization');
       delete state.pending_native;
@@ -407,9 +455,7 @@ export class MockStore {
       const count = action === 'bulk' ? quantity(payload.count, 1) : 1;
       requireValue(count <= 200, 'Maximum 200 labels per batch');
       const namedItems =
-        payload.type === 'box' ||
-        (payload.type === 'tracked' &&
-          (payload.label_as_serial || Object.hasOwn(payload, 'labels')));
+        payload.type === 'box' || (payload.type === 'tracked' && Object.hasOwn(payload, 'labels'));
       if (action === 'bulk' && namedItems) {
         requireValue(
           Array.isArray(payload.labels) &&
@@ -418,45 +464,13 @@ export class MockStore {
           'Enter one label per individual item.'
         );
       }
-      if (action === 'bulk' && payload.type === 'tracked')
-        requireValue(
-          typeof (payload.serial ?? '') === 'string' &&
-            Buffer.byteLength(payload.serial || '', 'utf8') <= 100,
-          'Serial prefixes must be at most 100 bytes'
-        );
       const codes = [];
       for (let index = 0; index < count; index++) {
         const code = makeCode(++this.data.sequence);
         let fields = payload;
         if (action === 'bulk' && ['tracked', 'box'].includes(payload.type)) {
           const label = namedItems ? String(payload.labels[index]).trim() : payload.label;
-          const prefix =
-            `${this.data.products[payload.product_id]?.ref}-${payload.serial || label || 'SN'}`
-              .toUpperCase()
-              .replace(/[^A-Z0-9]+/g, '-')
-              .slice(0, 60);
-          const serial =
-            payload.type === 'box' || payload.label_as_serial
-              ? String(payload.labels[index]).trim()
-              : `${prefix}-${code}`;
-          requireValue(
-            serial && Buffer.byteLength(serial, 'utf8') <= 100,
-            'Invalid or too long serial'
-          );
-          requireValue(
-            !this.data.lots.some(
-              lot =>
-                lot.product_id === payload.product_id &&
-                lot.serial.toLowerCase() === serial.toLowerCase()
-            ),
-            'A serial number in this batch already exists in Dolibarr: ' + serial
-          );
-          fields = {
-            ...payload,
-            serial,
-            label,
-            label_as_serial: false,
-          };
+          fields = { ...payload, label, serial: '' };
         }
         state.items[code] = this.fields(fields, code);
         codes.push(code);
@@ -531,9 +545,63 @@ export class MockStore {
       else state.personal_warehouses[payload.user_id] = this.warehouse(payload.warehouse_id);
       return true;
     }
+    if (action === 'location-configure') {
+      this.warehouse(payload.warehouse_id);
+      requireValue(
+        !Object.values(state.items).some(item => item.pending_operation || item.pending_handoff),
+        'Resolve pending stock operations before changing location definitions'
+      );
+      const old = state.location_levels?.[payload.warehouse_id] || this.data.levels;
+      requireValue(
+        Array.isArray(payload.names) && payload.names.length > 0 && payload.names.length <= 8,
+        'Configure between one and eight location levels'
+      );
+      requireValue(
+        !Object.values(state.items).some(
+          item => item.warehouse_id === payload.warehouse_id && item.bin
+        ) || payload.names.length >= old.length,
+        'Cannot remove location levels while locations are in use'
+      );
+      const names = payload.names.map(name => String(name).trim());
+      requireValue(
+        names.every(name => name && Buffer.byteLength(name, 'utf8') <= 64) &&
+          new Set(names.map(name => name.toLowerCase())).size === names.length,
+        'Location level names must be nonempty and unique'
+      );
+      state.location_levels ||= {};
+      state.location_levels[payload.warehouse_id] = names.map((label, index) => {
+        const level = structuredClone(
+          old[index] || {
+            id: Math.max(...old.map(level => level.id)) + index - old.length + 1,
+            datatype: 'text',
+            options: [],
+          }
+        );
+        level.label = label;
+        if (['list', 'letter'].includes(level.datatype)) {
+          for (const raw of payload.options?.[level.id] || []) {
+            const value = String(raw)
+              .replace(/<[^>]*>/g, '')
+              .trim();
+            requireValue(
+              value && Buffer.byteLength(value, 'utf8') <= 64,
+              'Invalid location option'
+            );
+            if (!level.options.some(option => option.value.toLowerCase() === value.toLowerCase())) {
+              level.options.push({
+                id: Math.max(0, ...level.options.map(option => option.id)) + 1,
+                value,
+              });
+            }
+          }
+        }
+        return level;
+      });
+      return state.location_levels[payload.warehouse_id];
+    }
     if (action === 'label-settings') {
       this.warehouse(payload.warehouse_id);
-      state.binloc_label_settings[payload.warehouse_id] = { ...payload.format, enabled: true };
+      state.location_label_settings[payload.warehouse_id] = { ...payload.format, enabled: true };
       return true;
     }
     if (action === 'reconcile') {

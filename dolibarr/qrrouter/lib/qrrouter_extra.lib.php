@@ -1,5 +1,5 @@
 <?php
-/** Pure aggregation, Binloc read adapter, and order picking helpers. */
+/** C# aggregation queries and native order picking facts. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }

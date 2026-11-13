@@ -16,7 +16,6 @@ function qrr_related_target($db, $user, $kind, $id) {
         throw new DomainException('Native object is inaccessible');
     }
     $object = null;
-    $binloc = '';
     if ($kind === 'product') {
         $object = qrr_product($db, $id);
         if (!$object || !qrr_native_read_access($user, 'produit', $id, 'product&product')) {
@@ -24,7 +23,6 @@ function qrr_related_target($db, $user, $kind, $id) {
         }
         $ref = $object->ref;
         $path = '/product/card.php';
-        $binloc = '/binloc/tab_product_locations.php';
     } elseif ($kind === 'warehouse') {
         $warehouses = qrr_warehouses($db);
         if (
@@ -40,7 +38,6 @@ function qrr_related_target($db, $user, $kind, $id) {
         }
         $ref = $warehouses[$id]['ref'];
         $path = '/product/stock/card.php';
-        $binloc = '/binloc/tab_warehouse_locations.php';
     } elseif ($kind === 'lot') {
         require_once DOL_DOCUMENT_ROOT . '/product/stock/class/productlot.class.php';
         $object = new Productlot($db);
@@ -82,7 +79,7 @@ function qrr_related_target($db, $user, $kind, $id) {
             'ref' => $reference['ref'],
             'url' => $reference['url'],
             'object' => null,
-            'binloc_url' => '',
+            'locations_url' => '',
         ];
     } else {
         throw new InvalidArgumentException('Unknown native object type');
@@ -93,10 +90,10 @@ function qrr_related_target($db, $user, $kind, $id) {
         'ref' => (string) $ref,
         'object' => $object,
         'url' => dol_buildpath($path, 1) . '?id=' . $id,
-        'binloc_url' =>
-            $binloc !== '' && qrr_locations_right($user)
-                ? dol_buildpath($binloc, 1) . '?id=' . $id
-                : '',
+        'locations_url' =>
+            $kind === 'warehouse'
+                ? qrr_app_link('locations', ['warehouse_id' => $id])
+                : qrr_related_url($kind, $id),
     ];
 }
 
@@ -128,7 +125,7 @@ function qrr_related_items($items, $kind, $id) {
     });
 }
 
-/** Keep the native tab strip, including Binloc and other installed extensions. */
+/** Keep the native tab strip, including other installed warehouse extensions. */
 function qrr_related_head($target) {
     if ($target['kind'] === 'warehouse') {
         require_once DOL_DOCUMENT_ROOT . '/core/lib/stock.lib.php';

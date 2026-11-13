@@ -20,6 +20,7 @@ FILES = [
     'core/lib/security.lib.php',
     'core/lib/admin.lib.php',
     'core/modules/DolibarrModules.class.php',
+    'core/class/extrafields.class.php',
     'user/class/user.class.php',
     'core/modules/modStock.class.php',
     'commande/class/commande.class.php',

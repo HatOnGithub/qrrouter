@@ -18,6 +18,10 @@
     <dd>{{ stats().pending }}</dd>
   </div>
 </dl>
+<div class="actions no-print">
+  <button mat-stroked-button (click)="exportCsv()">{{ 'Export current view as CSV' | t }}</button>
+  <a mat-stroked-button routerLink="/csv">{{ 'CSV import and export' | t }}</a>
+</div>
 <qrr-card [title]="(loans ? 'Loaned items' : 'All items') | t">
   <div class="grid no-print">
     <mat-form-field appearance="outline">

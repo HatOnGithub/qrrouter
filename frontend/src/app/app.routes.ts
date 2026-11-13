@@ -3,6 +3,10 @@ import { Routes } from '@angular/router';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'inventory' },
   {
+    path: 'csv',
+    loadComponent: () => import('@features/csv/csv.component').then(m => m.CsvComponent),
+  },
+  {
     path: 'inventory',
     loadComponent: () =>
       import('@features/inventory/inventory.component').then(m => m.InventoryComponent),

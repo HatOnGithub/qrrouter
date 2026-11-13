@@ -45,6 +45,12 @@ jobs:
       - name: Check end-to-end test types
         run: npm run typecheck:e2e:mock
 
+      - name: Test print models
+        run: npm run test:labels
+
+      - name: Test CSV files
+        run: npm run test:csv
+
       - name: Test mock API
         run: npm run test:mock
 

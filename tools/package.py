@@ -32,7 +32,7 @@ if not module_version or any(value != version for value in [
     raise SystemExit('Frontend, lockfile, Dolibarr module and service versions must match.')
 output = root / f'artifacts/module_qrrouter-{release_tag}.zip'
 output.parent.mkdir(parents=True, exist_ok=True)
-if not (module / 'spa/index.html').is_file():
+if not all((module / path).is_file() for path in ['spa/index.html', 'spa/print/main.js', 'spa/print/model.js']):
     raise SystemExit('Build the Angular frontend first: python tools/build-frontend.py')
 with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
     for source in sorted(module.rglob('*')):

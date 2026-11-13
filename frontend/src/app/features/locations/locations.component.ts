@@ -32,6 +32,9 @@ export class LocationsComponent {
   protected show: Record<string, boolean> = {};
   protected separator: Record<string, string> = {};
   protected showWarehouse = false;
+  protected levelNames = '';
+  protected newOptions: Record<number, string> = {};
+
   private sequence = 0;
 
   constructor() {
@@ -65,19 +68,65 @@ export class LocationsComponent {
         const levels = await this.api.levels(this.warehouse);
         if (request !== this.sequence) return;
         this.levels.set(levels);
-        const prefs = this.api.context()!.state.binloc_label_settings?.[this.warehouse];
+        this.newOptions = {};
+        this.levelNames = levels.map(level => level.label).join('\n');
+        const prefs = this.api.context()!.state.location_label_settings?.[this.warehouse];
         this.show = {};
         this.separator = {};
         this.showWarehouse = prefs?.show_warehouse || false;
         for (const level of levels) {
           this.show[level.id] = prefs ? !!prefs.show[level.id] : true;
-          this.separator[level.id] = prefs?.separator[level.id] || '-';
+          this.separator[level.id] = prefs?.separator?.[level.id] ?? '-';
         }
       }
     } catch (error) {
       if (request === this.sequence) this.error.set(this.api.message(error));
     } finally {
       if (request === this.sequence) this.busy.set(false);
+    }
+  }
+
+  protected async saveLevels(): Promise<void> {
+    this.busy.set(true);
+    this.error.set('');
+    try {
+      await this.api.command('location-configure', {
+        warehouse_id: this.warehouse,
+        options: Object.fromEntries(
+          Object.entries(this.newOptions).map(([id, text]) => [
+            id,
+            text
+              .split(/\r?\n/)
+              .map(value => value.trim())
+              .filter(Boolean),
+          ])
+        ),
+        names: this.levelNames
+          .split(/\r?\n/)
+          .map(name => name.trim())
+          .filter(Boolean),
+      });
+      await this.load(true, this.bin);
+      this.notice.set('Location levels saved');
+    } catch (error) {
+      this.error.set(this.api.message(error));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected async importLocations(): Promise<void> {
+    this.busy.set(true);
+    this.error.set('');
+    try {
+      await this.api.command('location-import', {});
+      await this.api.refresh();
+      await this.load(true, this.bin);
+      this.notice.set('Locations imported into QR Router');
+    } catch (error) {
+      this.error.set(this.api.message(error));
+    } finally {
+      this.busy.set(false);
     }
   }
 

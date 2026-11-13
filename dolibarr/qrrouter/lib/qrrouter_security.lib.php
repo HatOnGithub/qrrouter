@@ -15,7 +15,7 @@ function qrr_module_enabled() {
     if (!function_exists('isModEnabled')) {
         return false;
     }
-    foreach (['qrrouter', 'product', 'stock', 'productbatch', 'binloc'] as $module) {
+    foreach (['qrrouter', 'product', 'stock', 'productbatch'] as $module) {
         if (!isModEnabled($module)) {
             return false;
         }
@@ -29,8 +29,7 @@ function qrr_inventory_right($user) {
     return qrr_read_right($user) && qrr_products_right($user) && qrr_stock_read_right($user);
 }
 function qrr_locations_right($user) {
-    return qrr_inventory_right($user) &&
-        (!empty($user->admin) || $user->hasRight('binloc', 'read'));
+    return qrr_inventory_right($user);
 }
 function qrr_users_read_all($user) {
     return qrr_internal_user($user) &&
@@ -176,7 +175,7 @@ function qrr_browser_inventory($db) {
         'batches' => [],
         'history' => [],
         'personal_warehouses' => [],
-        'binloc_label_settings' => [],
+        'location_label_settings' => [],
     ];
     foreach ($raw['items'] as $code => $item) {
         if (!qrr_item_visible($db, $item, $warehouses, $products)) {
@@ -242,10 +241,10 @@ function qrr_browser_inventory($db) {
     }
     if (qrr_locations_right($user)) {
         foreach (
-            array_intersect_key($raw['binloc_label_settings'] ?? [], $warehouses)
+            array_intersect_key($raw['location_label_settings'] ?? [], $warehouses)
             as $wid => $settings
         ) {
-            $state['binloc_label_settings'][$wid] = array_intersect_key(
+            $state['location_label_settings'][$wid] = array_intersect_key(
                 $settings,
                 array_flip(['enabled', 'show', 'separator', 'show_warehouse']),
             );

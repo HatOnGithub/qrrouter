@@ -22,6 +22,7 @@ export class LocationFieldsComponent {
   private api = inject(InventoryService);
   readonly warehouse = input(0);
   readonly initial = input<Record<string, string | number>>({});
+  readonly initialLabel = input('');
   readonly disabled = input(false);
   readonly selected = output<Record<string, string | number>>();
   protected levels = signal<Level[]>([]);
@@ -47,7 +48,14 @@ export class LocationFieldsComponent {
     this.loading.set(true);
     try {
       const levels = await this.api.levels(wid);
-      if (request === this.sequence) this.levels.set(levels);
+      if (request === this.sequence) {
+        this.levels.set(levels);
+        // A removed legacy provider must not turn stored option IDs into a location name.
+        if (levels.length === 1 && levels[0].label === 'Location' && this.initialLabel()) {
+          this.values = { [levels[0].id]: this.initialLabel() };
+          this.selected.emit(this.values);
+        }
+      }
     } catch (error) {
       if (request === this.sequence) this.error.set(this.api.message(error));
     } finally {

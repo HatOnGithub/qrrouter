@@ -27,7 +27,7 @@ This lookup does not change stock.
 1. Print blank labels if needed, then open **Scan QR > Register items**.
 2. Scan or enter all labels you want to assign.
 3. Select **Assign details** to open the separate details page.
-4. Choose **QR type**, product, warehouse and Binloc location.
+4. Choose **QR type**, product, warehouse and QR Router location.
 5. For a generic unit, leave the item name blank for the product short name or enter an override. Several selected labels can share these details.
 6. For an individual or container, register one QR at a time. Enter the individual name and serial options, or the box lot name and quantity.
 7. Review any serial warning, then select **Save**. Use **Change selection** to return without losing the details draft.
@@ -40,7 +40,7 @@ An existing serial must have no QR association. Linking it preserves its native 
 1. Open **Scan QR > Move items**.
 2. Scan all items to move, then select **Review selected items**.
 3. Check the selected rows and their current locations; deselect anything to leave behind.
-4. Choose **Destination warehouse** and its Binloc location fields. Choose the same warehouse for a bin-only move.
+4. Choose **Destination warehouse** and its QR Router location fields. Choose the same warehouse for a bin-only move.
 5. Enter **Reason / purpose** if useful.
 6. Select **Confirm operation** and check each result.
 
@@ -64,7 +64,7 @@ The selected reference and reason appear in the item history.
 1. Open **Scan QR > Return items**, or select **Return** on a consumed item's detail page.
 2. Add the relevant QR IDs and select **Review selected items**.
 3. Enter the quantities to restore, within the item's consumed quantity.
-4. Choose **Destination warehouse**, Binloc location and **Reason / purpose**.
+4. Choose **Destination warehouse**, QR Router location and **Reason / purpose**.
 5. Review **Post native Dolibarr stock movement** as described for consumption.
 6. Select **Confirm operation** and check the restored quantities.
 

@@ -1,0 +1,23 @@
+:host {
+  display: block;
+}
+.file-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+input[type='file'] {
+  max-width: 100%;
+  margin-bottom: 16px;
+}
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+td {
+  max-width: 34ch;
+  overflow-wrap: anywhere;
+}
+small {
+  display: block;
+}

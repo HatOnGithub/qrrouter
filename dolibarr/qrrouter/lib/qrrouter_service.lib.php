@@ -88,6 +88,12 @@ function qrr_service($method, $action, $data = null) {
     }
     $result = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
     if ($status < 200 || $status >= 300) {
+        if ($status === 400) {
+            throw new InvalidArgumentException($result['message'] ?? 'Invalid QR request');
+        }
+        if ($status === 403) {
+            throw new DomainException($result['message'] ?? 'Missing Dolibarr permission');
+        }
         throw new RuntimeException($result['message'] ?? 'QR service rejected the request');
     }
     return $action === '' ? $result : $result['result'] ?? null;
@@ -104,7 +110,7 @@ function qrr_command($action, $data) {
     return qrr_service('POST', $action, $data);
 }
 
-/** Dolibarr supplies trusted product/warehouse/Binloc facts; C# validates QR domain rules. */
+/** Dolibarr supplies trusted native product/warehouse facts; C# validates QR domain rules. */
 function qrr_service_fields(
     $type,
     $label,

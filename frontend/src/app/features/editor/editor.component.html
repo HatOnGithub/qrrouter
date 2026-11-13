@@ -80,11 +80,7 @@
                     (ngModelChange)="checkSerial()"
                     [maxlength]="model.type === 'box' ? 100 : 140"
                     [required]="model.type === 'box'"
-                    [readonly]="
-                      editing &&
-                      !!original?.product_lot_id &&
-                      (model.type === 'box' || model.label_as_serial)
-                    "
+                    [readonly]="editing && !!original?.product_lot_id && model.type === 'box'"
                   />
                   @if (model.type === 'generic') {
                     <mat-hint>
@@ -99,7 +95,7 @@
               <div>
                 <qrr-lookup
                   [label]="'Dolibarr product'"
-                  (selected)="model.product_id = $event?.id || 0; checkSerial()"
+                  (selected)="productSelected($event)"
                   [disabled]="editing && !!original?.product_id"
                 />
                 <p class="muted">
@@ -151,6 +147,7 @@
             <qrr-location-fields
               [warehouse]="model.warehouse_id"
               [initial]="initialLevels"
+              [initialLabel]="initialBin"
               (selected)="model.levels = $event"
             />
             @if (model.keep_legacy) {
@@ -160,13 +157,9 @@
             }
             @if (model.type === 'tracked') {
               <div class="grid">
-                @if (!model.label_as_serial) {
+                @if (registering || (editing && !!original?.product_lot_id)) {
                   <mat-form-field appearance="outline">
-                    <mat-label>
-                      {{
-                        (bulkAssigned ? 'Serial prefix (optional)' : 'Dolibarr serial number') | t
-                      }}
-                    </mat-label>
+                    <mat-label>{{ 'Dolibarr serial number' | t }}</mat-label>
                     <input
                       matInput
                       name="serial"
@@ -175,30 +168,26 @@
                       maxlength="100"
                       [readonly]="editing && !!original?.product_lot_id"
                     />
-                    @if (!editing) {
+                    @if (registering) {
                       <mat-hint>
                         {{
-                          (bulkAssigned
-                            ? 'A new serial number is generated for every label, using this prefix when supplied.'
-                            : 'Leave blank to generate a new Dolibarr serial number.'
-                          ) | t
+                          'Enter an existing serial to link it, or leave blank to generate a random serial.'
+                            | t
                         }}
                       </mat-hint>
                     }
                   </mat-form-field>
+                } @else {
+                  <p class="muted">
+                    {{
+                      'A random serial number is generated for every new tracked individual.' | t
+                    }}
+                  </p>
                 }
                 @if (serialWarning()) {
                   <p class="alert" role="status">{{ serialWarning() | t }}</p>
                 }
               </div>
-              <mat-checkbox
-                name="labelAsSerial"
-                [(ngModel)]="model.label_as_serial"
-                (ngModelChange)="checkSerial()"
-                [disabled]="editing && !!original?.product_lot_id"
-              >
-                {{ 'Use label as serial number' | t }}
-              </mat-checkbox>
               <mat-form-field appearance="outline">
                 <mat-label>{{ 'Tracked-item details' | t }}</mat-label>
                 <textarea
@@ -231,9 +220,7 @@
                   {{
                     (model.type === 'box'
                       ? 'Box names are used exactly as entered. Lot names must be unique.'
-                      : model.label_as_serial
-                        ? 'Labels are used exactly as entered. Serial numbers must be unique.'
-                        : 'A new serial number is generated for each entered label.'
+                      : 'A random serial number is generated for each entered label.'
                     ) | t
                   }}
                 </mat-hint>
@@ -253,7 +240,7 @@
             @if (model.type === 'tracked' || model.type === 'box') {
               <p class="muted">
                 {{
-                  'Choose a Dolibarr product with lot/serial tracking enabled. The serial or box name is separate from the QR lookup ID. Locations are saved in Binloc.'
+                  'Choose a Dolibarr product with lot/serial tracking enabled. The serial or box name is separate from the QR lookup ID. Locations are saved in QR Router.'
                     | t
                 }}
               </p>
@@ -286,10 +273,6 @@
                 textTooLong() ||
                 form.invalid ||
                 (registering && !codes().length) ||
-                (model.type === 'tracked' &&
-                  model.label_as_serial &&
-                  !bulkAssigned &&
-                  (!model.label.trim() || model.label.length > 100)) ||
                 (namedItems() &&
                   (duplicateLabels() ||
                     !individualLabels().length ||

@@ -1,60 +1,18 @@
 <?php
-/** Native lot/serial identity, stock and Binloc persistence (Dolibarr 21+ / Binloc 2.19+). */
+/** Native lot/serial identity, stock persistence (Dolibarr 21+); locations belong to the C# service. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
-}
-
-function qrr_native_location($db) {
-    $path = dol_buildpath('/binloc/class/binlocproductlocation.class.php', 0);
-    if (!$path || !is_file($path)) {
-        throw new RuntimeException('Binloc 2.19 or newer is required for lot/serial locations');
-    }
-    require_once $path;
-    $location = new BinlocProductLocation($db);
-    foreach (['fetchAnyByLot', 'setRawValues', 'createOrUpdate'] as $method) {
-        if (!is_callable([$location, $method])) {
-            throw new RuntimeException(
-                'Installed Binloc lacks the required lot/serial APIs. Install a compatible Binloc 2.19.1 or newer.',
-            );
-        }
-    }
-    return $location;
 }
 
 function qrr_native_rights($user) {
     if (
         !qrr_stock_write_right($user) ||
-        (empty($user->admin) &&
-            (!$user->hasRight('binloc', 'write') || !$user->hasRight('produit', 'creer')))
+        (empty($user->admin) && !$user->hasRight('produit', 'creer'))
     ) {
-        throw new DomainException(
-            'Stock movement, product creation and Binloc write permissions required',
-        );
+        throw new DomainException('Stock movement and product creation permissions required');
     }
 }
 
-function qrr_native_location_matches($db, $lotId, $productId, $target) {
-    $location = qrr_native_location($db);
-    if (
-        $location->fetchAnyByLot((int) $lotId) <= 0 ||
-        (int) $location->fk_product !== (int) $productId ||
-        (int) $location->fk_entrepot !== (int) $target['warehouse_id']
-    ) {
-        return false;
-    }
-    $actual = [];
-    foreach ($location->values as $id => $value) {
-        $actual[(string) $id] = (string) (!empty($value->fk_option)
-            ? $value->fk_option
-            : $value->value);
-    }
-    $expected = array_map('strval', (array) ($target['bin_values'] ?? []));
-    ksort($actual);
-    ksort($expected);
-    return $actual === $expected;
-}
-
-/** Generate a native serial before staging, so recovery reuses the same identity. */
 function qrr_native_serial_exists($db, $productId, $serial) {
     require_once DOL_DOCUMENT_ROOT . '/product/stock/class/productlot.class.php';
     if (!qrr_product($db, (int) $productId)) {
@@ -68,33 +26,6 @@ function qrr_native_serial_exists($db, $productId, $serial) {
         );
     }
     return $found > 0;
-}
-
-function qrr_native_generate_serial($db, $productId, $label) {
-    require_once DOL_DOCUMENT_ROOT . '/product/stock/class/productlot.class.php';
-    $product = qrr_product($db, (int) $productId);
-    if (!$product) {
-        throw new InvalidArgumentException('Unknown product');
-    }
-    $prefix = trim(
-        preg_replace('/[^A-Z0-9]+/', '-', strtoupper($product->ref . '-' . $label)),
-        '-',
-    );
-    $prefix = rtrim(substr($prefix, 0, 60), '-');
-    for ($attempt = 0; $attempt < 10; $attempt++) {
-        $serial = ($prefix !== '' ? $prefix : 'SN') . '-' . strtoupper(bin2hex(random_bytes(12)));
-        $lot = new Productlot($db);
-        $found = $lot->fetch(0, (int) $productId, $serial);
-        if ($found < 0) {
-            throw new RuntimeException(
-                qrr_native_error('Cannot check Dolibarr serial availability', $lot->error),
-            );
-        }
-        if ($found === 0) {
-            return $serial;
-        }
-    }
-    throw new RuntimeException('Cannot generate an unused Dolibarr serial number');
 }
 
 function qrr_native_lot($db, $item, $create = false) {
@@ -231,41 +162,12 @@ function qrr_native_observations($db, $state) {
         [, $lot] = qrr_native_lot($db, $item);
         $item['native_batch'] = (string) $lot->batch;
         $stocks = qrr_native_lot_warehouses($db, $item);
-        $location = qrr_native_location($db);
-        $found = $location->fetchAnyByLot((int) $lot->id);
-        if ($found < 0) {
-            throw new RuntimeException('Cannot read native Binloc assignment');
-        }
-        $wid = $found > 0 ? (int) $location->fk_entrepot : (int) $item['warehouse_id'];
+        $wid = (int) $item['warehouse_id'];
         if ($stocks && !isset($stocks[$wid])) {
             $wid = (int) array_key_first($stocks);
-            $found = 0; // Dolibarr moved the stock; the old warehouse's bin cannot follow it.
         }
-        if (
-            !isset($warehouses[$wid]) ||
-            ($found > 0 && (int) $location->fk_product !== (int) $item['product_id'])
-        ) {
-            throw new RuntimeException(
-                'Native Binloc assignment outside accessible product or warehouse',
-            );
-        }
-        $values = [];
-        $parts = [];
-        $key = [];
-        foreach (qrr_binloc_levels($db, $wid) as $id => $cfg) {
-            $value = $found > 0 ? $location->values[$id] ?? null : null;
-            if (!$value) {
-                continue;
-            }
-            $values[$id] = !empty($value->fk_option)
-                ? (int) $value->fk_option
-                : (string) $value->value;
-            $parts[] = (string) $value->display;
-            $key[] =
-                $id .
-                (!empty($value->fk_option)
-                    ? ':o' . $value->fk_option
-                    : ':v' . strtolower($value->value));
+        if (!isset($warehouses[$wid])) {
+            throw new RuntimeException('Stock warehouse is inaccessible');
         }
         $qty = qrr_native_lot_qty($db, $item, $wid);
         if ($item['type'] === 'tracked' && $qty > 1) {
@@ -274,9 +176,11 @@ function qrr_native_observations($db, $state) {
         $observations[$code] = [
             'warehouse_id' => $wid,
             'qty' => $qty,
-            'bin' => qrr_binloc_display_code($db, $wid, qrr_binloc_levels($db, $wid), $parts),
-            'bin_key' => implode('|', $key),
-            'bin_values' => (object) $values,
+            'bin' => $wid === (int) $item['warehouse_id'] ? (string) ($item['bin'] ?? '') : '',
+            'bin_key' =>
+                $wid === (int) $item['warehouse_id'] ? (string) ($item['bin_key'] ?? '') : '',
+            'bin_values' =>
+                (object) ($wid === (int) $item['warehouse_id'] ? $item['bin_values'] ?? [] : []),
             'native_batch' => (string) $lot->batch,
             'serial' => $item['type'] === 'tracked' ? (string) $lot->batch : '',
             'label' => $item['type'] === 'box' ? (string) $lot->batch : $item['label'],
@@ -289,26 +193,6 @@ function qrr_native_observations($db, $state) {
         ];
     }
     return $observations;
-}
-
-function qrr_native_save_location($db, $user, $item, $lotId) {
-    qrr_native_rights($user);
-    $wid = (int) $item['warehouse_id'];
-    if (!isset(qrr_warehouses($db)[$wid])) {
-        throw new RuntimeException('Warehouse outside accessible entities');
-    }
-    $location = qrr_native_location($db);
-    $location->fk_product = (int) $item['product_id'];
-    $location->fk_entrepot = $wid;
-    $location->fk_product_lot = (int) $lotId;
-    $values = (array) ($item['bin_values'] ?? []);
-    $levels = qrr_binloc_levels($db, $wid);
-    qrr_binloc_parse_levels($levels, $values);
-    if ($location->setRawValues($levels, $values) < 0 || $location->createOrUpdate($user) <= 0) {
-        throw new RuntimeException(
-            qrr_native_error('Cannot save Binloc assignment', $location->error),
-        );
-    }
 }
 
 function qrr_native_receipt($db, $id) {
@@ -450,7 +334,6 @@ function qrr_native_complete($db, $user, $pending) {
                         );
                     }
                 }
-                qrr_native_save_location($db, $user, $after, (int) $lot->id);
             }
             if (
                 !$db->query(

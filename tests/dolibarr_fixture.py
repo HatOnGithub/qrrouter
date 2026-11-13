@@ -83,7 +83,7 @@ class Product {
  public function hasbatch(){return false;}
  public $array_options=[];
  public function fetch_optionals(){
-  $this->array_options=['options_description'=>'<p>Heat</p><p>resistant</p>','options_material'=>'2','options_supplier_code'=>'ACME-204','options_zero'=>'0','options_admin_only'=>'ADMIN-ALLOY','options_product_only'=>'Product-specific','options_password'=>'EXTRA_PASSWORD_SECRET','options_hidden'=>'EXTRA_HIDDEN_SECRET','options_disabled'=>'EXTRA_DISABLED_SECRET','options_hidden_attribute'=>'EXTRA_HIDDEN_ATTRIBUTE_SECRET','options_unknown'=>'EXTRA_UNKNOWN_SECRET'];return 1;
+  $this->array_options=['options_description'=>'<p>Heat</p><p>resistant</p>','options_material'=>'2','options_supplier_code'=>'ACME-204','options_zero'=>'0','options_admin_only'=>'ADMIN-ALLOY','options_product_only'=>'Product-specific','options_password'=>'EXTRA_PASSWORD_SECRET','options_hidden'=>'EXTRA_HIDDEN_SECRET','options_disabled'=>'EXTRA_DISABLED_SECRET','options_hidden_attribute'=>'EXTRA_HIDDEN_ATTRIBUTE_SECRET','options_unknown'=>'EXTRA_UNKNOWN_SECRET','options_qrrouter_serial_prefix'=>$this->db->state()['serial_prefixes'][$this->id]??''];return 1;
  }
  public function load_stock($mode=''){return 1;}
  public function correct_stock($user,$wid,$qty,$movement,$label='',$price=0,$inventorycode=''){

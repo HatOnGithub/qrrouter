@@ -1,5 +1,5 @@
 <?php
-/** Native warehouse stock transfers and lot-specific Binloc assignments for QR handoffs. */
+/** Native warehouse stock transfers and lot-specific internal location assignments for QR handoffs. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
@@ -83,14 +83,6 @@ function qrr_transfer_evidence($db, $pending) {
         }
     }
     $proof = ['out' => $out, 'in' => $in, 'extra' => $extra];
-    if (!empty($pending['product_lot_id'])) {
-        $proof['location'] = qrr_native_location_matches(
-            $db,
-            $pending['product_lot_id'],
-            $pending['product_id'],
-            $pending['location_target'],
-        );
-    }
     return $proof;
 }
 
@@ -195,14 +187,6 @@ function qrr_do_native_transfer($db, $user, $item, $pending) {
                     'Native stock increase failed',
                     $product->error ?: implode('; ', (array) $product->errors),
                 ),
-            );
-        }
-        if (!empty($item['product_lot_id'])) {
-            qrr_native_save_location(
-                $db,
-                $user,
-                array_merge($item, $pending['location_target']),
-                $item['product_lot_id'],
             );
         }
         if ($db->commit() <= 0) {

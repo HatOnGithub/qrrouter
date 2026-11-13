@@ -465,7 +465,7 @@ function qrr_products_index($db, $ids) {
 
 require_once __DIR__ . '/qrrouter_thumbnails.lib.php';
 require_once __DIR__ . '/qrrouter_extra.lib.php';
-require_once __DIR__ . '/qrrouter_binloc.lib.php';
+require_once __DIR__ . '/qrrouter_locations.lib.php';
 require_once __DIR__ . '/qrrouter_native.lib.php';
 require_once __DIR__ . '/qrrouter_checkout.lib.php';
 require_once __DIR__ . '/qrrouter_workflows.lib.php';

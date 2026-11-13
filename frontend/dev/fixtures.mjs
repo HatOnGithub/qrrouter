@@ -59,7 +59,7 @@ export function createFixture(scenario = 'populated') {
       items: {},
       batches: {},
       personal_warehouses: { 8: 3 },
-      binloc_label_settings: {},
+      location_label_settings: {},
       history: [],
     },
     products: {

@@ -43,7 +43,7 @@ The frontend mock remains temporary, in-memory sample data for development; it d
 - `frontend/src/app/shared`: reusable controls, capture and location input.
 - `frontend/src/app/core`: browser models and services.
 - `dolibarr/qrrouter/api.php`: authenticated gateway routing and orchestration.
-- `dolibarr/qrrouter/lib`: trusted request preparation, native Dolibarr/Binloc integration, authorization, metadata and printing helpers.
+- `dolibarr/qrrouter/lib`: trusted request preparation, native Dolibarr integration, optional location import, authorization, metadata and printing adapters.
 - `src/QrRouterApi`: QR identities, inventory state, business validation, planning and durable operation handling.
 - `frontend/dev` and `tests`: development mocks and integration fixtures.
 
@@ -58,7 +58,7 @@ python tools/build-frontend.py
 python tools/package.py
 ```
 
-The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.8.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
+The first command builds Angular and copies its production output into `dolibarr/qrrouter/spa`. Packaging validates the project versions and creates `artifacts/module_qrrouter-v0.3.9.zip`. Rebuild before packaging frontend changes; a service build alone does not deploy PHP or frontend changes.
 
 Build the service separately:
 
@@ -152,4 +152,10 @@ npm run format:check
 
 Use `npm run format` to apply the configured frontend and PHP formatting. Keep changes focused on the files you intend to edit.
 
-Fixtures and browser print checks do not replace a live Dolibarr/Binloc installation, physical camera, printer or Docker deployment check.
+Fixtures and browser print checks do not replace checks with a live Dolibarr installation, physical camera, printer or Docker deployment.
+
+## Responsibilities
+
+TypeScript owns the interactive interface and standalone print renderer (`frontend/src/print`). C# owns creation rules, random serial generation, location definitions and validation, stock-operation planning, queries and persistence. PHP authenticates Dolibarr sessions, verifies native object access, forwards authorized data and executes Dolibarr stock/lot APIs. Native hooks and the optional one-time Binloc importer are also PHP adapters; normal location reads and writes never load Binloc classes.
+
+`npm run build` compiles Angular and the standalone print modules. `npm run test:labels` verifies label field selection without PHP. Keep native authorization and transactional stock calls on the server; browser state is never stock evidence.

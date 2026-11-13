@@ -4,8 +4,8 @@
 
 ## Requirements
 
-- An existing Dolibarr installation. The integration targets Dolibarr 21.0.2 and Binloc 2.19.1.
-- Product, Stock, Lot/Serial and Binloc modules enabled.
+- An existing Dolibarr installation. The integration targets Dolibarr 21.0.2 and newer.
+- Product, Stock and Lot/Serial modules enabled. Binloc is not required.
 - PHP cURL and GD, with Dolibarr's QR/TCPDF support available.
 - The .NET 10 ASP.NET Core Runtime on the machine that will run the QR Router business service. A .NET SDK and Node.js are not needed to install release files.
 - An internal Dolibarr administrator account for installation and setup.
@@ -17,11 +17,11 @@ For a new installation, follow the steps below. For an existing installation, fo
 
 1. Open the project's [Releases](https://github.com/HatOnGithub/qrrouter/releases) page and choose a release.
 2. Under **Assets**, download both files for the same version:
-   - `module_qrrouter-v0.3.8.zip`: the installable Dolibarr module, including its built interface.
-   - `qrrouter-service-v0.3.8.zip`: the matching portable business service.
+   - `module_qrrouter-v0.3.9.zip`: the installable Dolibarr module, including its built interface.
+   - `qrrouter-service-v0.3.9.zip`: the matching portable business service.
 3. Download `SHA256SUMS` if you want to verify the files against their published SHA-256 checksums.
 
-The filenames above illustrate v0.3.8; use the matching files from your chosen release. Download the attached module ZIP rather than GitHub's automatically generated **Source code** archive, which does not include the built interface. If no release is available yet, use the [source build instructions](development.md#build-the-installable-module).
+The filenames above illustrate v0.3.9; use the matching files from your chosen release. Download the attached module ZIP rather than GitHub's automatically generated **Source code** archive, which does not include the built interface. If no release is available yet, use the [source build instructions](development.md#build-the-installable-module).
 
 ## 2. Start the business service
 
@@ -63,9 +63,9 @@ The connection key is saved through Dolibarr's native configuration. Leave an al
 
 ## 4. Prepare products, locations and users
 
-1. Create the required products and warehouses in Dolibarr. Enable lot/serial tracking for products used by individual serials or containers.
-2. Configure the warehouse location levels in Binloc.
-3. Grant operators QR read/manage rights and the native product, stock, Binloc and document rights needed for their work. QR permissions do not replace native permissions.
+1. Create the required products and warehouses in Dolibarr. Enable lot/serial tracking for products used by individual serials or containers. Optionally set **QR serial number prefix** in each product's additional attributes; blank uses `SN-` for new individual serials.
+2. Open **QR Router > Bins and locations**, choose a warehouse and save its location level names.
+3. Grant operators QR read/manage rights and the native product, stock, document rights needed for their work. QR permissions do not replace native permissions.
 4. Create active employee users before using checkout. Administrators can map their personal warehouses, or checkout can create one when permitted.
 5. Open QR Router, create a test item or blank label batch, and follow the [user guide](user-guide/README.md).
 

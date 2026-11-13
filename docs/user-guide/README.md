@@ -7,6 +7,7 @@ Open **QR Router** from Dolibarr. On a phone, use **Menu** to open the navigatio
 | Interface area                                                     | Guide                                             |
 | ------------------------------------------------------------------ | ------------------------------------------------- |
 | Inventory, item details, creating and editing                      | [Inventory and items](inventory.md)               |
+| CSV inventory import, export and spreadsheet updates | [CSV import and export](csv.md) |
 | Print QR labels, blank batches, assigned batches and DYMO printing | [Labels and printing](labels.md)                  |
 | Scan QR, manual / USB entry and every warehouse action             | [Scanner workflows](scanner.md)                   |
 | Bins and locations, local label format and Picking                 | [Locations and picking](locations-and-picking.md) |
@@ -16,7 +17,7 @@ Open **QR Router** from Dolibarr. On a phone, use **Menu** to open the navigatio
 
 ## Before using stock actions
 
-Your administrator must enable the module and grant the relevant Dolibarr permissions. Products and warehouses are selected from Dolibarr. Serial items and containers require products with lot/serial tracking enabled; locations use Binloc.
+Your administrator must enable the module and grant the relevant Dolibarr permissions. Products and warehouses are selected from Dolibarr. Serial items and containers require products with lot/serial tracking enabled; locations are stored in QR Router.
 
 Choose the QR type that matches your use:
 

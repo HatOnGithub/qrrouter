@@ -4,7 +4,8 @@ import { SharedModule } from '@shared/shared.module';
 import { LookupComponent } from '@shared/lookup/lookup.component';
 import { LocationFieldsComponent } from '@shared/location-fields/location-fields.component';
 import { InventoryService } from '@services/inventory.service';
-import { ItemType } from '@core/models/inventory';
+import { ItemType, Lookup } from '@core/models/inventory';
+import { TranslationService } from '@services/translation.service';
 import { faArrowLeft, faFloppyDisk, faXmark } from '@fortawesome/free-solid-svg-icons';
 
 @Component({
@@ -18,6 +19,9 @@ import { faArrowLeft, faFloppyDisk, faXmark } from '@fortawesome/free-solid-svg-
 export class EditorComponent {
   protected readonly icons = { back: faArrowLeft, save: faFloppyDisk, cancel: faXmark };
   protected api = inject(InventoryService);
+  private translations = inject(TranslationService);
+  private suggestedLabel = '';
+  private productLabel = '';
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   protected editing = this.route.snapshot.routeConfig?.path === 'edit/:code';
@@ -52,23 +56,18 @@ export class EditorComponent {
     return this.bulkAssigned && (this.model.type === 'box' || this.model.type === 'tracked');
   }
   protected duplicateLabels(): boolean {
-    if (this.model.type === 'tracked' && !this.model.label_as_serial) return false;
+    if (this.model.type !== 'box') return false;
     const labels = this.individualLabels().map(value => value.toLowerCase());
     return new Set(labels).size !== labels.length;
   }
   protected textTooLong(): boolean {
     const length = (value: string) => new TextEncoder().encode(value.trim()).length;
-    const limit =
-      this.model.type === 'box' || (this.model.type === 'tracked' && this.model.label_as_serial)
-        ? 100
-        : 140;
+    const limit = this.model.type === 'box' ? 100 : 140;
     const labels = this.namedItems() ? this.individualLabels() : [this.model.label];
     return (
       this.model.type !== 'unassigned' &&
       (labels.some(label => length(label) > limit) ||
-        (this.model.type === 'tracked' &&
-          !this.model.label_as_serial &&
-          length(this.model.serial) > 100))
+        (this.model.type === 'tracked' && length(this.model.serial) > 100))
     );
   }
   protected model: {
@@ -78,7 +77,6 @@ export class EditorComponent {
     warehouse_id: number;
     qty: number | null;
     serial: string;
-    label_as_serial: boolean;
     native_batch: string;
     details: string;
     levels: Record<string, string | number>;
@@ -90,13 +88,13 @@ export class EditorComponent {
     warehouse_id: 0,
     qty: 1,
     serial: '',
-    label_as_serial: false,
     native_batch: '',
     details: '',
     levels: {},
     keep_legacy: false,
   };
   protected initialLevels: Record<string, string | number> = {};
+  protected initialBin = '';
   protected original = this.editing ? this.api.context()!.state.items[this.code] : undefined;
 
   constructor() {
@@ -122,7 +120,6 @@ export class EditorComponent {
         warehouse_id: source.warehouse_id,
         qty: source.qty,
         serial: this.editing ? source.serial : '',
-        label_as_serial: false,
         native_batch: this.editing ? source.native_batch : '',
         details: this.editing ? source.details : '',
         levels: { ...source.bin_values },
@@ -130,6 +127,7 @@ export class EditorComponent {
       };
       if (!this.editing && source.type === 'box') this.model.qty = null;
       this.initialLevels = { ...source.bin_values };
+      this.initialBin = source.bin;
     }
     if (this.registering && history.state?.draft) {
       this.model = { ...history.state.draft };
@@ -155,18 +153,39 @@ export class EditorComponent {
     if (type !== 'generic' && this.codes().length > 1) this.codes.set([]);
     this.thumbnail = '';
     this.model.qty = type === 'box' ? null : type === 'unassigned' ? 0 : 1;
+    this.prefillLabel();
     if (type !== 'tracked') {
       this.model.serial = '';
-      this.model.label_as_serial = false;
       this.model.native_batch = '';
       this.model.details = '';
     }
+  }
+
+  protected productSelected(product: Lookup | null): void {
+    this.model.product_id = product?.id || 0;
+    this.productLabel = product
+      ? product.label?.trim() || this.api.context()?.products[product.id]?.label || product.text
+      : '';
+    if (product) this.prefillLabel();
+    this.checkSerial();
+  }
+
+  private prefillLabel(): void {
+    if (!this.registering || !this.productLabel || !['generic', 'box'].includes(this.model.type))
+      return;
+    if (this.model.label && this.model.label !== this.suggestedLabel) return;
+    this.suggestedLabel =
+      this.model.type === 'box'
+        ? this.translations.text('Container of {x}').replace('{x}', this.productLabel)
+        : this.productLabel;
+    this.model.label = this.suggestedLabel;
   }
 
   protected warehouseChanged(id: number): void {
     this.model.warehouse_id = id;
     this.model.levels = {};
     this.initialLevels = {};
+    this.initialBin = '';
     this.model.keep_legacy = false;
   }
 
@@ -174,9 +193,10 @@ export class EditorComponent {
     clearTimeout(this.serialTimer);
     const request = ++this.serialRequest;
     this.serialWarning.set('');
-    const serial = (this.model.label_as_serial ? this.model.label : this.model.serial).trim();
+    const serial = this.model.serial.trim();
     const product = this.model.product_id;
     if (
+      !this.registering ||
       !serial ||
       this.bulkAssigned ||
       !product ||
@@ -241,6 +261,7 @@ export class EditorComponent {
             }
           : {
               ...this.model,
+              serial: this.registering || this.editing ? this.model.serial : '',
               count,
               labels: this.namedItems() ? this.individualLabels() : [],
               code: this.code,

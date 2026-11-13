@@ -78,6 +78,9 @@ public static class InventoryQueries
         }
         return action switch
         {
+            "query-location-choice" => Locations.Choice(state, data),
+            "query-location-levels" => Locations.Levels(state, data.I("warehouse_id")),
+            "query-location-label" => JsonValue.Create(Locations.Display(state, data))!,
             "query-bin-summary" => BinSummary(state, data),
             "query-warehouse-summary" => WarehouseSummary(state, data),
             "query-known-bins" => new JsonArray(

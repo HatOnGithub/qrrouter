@@ -17,6 +17,75 @@ after(async () => {
 });
 beforeEach(() => store.reset());
 
+test('new serials use the product prefix in single and bulk creation without accepting browser overrides', () => {
+  store.data.products[2].serial_prefix = 'DRILL-';
+  const code = store.command('create', {
+    type: 'tracked',
+    product_id: 2,
+    warehouse_id: 1,
+    serial_prefix: 'FORGED-',
+  });
+  assert.match(store.data.state.items[code].serial, /^DRILL-[A-F0-9]{24}$/);
+  const batch = store.command('bulk', {
+    type: 'tracked',
+    product_id: 2,
+    warehouse_id: 1,
+    count: 2,
+    labels: ['First', 'Second'],
+    serial_prefix: 'FORGED-',
+  });
+  for (const qr of store.data.state.batches[batch].codes)
+    assert.match(store.data.state.items[qr].serial, /^DRILL-[A-F0-9]{24}$/);
+  store.data.products[2].serial_prefix = 'invalid prefix';
+  const before = structuredClone(store.data);
+  assert.throws(
+    () => store.command('create', { type: 'tracked', product_id: 2, warehouse_id: 1 }),
+    /Serial prefix/
+  );
+  assert.deepEqual(store.data, before);
+});
+
+test('deletion removes only unassigned labels and cleans print batches', () => {
+  const batch = store.command('bulk', { type: 'unassigned', count: 2 });
+  const [code, remaining] = store.data.state.batches[batch].codes;
+  const assigned = Object.values(store.data.state.items).find(item => item.type === 'tracked');
+  const before = structuredClone(store.data);
+  assert.throws(
+    () => store.command('delete-unassigned', { code: assigned.code }),
+    /Only unassigned/
+  );
+  assert.deepEqual(store.data, before);
+  store.command('delete-unassigned', { code });
+  assert.equal(store.data.state.items[code], undefined);
+  assert.deepEqual(store.data.state.batches[batch].codes, [remaining]);
+  store.command('delete-unassigned', { code: remaining });
+  assert.equal(store.data.state.batches[batch], undefined);
+});
+
+test('internal location configuration preserves option identities and blocks pending operations', () => {
+  store.data.state.location_levels = {
+    1: [{ id: 4, label: 'Aisle', datatype: 'list', options: [{ id: 12, value: 'North' }] }],
+  };
+  store.command('location-configure', {
+    warehouse_id: 1,
+    names: ['Aisle', 'Position'],
+    options: { 4: ['South', 'North'] },
+  });
+  assert.deepEqual(store.data.state.location_levels[1][0].options, [
+    { id: 12, value: 'North' },
+    { id: 13, value: 'South' },
+  ]);
+  assert.equal(store.data.state.location_levels[1][1].id, 5);
+  const item = Object.values(store.data.state.items)[0];
+  item.pending_operation = { id: 'pending' };
+  const before = structuredClone(store.data);
+  assert.throws(
+    () => store.command('location-configure', { warehouse_id: 1, names: ['Changed'] }),
+    /Resolve pending/
+  );
+  assert.deepEqual(store.data, before);
+});
+
 const read = async (resource, params = {}) => {
   const response = await fetch(
     `${base}/custom/qrrouter/api.php?${new URLSearchParams({ resource, ...params })}`

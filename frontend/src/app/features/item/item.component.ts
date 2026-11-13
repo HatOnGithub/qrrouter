@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { available } from '@core/models/inventory';
@@ -18,6 +18,7 @@ import {
   faPrint,
   faQrcode,
   faRightLeft,
+  faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 
 @Component({
@@ -43,23 +44,42 @@ export class ItemComponent {
     print: faPrint,
     scan: faQrcode,
     transfer: faRightLeft,
+    delete: faTrash,
   };
   protected api = inject(InventoryService);
   protected consumption = inject(ConsumptionService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   protected code = signal(this.route.snapshot.paramMap.get('code') || '');
   protected item = computed(() => this.api.context()?.state.items[this.code()]);
   protected available = available;
   protected busy = signal(false);
   protected error = signal('');
   protected notice = signal('');
+  protected confirmingDelete = signal(false);
 
   constructor() {
     this.route.paramMap.subscribe(params => {
       this.code.set(params.get('code') || '');
       this.error.set('');
       this.notice.set('');
+      this.confirmingDelete.set(false);
     });
+  }
+
+  protected async deleteUnassigned(): Promise<void> {
+    if (this.busy() || !this.confirmingDelete()) return;
+    this.busy.set(true);
+    this.error.set('');
+    try {
+      await this.api.command('delete-unassigned', { code: this.code() });
+      await this.api.refresh();
+      await this.router.navigate(['/inventory']);
+    } catch (error) {
+      this.error.set(this.api.message(error));
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected async reconcile(): Promise<void> {

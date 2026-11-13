@@ -9,12 +9,12 @@ class modQrrouter extends DolibarrModules {
         $this->db = $db;
         $this->numero = 503871;
         $this->rights_class = 'qrrouter';
-        $this->family = 'products';
+        $this->family = 'technic';
         $this->module_position = '91';
         $this->name = 'Qrrouter';
         $this->description =
-            'QR item registration, scan-many warehouse workflows, native stock transfers, consumption, returns and Binloc integration.';
-        $this->version = '0.3.8';
+            'QR item registration, scan-many warehouse workflows, native stock transfers, consumption, returns and internal location management.';
+        $this->version = '0.3.9';
         $this->phpmin = [8, 0];
         $this->need_dolibarr_version = [21, 0, 2];
         $this->const_name = 'MAIN_MODULE_QRROUTER';
@@ -22,7 +22,7 @@ class modQrrouter extends DolibarrModules {
         $this->langfiles = ['qrrouter@qrrouter'];
         $this->dirs = [];
         $this->config_page_url = ['setup.php@qrrouter'];
-        $this->depends = ['modProduct', 'modStock', 'modProductBatch', 'modBinloc'];
+        $this->depends = ['modProduct', 'modStock', 'modProductBatch'];
         $this->requiredby = [];
         $this->conflictwith = [];
         $this->module_parts = [
@@ -31,6 +31,7 @@ class modQrrouter extends DolibarrModules {
                     'productcard',
                     'warehousecard',
                     'productlotcard',
+                    'product_lotlist',
                     'usercard',
                     'ordercard',
                     'mocard',
@@ -41,7 +42,7 @@ class modQrrouter extends DolibarrModules {
         $this->const = [];
         $this->tabs = [];
         $qrRead =
-            'isModEnabled("qrrouter") && isModEnabled("product") && isModEnabled("stock") && isModEnabled("productbatch") && isModEnabled("binloc") && $user->id > 0 && (int) ($user->status ?? $user->statut ?? 1) === 1 && empty($user->socid) && ($user->admin || (($user->hasRight("qrrouter", "read") || $user->hasRight("qrrouter", "manage")) && $user->hasRight("produit", "lire") && $user->hasRight("stock", "lire")))';
+            'isModEnabled("qrrouter") && isModEnabled("product") && isModEnabled("stock") && isModEnabled("productbatch") && $user->id > 0 && (int) ($user->status ?? $user->statut ?? 1) === 1 && empty($user->socid) && ($user->admin || (($user->hasRight("qrrouter", "read") || $user->hasRight("qrrouter", "manage")) && $user->hasRight("produit", "lire") && $user->hasRight("stock", "lire")))';
         foreach (
             ['product' => 'product', 'stock' => 'warehouse', 'productlot' => 'lot']
             as $native => $kind
@@ -56,6 +57,12 @@ class modQrrouter extends DolibarrModules {
                     '&id=__ID__',
             ];
         }
+        $this->tabs[] = [
+            'data' =>
+                'stock:+qrrouterlocations:Locations:qrrouter@qrrouter:' .
+                $qrRead .
+                ':/qrrouter/index.php#/locations?warehouse_id=__ID__',
+        ];
         $this->rights = [];
         $this->rights[] = [5038711, 'Read QR inventory and scan labels', 'r', 1, 'read'];
         $this->rights[] = [
@@ -100,6 +107,40 @@ class modQrrouter extends DolibarrModules {
     public function init($options = '') {
         if ($this->_load_tables('/qrrouter/sql/') < 0) {
             return -1;
+        }
+        require_once DOL_DOCUMENT_ROOT . '/core/class/extrafields.class.php';
+        $extra = new ExtraFields($this->db);
+        $extra->fetch_name_optionals_label('product');
+        if (!empty($extra->error)) {
+            $this->error = $extra->error;
+            return -1;
+        }
+        if (!isset($extra->attributes['product']['label']['qrrouter_serial_prefix'])) {
+            if (
+                $extra->addExtraField(
+                    'qrrouter_serial_prefix',
+                    'QRRSerialPrefix',
+                    'varchar',
+                    100,
+                    76,
+                    'product',
+                    0,
+                    0,
+                    '',
+                    [],
+                    0,
+                    '',
+                    '3',
+                    'QRRSerialPrefixHelp',
+                    '',
+                    '',
+                    'qrrouter@qrrouter',
+                    'isModEnabled("qrrouter")',
+                ) <= 0
+            ) {
+                $this->error = $extra->error;
+                return -1;
+            }
         }
         return $this->_init([], $options);
     }

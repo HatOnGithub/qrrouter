@@ -475,8 +475,8 @@ try
                 .EntityFrameworkCore.RelationalDatabaseFacadeExtensions.GetAppliedMigrations(
                     db.Database
                 )
-                .Count() == 1,
-            "Initial EF migration is applied exactly once"
+                .Count() == 2,
+            "Both EF migrations are applied exactly once"
         );
     }
     Reject(
@@ -670,19 +670,7 @@ try
     var nativeMoveOp = (JsonObject)Native("stage", nativeMove)!;
     Check(
         service.State(nativeActor).Map("items")[nativeCode]!["pending_operation"] is not null,
-        "Same-warehouse Binloc changes are durably staged"
-    );
-    Reject(
-        () =>
-            Native(
-                "finish",
-                Object(
-                    ("code", nativeCode),
-                    ("id", nativeMoveOp.S("id")),
-                    ("proof", new { seen = Array.Empty<int>(), other = 0 })
-                )
-            ),
-        "Location changes need native Binloc evidence"
+        "Same-warehouse internal location changes are durably staged"
     );
     Native(
         "finish",
@@ -702,7 +690,7 @@ try
     );
     Check(
         service.State(nativeActor).Map("items")[nativeCode]!.S("bin") == "B",
-        "Verified Binloc change finalizes"
+        "Internal location change finalizes without Binloc evidence"
     );
     Reject(
         () =>
@@ -711,6 +699,67 @@ try
                 PlanData(nativeCode, "consume", Object(("quantity", 1), ("post_stock", false)))
             ),
         "Native-linked consumption cannot silently change cached counts only"
+    );
+    passed += LocationTests.Run(directory);
+    var deletionActor = admin with { EntityId = 90 };
+    JsonNode? DeleteRun(string action, JsonObject data) =>
+        service.Execute(deletionActor, action, data);
+    var deletionBatch = DeleteRun("bulk", Object(("type", "unassigned"), ("count", 2)))!
+        .GetValue<string>();
+    var deletionCodes = (JsonArray)
+        service.State(deletionActor)["batches"]![deletionBatch]!["codes"]!;
+    var unusedCode = deletionCodes[0]!.GetValue<string>();
+    var remainingCode = deletionCodes[1]!.GetValue<string>();
+    Reject(
+        () =>
+            service.Execute(
+                deletionActor with
+                {
+                    Manage = false,
+                    Admin = false,
+                },
+                "delete-unassigned",
+                Object(("code", unusedCode))
+            ),
+        "Readers cannot delete labels"
+    );
+    DeleteRun("delete-unassigned", Object(("code", unusedCode)));
+    var afterDelete = service.State(deletionActor);
+    Check(
+        !afterDelete.Map("items").ContainsKey(unusedCode)
+            && afterDelete.Map("items").ContainsKey(remainingCode),
+        "Deletion removes only the selected unassigned label"
+    );
+    Check(
+        afterDelete["batches"]![deletionBatch]!["codes"]!.AsArray().Count == 1,
+        "Deleted label removed from print batch"
+    );
+    Check(
+        afterDelete["history"]!.AsArray().Last().S("action") == "delete-unassigned",
+        "Deletion retained in audit history"
+    );
+    DeleteRun("delete-unassigned", Object(("code", remainingCode)));
+    Check(
+        !service.State(deletionActor).Map("batches").ContainsKey(deletionBatch),
+        "Empty print batch removed"
+    );
+    var assignedCode = DeleteRun("create", Object(("type", "generic"), ("product_id", 1)))!
+        .GetValue<string>();
+    var beforeDeleteRejection = service.State(deletionActor).ToJsonString();
+    Reject(
+        () => DeleteRun("delete-unassigned", Object(("code", assignedCode))),
+        "Assigned labels cannot be deleted"
+    );
+    Check(
+        service.State(deletionActor).ToJsonString() == beforeDeleteRejection,
+        "Rejected deletion preserves state and history"
+    );
+    Check(
+        !new StateRepository(Options.Create(new AppSettings { DataDirectory = directory })).Read(
+            90,
+            s => s.Map("items").ContainsKey(unusedCode)
+        ),
+        "Deletion persists across restarts"
     );
     Console.WriteLine($"Passed {passed} assertions.");
 }

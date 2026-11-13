@@ -153,6 +153,7 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
 """
     product = fixture.PRODUCT.replace("public $id,$type=0", "public $entity=1; public $id,$type=0")
     product = product.replace('$this->id=(int)$id;', "$this->id=(int)$id;$this->entity=(int)($this->db->state()['product_entities'][$id]??1);")
+    product = product.replace('$this->id=(int)$id;', "$this->id=(int)$id;$this->ref=$id==4?'SERIAL-004':'PART-003';$this->label=$id==4?'Tracked Part':'Fixture Part';")
     product = product.replace('public function hasbatch(){return false;}', 'public function hasbatch(){return $this->id===4;}'+native_contract.PRODUCT_METHOD)
     for target, content in {'main.inc.php': main, 'product/class/product.class.php': product,
                             'core/class/extrafields.class.php': fixture.EXTRAFIELDS,
@@ -175,7 +176,11 @@ function stock_prepare_head($object){return [['/product/stock/card.php?id='.$obj
 require __DIR__.'/../../main.inc.php';
 require __DIR__.'/class/actions_qrrouter.class.php';
 $object=(object)['id'=>(int)GETPOST('id','int')]; $action=(string)GETPOST('action');
-$hooks=new ActionsQrrouter($db); $hooks->addMoreActionsButtons(['currentcontext'=>(string)GETPOST('context')],$object,$action);
+$hooks=new ActionsQrrouter($db); $parameters=['currentcontext'=>(string)GETPOST('context')];
+$method=(string)GETPOST('method');
+if(in_array($method,['printFieldListTitle','printFieldListOption','printFieldListValue'],true)) {
+ $hooks->$method($parameters,$object,$action);print $hooks->resprints;
+} else {$hooks->addMoreActionsButtons($parameters,$object,$action);}
 """,
                             'core/modules/DolibarrModules.class.php': "<?php #[AllowDynamicProperties] class DolibarrModules {}",
                             'custom/qrrouter/descriptor_fixture.php': """<?php
@@ -289,8 +294,19 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         populated['batches'] = {'4': {'1': {'SN-REGISTER': 1, 'Fixture box': 5, 'Browser container': 7}, '2': {}}}
         native_path.write_text(json.dumps(populated))
         assert key not in json.dumps(bootstrap)
+        request(action='location-import', payload={})
+        assert request('levels', params={'warehouse_id': 1})[0]['label'] == 'Shelf'
+        request(action='location-import', payload={}, role='reader', expected=403)
+        # No normal path may load Binloc after the one-time import.
+        binloc_source = (webroot / 'custom/binloc').resolve()
+        binloc_archive = (tmp / 'imported-binloc').resolve()
+        assert binloc_source.is_relative_to(tmp.resolve()) and binloc_archive.is_relative_to(tmp.resolve())
+        binloc_source.rename(binloc_archive)
+        assert not request()['location_import_available']
+
+        revision_before_invalid = request()['state']['revision']
         request(action='bulk', payload={'count': 2, 'type': 'unassigned'}, csrf='invalid', expected=409)
-        assert request()['state']['revision'] == 0
+        assert request()['state']['revision'] == revision_before_invalid
         request(action='bulk', payload={'count': 1}, role='reader', expected=403)
         forged = Request(base + 'api.php?role=reader&action=bulk', data=urlencode({
             'payload': json.dumps({'count': 1, 'type': 'unassigned'}), 'token': 'fixture-dolibarr-token', 'qrr_token': bootstrap['csrf']
@@ -335,21 +351,21 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
                 assert error.code == expected, error.read().decode()
                 return ''
         product_entries = native_entries('product', 4)
-        for role, allowed in [('admin', True), ('reader', True), ('no-stock', False), ('external-admin', False), ('inactive', False), ('disabled-binloc', False)]:
+        for role, allowed in [('admin', True), ('reader', True), ('no-stock', False), ('external-admin', False), ('inactive', False), ('disabled-binloc', True)]:
             with client.open(base + 'descriptor_fixture.php?role=' + role) as response:
                 descriptor = json.load(response)
                 assert descriptor['allowed'] is allowed
                 assert 'productlotcard' in descriptor['parts']['hooks']['data']
-                assert [tab['data'].split(':', 1)[0] for tab in descriptor['tabs']] == ['product', 'stock', 'productlot']
+                assert [tab['data'].split(':', 1)[0] for tab in descriptor['tabs']] == ['product', 'stock', 'productlot', 'stock']
         assert '#/items/' + tracked in product_entries and '#/items/' + box in product_entries
         assert '#/items/' + generic not in product_entries
-        assert 'data-native-tabs' in product_entries and 'tab_product_locations.php?id=4' in product_entries
+        assert 'data-native-tabs' in product_entries and 'Change location' in product_entries
         assert '#/items/' + generic in native_entries('product', 3)
         assert '#/items/' + tracked in native_entries('lot', 1)
         assert '#/items/' + box not in native_entries('lot', 1)
         assert '#/items/' + tracked in native_entries('warehouse', 1, bin_key='1:v' + 'a')
         assert 'No related QR entries.' in native_entries('warehouse', 2)
-        native_entries('warehouse', 1, role='no-binloc', expected=403, bin_key='1:va')
+        native_entries('warehouse', 1, role='no-binloc', bin_key='1:va')
         for role in ['no-stock', 'no-product', 'external', 'disabled']:
             native_entries('product', 4, role=role, expected=403)
         native_entries('product', 999, expected=403)
@@ -364,6 +380,16 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         for context, role in [('productcard', 'external'), ('ordercard', 'restricted'), ('unknown', 'admin')]:
             with client.open(base + 'hook_fixture.php?' + urlencode({'context': context, 'id': 4 if context == 'productcard' else 39, 'role': role})) as response:
                 assert response.read().decode() == ''
+        with client.open(base + 'hook_fixture.php?context=productlotcard&id=1') as response:
+            assert '#/items/' + tracked in response.read().decode()
+        for method, expected in [('printFieldListTitle', 'QR entries'), ('printFieldListOption', '<td'), ('printFieldListValue', '#/items/' + tracked)]:
+            with client.open(base + 'hook_fixture.php?' + urlencode({'context': 'product_lotlist', 'id': 1, 'method': method})) as response:
+                assert expected in response.read().decode()
+        for role in ['external', 'no-product', 'no-stock']:
+            with client.open(base + 'hook_fixture.php?' + urlencode({'context': 'product_lotlist', 'id': 1, 'method': 'printFieldListValue', 'role': role})) as response:
+                assert response.read().decode() == ''
+        with client.open(base + 'hook_fixture.php?context=product_lotlist&id=999&method=printFieldListValue') as response:
+            assert response.read().decode() == '<td></td>'
         offline = native(); original_url = offline['constants']['1']['QRR_SERVICE_URL']
         try:
             offline['constants']['1']['QRR_SERVICE_URL'] = 'http://127.0.0.1:1'
@@ -408,7 +434,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         request(action='mapping', role='manager', payload={'user_id': 9, 'warehouse_id': 2}, expected=403)
         assert request()['state']['revision'] == before
         # Authorization is enforced by direct HTTP requests, independently of Angular controls.
-        for role in ['no-qr', 'no-product', 'no-stock', 'external', 'external-admin', 'inactive', 'anonymous', 'disabled', 'disabled-stock', 'disabled-product', 'disabled-binloc', 'disabled-productbatch']:
+        for role in ['no-qr', 'no-product', 'no-stock', 'external', 'external-admin', 'inactive', 'anonymous', 'disabled', 'disabled-stock', 'disabled-product', 'disabled-productbatch']:
             request(role=role, expected=403)
             request('products', role=role, expected=403)
             for endpoint in ['index.php', 'label.php', 'batch_print.php', 'bin_print.php', 'qr.php', 'thumbnail.php']:
@@ -429,12 +455,11 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         assert request('references', role='restricted', params={'type': 'salesorder'}) == []
         request('picking', role='restricted', params={'warehouse_id': 1, 'order_id': 39}, expected=403)
         request(action='workflow', role='restricted', payload={'kind': 'consume', 'codes': [generic], 'reference_type': 'salesorder', 'reference_id': 39}, expected=403)
-        hidden_locations = request(role='no-binloc')
-        assert not hidden_locations['permissions']['locations']
-        assert not hidden_locations['state']['binloc_label_settings']
-        assert all(not item['bin'] and not item['bin_key'] and not item['bin_values'] for item in hidden_locations['state']['items'].values())
-        request('levels', role='no-binloc', params={'warehouse_id': 1}, expected=403)
-        request('locations', role='no-binloc', params={'warehouse_id': 1}, expected=403)
+        independent_locations = request(role='disabled-binloc')
+        assert independent_locations['permissions']['locations']
+        assert independent_locations['state']['items'][tracked]['bin'] == request()['state']['items'][tracked]['bin']
+        request('levels', role='no-binloc', params={'warehouse_id': 1})
+        request('locations', role='no-binloc', params={'warehouse_id': 1})
         reader_history = request(role='reader')['state']['items'][box]['consumption_log']
         assert all('reference_id' not in entry and 'reference_type' not in entry for entry in reader_history)
         assert request()['state']['history'] == []
@@ -476,7 +501,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             restored = native(); restored.pop('product_entities', None); native_path.write_text(json.dumps(restored))
         assert request()['state']['revision'] == before
         print('Authorization PASS: native read rights, external/disabled users, object scopes, restricted references, employee privacy, field projection and direct media access.', flush=True)
-        print('Native references PASS: product/warehouse/lot tabs, card hooks, Binloc filtering, employee loans, transaction history and authorization.', flush=True)
+        print('Native references PASS: product/warehouse/lot tabs, card hooks, internal location filtering, employee loans, transaction history and authorization.', flush=True)
         request(action='register', payload={'type': 'generic', 'codes': [blank], 'label': 'Unsafe', 'product_id': 999, 'warehouse_id': 1}, expected=409)
         assert request()['state']['items'][blank]['type'] == 'unassigned'
         with client.open(base + 'index.php') as response:
@@ -495,10 +520,10 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         box_lot = str(inventory[new_box]['product_lot_id'])
         serial_lot = str(inventory[new_serial]['product_lot_id'])
         assert native()['lots'][box_lot]['batch'] == 'BOX-NEW' and new_box != 'BOX-NEW'
-        assert native()['lots'][serial_lot]['batch'] == 'USER-SERIAL-01' and new_serial != 'USER-SERIAL-01'
-        assert native()['locations'][box_lot]['values']['1']['value'] == 'B'
-        assert native()['locations'][serial_lot]['values']['1']['value'] == 'C'
-        request(action='create', payload={'type': 'tracked', 'label': 'Duplicate', 'serial': 'USER-SERIAL-01', 'product_id': 4, 'warehouse_id': 1}, expected=409)
+        assert re.fullmatch(r'SN-[A-F0-9]{24}', native()['lots'][serial_lot]['batch']) and inventory[new_serial]['serial'] != new_serial
+        assert inventory[new_box]['bin_values']['1'] == 'B'
+        assert inventory[new_serial]['bin_values']['1'] == 'C'
+        request(action='create', payload={'type': 'tracked', 'label': 'Duplicate', 'serial': inventory[new_serial]['serial'], 'product_id': 4, 'warehouse_id': 1}, expected=409)
         assert not request()['state'].get('pending_native')
         workflow('move', new_serial, warehouse_id=1, levels={'1': 'D'})
         assert request()['state']['items'][new_serial]['bin_values'] == {'1': 'D'}
@@ -506,13 +531,12 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         changed = native()
         changed['batches']['4']['1']['BOX-NEW'] = 6
         changed['stock']['4']['1'] -= 2
-        changed['locations'][box_lot]['values']['1']['value'] = 'E'
-        changed['locations'][box_lot]['values']['1']['display'] = 'E'
+        changed.setdefault('locations', {})[box_lot] = {'fk_product': 4, 'fk_entrepot': 1, 'values': {'1': {'value': 'E', 'display': 'E'}}}
         native_path.write_text(json.dumps(changed))
         assert request()['state']['items'][new_box]['qty'] == 6
-        assert request()['state']['items'][new_box]['bin'] == 'E'
+        assert request()['state']['items'][new_box]['bin'] == 'B'
         with client.open(base + 'api.php?resource=locations&warehouse_id=1') as response:
-            assert 'E' in json.load(response)['bins']
+            assert 'B' in json.load(response)['bins']
         workflow('correct', new_box, quantities={new_box: 7})
         assert native()['batches']['4']['1']['BOX-NEW'] == 7
         total_before = native()['stock']['4']['1']
@@ -522,8 +546,8 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         workflow('checkout', new_serial, person_id=9)
         workflow('checkin', new_serial)
         assert request()['state']['items'][new_serial]['bin_values'] == {'1': 'D'}
-        # Binloc failure rolls back lot creation and stock, retaining durable recovery intent.
-        changed = native(); changed['fail_location'] = True; native_path.write_text(json.dumps(changed))
+        # Native stock failure rolls back lot creation and stock, retaining durable recovery intent.
+        changed = native(); changed['fail_stock'] = True; native_path.write_text(json.dumps(changed))
         count_before = len(native()['lots']); stock_before = native()['stock']['4']['1']
         request(action='create', payload={'type': 'box', 'label': 'RECOVER-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
         assert len(native()['lots']) == count_before and native()['stock']['4']['1'] == stock_before
@@ -541,7 +565,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             finally:
                 native_path.write_bytes(saved_native)
         pending_state = read_state(pending_path); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; write_state(pending_path, pending_state)
-        changed = native(); changed.pop('fail_location'); native_path.write_text(json.dumps(changed))
+        changed = native(); changed.pop('fail_stock'); native_path.write_text(json.dumps(changed))
         assert_hidden_recovery()
         recovered = request(action='native-recover', payload={})
         assert request()['state']['items'][recovered]['qty'] == 3 and not request()['state'].get('pending_native')
@@ -553,22 +577,22 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         assert request(action='native-recover', payload={}) == recovered
         assert len(native()['lots']) == lots_after and len(native()['movements']) == movements_after
         assert native()['stock']['4']['1'] == stock_before + 3
-        changed = native(); changed['fail_location'] = True; native_path.write_text(json.dumps(changed))
+        changed = native(); changed['fail_stock'] = True; native_path.write_text(json.dumps(changed))
         request(action='create', payload={'type': 'box', 'label': 'CANCEL-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
         pending_state = read_state(pending_path); pending_state['pending_native']['at'] = '2020-01-01T00:00:00Z'; write_state(pending_path, pending_state)
         request(action='native-cancel', payload={})
         assert not request()['state'].get('pending_native')
         assert native()['stock']['4']['1'] == stock_before + 3
-        changed = native(); changed.pop('fail_location'); native_path.write_text(json.dumps(changed))
+        changed = native(); changed.pop('fail_stock'); native_path.write_text(json.dumps(changed))
         generated_serials = []
         for index in range(2):
             generated_code = request(action='create', payload={'type': 'tracked', 'label': 'Automatic serial', 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'F'}})
             generated_item = request()['state']['items'][generated_code]
             generated_serials.append(generated_item['serial'])
-            assert generated_item['serial'].startswith('PART-003-AUTOMATIC-SERIAL-') and len(generated_item['serial']) <= 100
+            assert re.fullmatch(r'SN-[A-F0-9]{24}', generated_item['serial']) and len(generated_item['serial']) <= 100
             assert generated_item['native_batch'] == generated_item['serial'] != generated_code
             assert native()['lots'][str(generated_item['product_lot_id'])]['batch'] == generated_item['serial']
-            assert native()['locations'][str(generated_item['product_lot_id'])]['values']['1']['value'] == 'F'
+            assert generated_item['bin_values']['1'] == 'F'
         assert len(set(generated_serials)) == 2
         # Existing unassociated serials attach without receiving stock, including empty lots.
         for qty in [0, 1]:
@@ -592,7 +616,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         assert request()['state']['items'][generated_code]['serial'] == generated_serials[-1]
         request(action='register', payload={'type': 'tracked', 'codes': [blank], 'label': 'Generated registration', 'product_id': 4, 'warehouse_id': 1})
         registered_auto = request()['state']['items'][blank]
-        assert registered_auto['serial'].startswith('PART-003-GENERATED-REGISTRATION-')
+        assert re.fullmatch(r'SN-[A-F0-9]{24}', registered_auto['serial'])
         assert registered_auto['product_lot_id'] > 0 and registered_auto['qty'] == 1
         # Assigned serial batches stage all identities and receive one unit per label atomically.
         bulk_fields = {'type': 'tracked', 'label': 'Bulk native', 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'BULK'}, 'count': 3}
@@ -611,15 +635,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
                 item = state['items'][code]
                 assert native()['lots'][str(item['product_lot_id'])]['batch'] == item['serial']
                 assert item['qty'] == 1 and item['bin_values'] == {'1': 'BULK'}
-                if use_labels:
-                    assert item['serial'] == item['label'] == supplied[index]
-                else:
-                    assert item['label'] == supplied[index] and item['serial'] != supplied[index]
-            if use_labels:
-                before_duplicate = native_path.read_bytes()
-                request(action='bulk', payload=payload, expected=400)
-                assert native_path.read_bytes() == before_duplicate
-                assert not request()['state'].get('pending_native')
+                assert item['label'] == supplied[index] and re.fullmatch(r'SN-[A-F0-9]{24}', item['serial'])
         # Reject malformed lists before staging or writing native stock.
         before_malformed = native_path.read_bytes()
         for labels in [{'wrong': 'name'}, [['nested'], 'B', 'C'], [None, 'B', 'C'], [' ', 'B', 'C'], []]:
@@ -628,10 +644,11 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             assert not request()['state'].get('pending_native')
         duplicate_payload = dict(bulk_fields, count=2, label_as_serial=True, labels=['DUPLICATE', 'duplicate'])
         native_before = native_path.read_bytes()
-        request(action='bulk', payload=duplicate_payload, expected=400)
-        assert native_path.read_bytes() == native_before and not request()['state'].get('pending_native')
+        duplicate_batch = request(action='bulk', payload=duplicate_payload)
+        duplicate_codes = request()['state']['batches'][duplicate_batch]['codes']
+        assert len({request()['state']['items'][code]['serial'] for code in duplicate_codes}) == 2
         exact_code = request(action='create', payload={'type': 'tracked', 'label': 'Exact single label', 'label_as_serial': True, 'product_id': 4, 'warehouse_id': 1})
-        assert request()['state']['items'][exact_code]['serial'] == 'Exact single label'
+        assert re.fullmatch(r'SN-[A-F0-9]{24}', request()['state']['items'][exact_code]['serial'])
         box_payload = {'type': 'box', 'labels': ['Bulk box east', 'Bulk box west'], 'count': 2, 'qty': 5, 'product_id': 4, 'warehouse_id': 1, 'levels': {'1': 'BOXES'}}
         stock_before_boxes = native()['stock']['4']['1']
         box_batch = request(action='bulk', payload=box_payload)
@@ -649,7 +666,6 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             {'type': 'generic', 'label': 'x' * 141, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
             {'type': 'tracked', 'label': 'Prefix', 'serial': 'x' * 101, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
             {'type': 'tracked', 'labels': ['é' * 71], 'count': 1, 'product_id': 4, 'warehouse_id': 1},
-            {'type': 'tracked', 'labels': ['é' * 51], 'label_as_serial': True, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
             {'type': 'box', 'labels': ['é' * 51], 'qty': 1, 'count': 1, 'product_id': 4, 'warehouse_id': 1},
         ]:
             request(action='bulk', payload=payload, expected=400)
@@ -681,7 +697,24 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         assert not request()['state'].get('pending_native')
         assert native()['stock']['4']['1'] == warehouse_stock_before + 2
         print('Warehouse compatibility PASS: legacy statut, closed warehouse rejection, retained intent and recovery after reopening.', flush=True)
-        print('Native integration PASS: bulk assigned serials, exact label serials, automatic and named serials, box lots, Binloc writes, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
+        changed = native(); changed['serial_prefixes'] = {'4': 'PART-'}; native_path.write_text(json.dumps(changed))
+        prefix_payload = {'type': 'tracked', 'label': 'Prefixed individual', 'product_id': 4, 'warehouse_id': 1, 'serial_prefix': 'FORGED-'}
+        prefixed_code = request(action='create', payload=prefix_payload)
+        assert re.fullmatch(r'PART-[A-F0-9]{24}', request()['state']['items'][prefixed_code]['serial'])
+        prefix_batch = request(action='bulk', payload=dict(prefix_payload, count=2, labels=['Prefix A', 'Prefix B']))
+        prefix_state = request()['state']
+        assert all(re.fullmatch(r'PART-[A-F0-9]{24}', prefix_state['items'][code]['serial']) for code in prefix_state['batches'][prefix_batch]['codes'])
+        prefix_blank = request(action='bulk', payload={'type': 'unassigned', 'count': 1})
+        prefix_blank_code = request()['state']['batches'][prefix_blank]['codes'][0]
+        request(action='register', payload=dict(prefix_payload, codes=[prefix_blank_code]))
+        assert re.fullmatch(r'PART-[A-F0-9]{24}', request()['state']['items'][prefix_blank_code]['serial'])
+        changed = native(); changed['serial_prefixes'] = {'4': 'invalid prefix'}; native_path.write_text(json.dumps(changed))
+        before_prefix_rejection = native_path.read_bytes()
+        request(action='create', payload=prefix_payload, expected=400)
+        assert native_path.read_bytes() == before_prefix_rejection and not request()['state'].get('pending_native')
+        changed = native(); changed.pop('serial_prefixes'); native_path.write_text(json.dumps(changed))
+        print('Product prefix PASS: trusted product prefix for single, bulk and registered individuals; browser override ignored; invalid prefix rejected before stock changes.', flush=True)
+        print('Native integration PASS: bulk and single random serials, existing serial links, box lots, internal locations, live native stock observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
         print('Gateway integration PASS: native workflows, real C# state, CSRF, permissions, trusted facts, product/order lookups, Angular hosting and no API-key exposure.', flush=True)
         if args.browser:
             env = dict(os.environ, QRR_E2E_URL=base, QRR_E2E_ITEM=tracked, QRR_E2E_BOX=box)

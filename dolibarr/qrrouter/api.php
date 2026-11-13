@@ -53,13 +53,17 @@ function qrr_api_get($resource) {
         $inventory = qrr_browser_inventory($db);
         $inventory['products'] = qrr_product_search_metadata($db, $inventory['products']);
         $state = $inventory['state'];
-        foreach (['items', 'batches', 'personal_warehouses', 'binloc_label_settings'] as $map) {
+        foreach (['items', 'batches', 'personal_warehouses', 'location_label_settings'] as $map) {
             $state[$map] = (object) ($state[$map] ?? []);
         }
         return [
             'state' => $state,
             'consumption_references' => (object) $inventory['consumption_references'],
             'label_formats' => qrr_label_profiles(),
+            'location_import_available' =>
+                !empty($user->admin) &&
+                isModEnabled('binloc') &&
+                is_file(dol_buildpath('/binloc/class/binlocwarehouselevel.class.php', 0)),
             'warehouses' => (object) $inventory['warehouses'],
             'users' => (object) $inventory['users'],
             'products' => (object) $inventory['products'],
@@ -111,22 +115,7 @@ function qrr_api_get($resource) {
         if (!isset($warehouses[$wid])) {
             throw new InvalidArgumentException('Unknown warehouse');
         }
-        $out = [];
-        foreach (qrr_binloc_levels($db, $wid) as $id => $cfg) {
-            $options = [];
-            foreach ($cfg->options ?? [] as $option) {
-                if ((int) $option->active === 1) {
-                    $options[] = ['id' => (int) $option->id, 'value' => (string) $option->value];
-                }
-            }
-            $out[] = [
-                'id' => (int) $id,
-                'label' => (string) $cfg->label,
-                'datatype' => (string) $cfg->datatype,
-                'options' => $options,
-            ];
-        }
-        return $out;
+        return qrr_location_levels($db, $wid);
     }
     $q = trim((string) GETPOST('q', 'alphanohtml'));
     if (strlen($q) > 100) {
@@ -238,6 +227,10 @@ function qrr_api_get($resource) {
                         ? ' — ' . $row->customer
                         : '')),
         ];
+        if ($resource === 'products') {
+            $out[array_key_last($out)]['label'] = (string) $row->label;
+            $out[array_key_last($out)]['ref'] = (string) $row->ref;
+        }
     }
     $db->free($rs);
     return $out;
@@ -260,6 +253,11 @@ function qrr_api_post($action, $data) {
             : qrr_native_complete($db, $user, $pending);
     }
     // Never forward the browser's object wholesale to the C# service.
+    if ($action === 'delete-unassigned') {
+        $code = qrr_input_code($data['code'] ?? '');
+        qrr_require_item_visible($db, qrr_load_state()['items'][$code] ?? null);
+        return qrr_command('delete-unassigned', ['code' => $code]);
+    }
     if (in_array($action, ['create', 'update', 'bulk', 'register'], true)) {
         $code = qrr_input_code($data['code'] ?? '');
         $existing = null;
@@ -353,15 +351,26 @@ function qrr_api_post($action, $data) {
         if (!isset($warehouses[$wid])) {
             throw new InvalidArgumentException('Unknown warehouse');
         }
-        $prefs = qrr_binloc_validate_label_settings(
-            qrr_binloc_levels($db, $wid),
-            $data['format'] ?? [],
-        );
+        $prefs = $data['format'] ?? [];
+        $prefs['enabled'] = true;
         return qrr_command('label-settings', [
             'warehouse_id' => $wid,
-            'prefs' => $prefs,
+            'prefs' => (object) $prefs,
             'warehouses' => (object) $warehouses,
         ]);
+    }
+    if ($action === 'location-configure') {
+        return qrr_command('location-configure', [
+            'warehouse_id' => qrr_api_int($data, 'warehouse_id'),
+            'names' => $data['names'] ?? [],
+            'options' => (object) ($data['options'] ?? []),
+            'warehouses' => (object) qrr_warehouses($db),
+        ]);
+    }
+    if ($action === 'location-import') {
+        qrr_api_permit(!empty($user->admin));
+        require_once __DIR__ . '/lib/qrrouter_location_import.lib.php';
+        return qrr_command('location-import', qrr_location_import($db));
     }
     if ($action === 'reconcile') {
         qrr_api_permit(qrr_stock_write_right($user));
@@ -393,9 +402,9 @@ function qrr_api_post($action, $data) {
     $person = qrr_api_int($data, 'person_id');
     $wid = qrr_api_int($data, 'warehouse_id');
     if (!qrr_locations_right($user) && !empty($data['levels'])) {
-        throw new DomainException('Missing Binloc read permission');
+        throw new DomainException('Location access required');
     }
-    $choice = qrr_binloc_choice($db, $wid, $data['levels'] ?? []);
+    $choice = qrr_location_choice($db, $wid, $data['levels'] ?? []);
     $ref = (string) ($data['reference_type'] ?? '');
     $refId = qrr_api_int($data, 'reference_id');
     if ($ref !== '') {

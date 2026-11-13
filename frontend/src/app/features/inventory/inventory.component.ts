@@ -4,6 +4,7 @@ import { InventoryService } from '@services/inventory.service';
 import { SharedModule } from '@shared/shared.module';
 import { Item } from '@core/models/inventory';
 import { ConsumptionService } from '@services/consumption.service';
+import { downloadCsv, inventoryCsv } from '@features/csv/csv';
 
 @Component({
   selector: 'qrr-inventory',
@@ -99,5 +100,12 @@ export class InventoryComponent {
           : item.type === 'unassigned'
             ? 'Unassigned'
             : 'In stock';
+  }
+  protected exportCsv(): void {
+    const context = this.api.context()!;
+    downloadCsv(
+      'qrrouter-inventory.csv',
+      inventoryCsv(this.rows(), context.products, context.warehouses)
+    );
   }
 }

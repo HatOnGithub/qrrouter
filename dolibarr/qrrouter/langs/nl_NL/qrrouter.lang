@@ -1,7 +1,9 @@
 # QR Product Router UI translations; generated keys are derived from the source English phrase.
 QRRUI_d3c7366db5a3=Toegewezen labels tonen productgegevens. Niet-toegewezen labels tonen alleen de QR-code en het QR-ID.
 Module503871Name=QR Product Router
-Module503871Desc=QR-artikelbeheer, containers met aantallen, Binloc-locaties en magazijnhandelingen
+Module503871Desc=QR-artikelbeheer, containers met aantallen, interne locaties en magazijnhandelingen
+QRRSerialPrefix=Voorvoegsel voor QR-serienummers
+QRRSerialPrefixHelp=Voorvoegsel voor nieuwe individuele QR Router-serienummers, gevolgd door 24 willekeurige hexadecimale tekens. Leeg gebruikt SN-. Maximaal 76 UTF-8-bytes; geen witruimte of opmaak. Bestaande serienummers en containernamen blijven behouden.
 Qrrouter=QR Product Router
 # Module connection settings
 QRRUI_5e79c27833d2=QR Router instellen

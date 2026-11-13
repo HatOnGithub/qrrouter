@@ -35,7 +35,8 @@ public sealed class StateRepository(IOptions<AppSettings> settings) : IStateRepo
         "items",
         "batches",
         "personal_warehouses",
-        "binloc_label_settings",
+        "location_label_settings",
+        "location_levels",
     ];
 
     private InventoryDbContext Open(int entity)
@@ -106,7 +107,8 @@ public sealed class StateRepository(IOptions<AppSettings> settings) : IStateRepo
             ["items"] = new JsonObject(),
             ["batches"] = new JsonObject(),
             ["personal_warehouses"] = new JsonObject(),
-            ["binloc_label_settings"] = new JsonObject(),
+            ["location_label_settings"] = new JsonObject(),
+            ["location_levels"] = new JsonObject(),
         };
 
     private static void ImportLegacy(InventoryDbContext db, string folder)
@@ -141,6 +143,11 @@ public sealed class StateRepository(IOptions<AppSettings> settings) : IStateRepo
 
     public static void Validate(JsonObject state)
     {
+        if (state["binloc_label_settings"] is not null)
+        {
+            state["location_label_settings"] = state["binloc_label_settings"]!.DeepClone();
+            state.Remove("binloc_label_settings");
+        }
         if (state.I("schema") != 2 || state["history"] is not JsonArray)
             throw new InvalidDataException("Expected schema 2 inventory with history");
         foreach (var key in Maps)
@@ -167,7 +174,8 @@ public sealed class StateRepository(IOptions<AppSettings> settings) : IStateRepo
                 row.Collection == "metadata"
                 || row.Collection == "batches"
                 || row.Collection == "personal_warehouses"
-                || row.Collection == "binloc_label_settings"
+                || row.Collection == "location_label_settings"
+                || row.Collection == "location_levels"
             )
         )
         {

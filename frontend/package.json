@@ -1,6 +1,6 @@
 {
   "name": "qrrouter-web",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -12,7 +12,9 @@
     "start:mock": "node dev/start-mock.mjs",
     "mock": "node dev/server.mjs",
     "test:mock": "node --test dev/mock.test.mjs",
-    "build": "ng build",
+    "test:labels": "tsc --project tsconfig.print.json && node --test dev/labels.test.mjs",
+    "test:csv": "node --test dev/csv.test.mjs",
+    "build": "ng build && tsc --project tsconfig.print.json",
     "build:dev": "ng build --configuration development",
     "e2e": "playwright test",
     "e2e:mock": "playwright test --config playwright.mock.config.ts",

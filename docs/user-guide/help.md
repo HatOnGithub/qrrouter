@@ -16,7 +16,7 @@ When the URL is unchanged, leaving a previously saved API key blank keeps it. Re
 
 ## Missing pages or actions
 
-Menu entries and actions depend on permissions. Ask an administrator to check QR read/manage rights and native product, stock, Binloc, employee or document rights for the action you need. A read-only user can inspect permitted records but cannot perform management workflows.
+Menu entries and actions depend on permissions. Ask an administrator to check QR read/manage rights and native product, stock, employee or document rights for the action you need. A read-only user can inspect permitted records but cannot perform management workflows.
 
 ## Camera or entry problems
 
@@ -28,7 +28,7 @@ Menu entries and actions depend on permissions. Ask an administrator to check QR
 ## Serial, quantity and print warnings
 
 - An existing serial can be linked only if it has no QR association. Read its availability warning and verify the product and warehouse before saving.
-- Bulk exact-name serials must be new and unique; change duplicate names or use automatic serial generation.
+- New tracked individuals receive random serials automatically. Existing serials can only be associated with one QR item.
 - Shorten names when the form reports a text limit. See [Labels and printing](labels.md) for label sizes and limits.
 - If linked lot stock is split across warehouses, consolidate it in Dolibarr before using that lot in QR Router.
 - After a native record changes in Dolibarr, select **Refresh** before continuing.

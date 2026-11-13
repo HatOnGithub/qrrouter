@@ -1,7 +1,8 @@
 import { test, expect, Page } from '@playwright/test';
 
 import { validCode } from '../src/app/shared/scanner/codes';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { readRecords, recordsCsv } from '../src/app/features/csv/csv';
 
 async function open(page: Page, route: string): Promise<void> {
   await page.goto('index.php#/' + route);
@@ -62,9 +63,7 @@ test('inventory searches native tags and readable extra fields', async ({ page }
   await expect(page.getByText('No matching items', { exact: true })).toBeVisible();
 });
 
-test('native product and Binloc-adjacent warehouse tabs open the related QR entries', async ({
-  page,
-}) => {
+test('native product and warehouse location tabs open the related QR entries', async ({ page }) => {
   const code = process.env['QRR_E2E_BOX']!;
   const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
   const item = bootstrap.state.items[code];
@@ -72,16 +71,15 @@ test('native product and Binloc-adjacent warehouse tabs open the related QR entr
   await expect(
     page.locator('[data-native-tabs]').getByRole('link', { name: 'QR entries', exact: true })
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Binloc locations', exact: true })).toHaveAttribute(
-    'href',
-    /binloc\/tab_product_locations\.php/
-  );
+  await expect(
+    page.getByRole('link', { name: 'QR Router locations', exact: true })
+  ).toHaveAttribute('href', /native\.php\?kind=product/);
   await expect(page.locator('a[href$="#/items/' + code + '"]')).toHaveAttribute(
     'href',
     new RegExp('#/items/' + code + '$')
   );
   await page.goto('native.php?kind=warehouse&id=' + item.warehouse_id);
-  await page.getByRole('combobox', { name: 'Binloc locations' }).selectOption(item.bin_key);
+  await page.getByRole('combobox', { name: 'QR Router locations' }).selectOption(item.bin_key);
   await page.getByRole('button', { name: 'Filter', exact: true }).click();
   await expect(page).toHaveURL(new RegExp('bin_key='));
   await page.locator('a[href$="#/items/' + code + '"]').click();
@@ -107,7 +105,7 @@ test('DYMO labels add details and preserve physical dimensions at every size', a
     await page
       .locator('.qrr-label-detail')
       .evaluateAll(fields => fields.map(field => field.getAttribute('data-kind')))
-  ).toEqual(['serial', 'name', 'ref']);
+  ).toEqual(['name', 'serial', 'ref']);
   await expect(page.locator('.qrr-label-detail.serial')).toContainText('SN-REGISTER');
   await expect(page.locator('.qrr-id-code')).toHaveText(code);
   await expect(page.locator('.qrr-qr-column img')).toHaveAttribute(
@@ -446,27 +444,22 @@ test('register a container using the product lookup and native warehouse selecti
   expect(state.items[code].type).toBe('box');
 });
 
-test('create a named Dolibarr serial with an independent QR identity and Binloc location', async ({
+test('create a named Dolibarr serial with an independent QR identity and internal location', async ({
   page,
 }) => {
   await open(page, 'create');
   await choose(page, 'QR type', 'Tracked Individual');
   await page.getByRole('textbox', { name: 'Item name / label', exact: true }).fill('Browser tool');
-  await page
-    .getByRole('textbox', { name: 'Dolibarr serial number', exact: true })
-    .fill('BROWSER-SERIAL');
   await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Tracked');
   await page.getByRole('option', { name: 'SERIAL-004 — Tracked Part', exact: true }).click();
   await choose(page, 'Warehouse', 'MAIN');
   await page.getByRole('textbox', { name: 'Shelf', exact: true }).fill('Tool shelf');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Browser tool', exact: true })).toBeVisible();
-  const link = page.getByRole('link', { name: 'Dolibarr lot/serial: BROWSER-SERIAL', exact: true });
+  const link = page.getByRole('link', { name: /Dolibarr lot\/serial: SN-[A-F0-9]{24}/ });
   await expect(link).toHaveAttribute('href', /productlot_card.php\?id=\d+/);
   const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
-  const item = Object.values(state.items).find(
-    (item: any) => item.native_batch === 'BROWSER-SERIAL'
-  ) as any;
+  const item = Object.values(state.items).find((item: any) => item.label === 'Browser tool') as any;
   expect(item.product_lot_id).toBeGreaterThan(0);
   expect(item.code).not.toBe(item.serial);
   expect(item.bin_values).toEqual({ '1': 'Tool shelf' });
@@ -917,9 +910,7 @@ test('scan selection and camera pages fit mobile portrait without page scrolling
   }
 });
 
-test('entered existing serial warns before save and automatic serial uses entered context', async ({
-  page,
-}) => {
+test('new serial is random and independent of the entered label', async ({ page }) => {
   await open(page, 'create');
   await choose(page, 'QR type', 'Tracked Individual');
   await page
@@ -928,17 +919,8 @@ test('entered existing serial warns before save and automatic serial uses entere
   await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('Tracked');
   await page.getByRole('option', { name: /SERIAL-004.*Tracked Part/ }).click();
   await choose(page, 'Warehouse', 'MAIN');
-  await page
-    .getByRole('textbox', { name: 'Dolibarr serial number', exact: true })
-    .fill('USER-SERIAL-01');
   await expect(
-    page.getByRole('status').filter({ hasText: 'already associated with a QR item' })
-  ).toBeVisible();
-  await page.getByRole('textbox', { name: 'Dolibarr serial number', exact: true }).fill('');
-  await expect(
-    page.getByText('This serial number is already associated with a QR item.', {
-      exact: true,
-    })
+    page.getByRole('textbox', { name: 'Dolibarr serial number', exact: true })
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Auto browser tool', exact: true })).toBeVisible();
@@ -946,6 +928,124 @@ test('entered existing serial warns before save and automatic serial uses entere
   const item = Object.values(state.items).find(
     (item: any) => item.label === 'Auto browser tool'
   ) as any;
-  expect(item.serial).toMatch(/^PART-003-AUTO-BROWSER-TOOL-[A-F0-9]{24}$/);
+  expect(item.serial).toMatch(/^SN-[A-F0-9]{24}$/);
   expect(item.serial).not.toBe(item.code);
+});
+
+test('warehouse links configure internal locations and edit assignments without Binloc', async ({
+  page,
+}) => {
+  const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
+  expect(bootstrap.location_import_available).toBe(false);
+  const response = await page.request.post('api.php?action=create', {
+    form: {
+      token: bootstrap.token,
+      qrr_token: bootstrap.csrf,
+      payload: JSON.stringify({
+        type: 'generic',
+        label: 'Internal location browser item',
+        product_id: 3,
+        warehouse_id: 1,
+        levels: { '1': 'A' },
+      }),
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+  const code = (await response.json()).result;
+  await page.goto('hook_fixture.php?context=warehousecard&id=1');
+  const locations = page.getByRole('link', { name: 'Locations', exact: true });
+  await expect(locations).toHaveAttribute('href', /#\/locations\?warehouse_id=1$/);
+  await locations.click();
+  await page
+    .getByRole('textbox', { name: 'Location level names', exact: true })
+    .fill('Shelf\nPosition');
+  await page.getByRole('button', { name: 'Save location levels', exact: true }).click();
+  await expect(page.getByText('Location levels saved', { exact: true })).toBeVisible();
+  await open(page, 'edit/' + code);
+  await page.getByRole('textbox', { name: 'Shelf', exact: true }).fill('Rack B');
+  await page.getByRole('textbox', { name: 'Position', exact: true }).fill('7');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('#/items/' + code));
+  const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
+  expect(state.items[code].bin).toBe('Rack B-7');
+  await page.goto('native.php?kind=product&id=3');
+  const row = page.getByRole('row').filter({ hasText: 'Internal location browser item' });
+  await row.getByRole('link', { name: 'Change location', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Position', exact: true })).toHaveValue('7');
+});
+
+test('unassigned deletion uses the native gateway and rejects assigned QR codes', async ({
+  page,
+}) => {
+  const code = await blank(page);
+  await open(page, 'items/' + code);
+  await page.getByRole('button', { name: 'Delete unassigned QR code', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm deletion', exact: true }).click();
+  await expect(page).toHaveURL(/#\/inventory$/);
+  const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
+  expect(bootstrap.state.items[code]).toBeUndefined();
+  expect(
+    Object.values(bootstrap.state.batches as Record<string, { codes: string[] }>).some(batch =>
+      batch.codes.includes(code)
+    )
+  ).toBe(false);
+  const assigned = Object.values(
+    bootstrap.state.items as Record<string, { code: string; type: string }>
+  ).find(item => item.type === 'generic')!;
+  const rejected = await page.request.post('api.php?action=delete-unassigned', {
+    form: {
+      token: bootstrap.token,
+      qrr_token: bootstrap.csrf,
+      payload: JSON.stringify({ code: assigned.code }),
+    },
+  });
+  expect(rejected.status()).toBe(409);
+  expect(
+    (await (await page.request.get('api.php?resource=bootstrap')).json()).state.items[assigned.code]
+  ).toBeDefined();
+});
+
+test('CSV creates a native serial and updates QR metadata through Dolibarr', async ({ page }) => {
+  const initial = await (await page.request.get('api.php?resource=bootstrap')).json();
+  const generic = Object.values(
+    initial.state.items as Record<
+      string,
+      { code: string; type: string; checkout?: unknown; status?: string }
+    >
+  ).find(item => item.type === 'generic' && !item.checkout && item.status !== 'consumed')!;
+  await open(page, 'csv');
+  await page.getByLabel('CSV file (UTF-8, up to 200 rows)', { exact: true }).setInputFiles({
+    name: 'native.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      recordsCsv([
+        { type: 'tracked', label: 'CSV native individual', product_id: '4', warehouse_id: '1' },
+        { code: generic.code, type: 'generic', label: 'CSV updated native metadata' },
+      ])
+    ),
+  });
+  const confirm = page.getByRole('button', { name: 'Confirm CSV import', exact: true });
+  await expect(confirm).toBeEnabled();
+  await confirm.click();
+  await expect(page.getByText('CSV import completed', { exact: true })).toBeVisible();
+  const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
+  const created = Object.values(
+    state.items as Record<
+      string,
+      { label: string; serial: string; qty: number; product_lot_id: number }
+    >
+  ).find(item => item.label === 'CSV native individual')!;
+  expect(created.serial).toMatch(/^SN-[A-F0-9]{24}$/);
+  expect(created.product_lot_id).toBeGreaterThan(0);
+  expect(created.qty).toBe(1);
+  expect(state.items[generic.code].label).toBe('CSV updated native metadata');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download import results', exact: true }).click();
+  const report = await readFile((await (await download).path()) as string, 'utf8');
+  expect(readRecords(report).every(row => row.code && row.import_status === 'done')).toBe(true);
+  await page
+    .getByLabel('CSV file (UTF-8, up to 200 rows)', { exact: true })
+    .setInputFiles({ name: 'round-trip.csv', mimeType: 'text/csv', buffer: Buffer.from(report) });
+  await expect(confirm).toBeDisabled();
+  await expect(page.locator('tbody tr').filter({ hasText: 'invalid' })).toHaveCount(0);
 });

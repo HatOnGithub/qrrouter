@@ -57,6 +57,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             );
         }
         Permit(actor.Manage || actor.Admin);
+        if (action == "prepare-creation")
+            return Creation.Prepare(data);
         if (action == "validate")
             return Make(data, "");
         if (
@@ -100,6 +102,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                     "native-finish" => NativeFinish(s, data, actor),
                     "native-cancel" => NativeCancel(s, data, actor),
                     "create" => Create(s, data),
+                    "delete-unassigned" => DeleteUnassigned(s, data),
                     "bulk" => Bulk(s, data),
                     "register" => Register(s, data),
                     "update" => Edit(s, data),
@@ -107,6 +110,12 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                     "box-transfer" => Transfer(s, data),
                     "mapping" or "resolve-mapping" => Mapping(s, data),
                     "label-settings" => LabelSettings(s, data),
+                    "location-configure" => Locations.Configure(s, data),
+                    "location-import" => actor.Admin
+                        ? Locations.Import(s, data)
+                        : throw new UnauthorizedAccessException(
+                            "Administrator permission required"
+                        ),
                     "stage" => Stage(s, data, actor, false),
                     "handoff-stage" => Stage(s, data, actor, true),
                     "finish" => Finish(s, data, false, false),
@@ -447,6 +456,38 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         return JsonValue.Create(code)!;
     }
 
+    private static JsonNode? DeleteUnassigned(JsonObject state, JsonObject data)
+    {
+        var code = data.S("code");
+        var item = Item(state, code);
+        Require(
+            item.S("type") == "unassigned"
+                && item.I("product_id") == 0
+                && item.I("warehouse_id") == 0
+                && item.I("product_lot_id") == 0
+                && item.S("serial") == ""
+                && item.S("native_batch") == ""
+                && item.I("qty") == 0
+                && item.I("consumed_units") == 0
+                && item["checkout"] is null
+                && item["pending_operation"] is null
+                && item["pending_handoff"] is null,
+            "Only unassigned QR codes without inventory or pending operations can be deleted"
+        );
+        state.Map("items").Remove(code);
+        foreach (var pair in state.Map("batches").ToArray())
+        {
+            if (pair.Value?["codes"] is not JsonArray codes)
+                continue;
+            for (var i = codes.Count - 1; i >= 0; i--)
+                if (codes[i]?.GetValue<string>() == code)
+                    codes.RemoveAt(i);
+            if (codes.Count == 0)
+                state.Map("batches").Remove(pair.Key);
+        }
+        return null;
+    }
+
     private static JsonNode Bulk(JsonObject state, JsonObject data)
     {
         var count = data.I("count");
@@ -642,18 +683,34 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             data["prefs"] as JsonObject ?? throw new ArgumentException("Missing label preferences");
         Require(
             prefs["show"] is JsonObject { Count: > 0 },
-            "At least one Binloc level must be shown"
+            "At least one location level must be shown"
         );
+        var ids = Locations
+            .Levels(state, wid)
+            .Select(level => level!.I("id").ToString())
+            .ToHashSet();
+        foreach (var pair in (JsonObject)prefs["show"]!)
+            Require(
+                ids.Contains(pair.Key) && pair.Value?.ToJsonString() is "1" or "true",
+                "Invalid visible location level"
+            );
+        Require(prefs["separator"] is null or JsonObject, "Invalid label separators");
         if (prefs["separator"] is JsonObject separators)
             foreach (var pair in separators)
             {
+                Require(ids.Contains(pair.Key), "Unknown location separator level");
+                Require(
+                    pair.Value is JsonValue value && value.TryGetValue<string>(out _),
+                    "Invalid label separator"
+                );
                 var text = pair.Value!.GetValue<string>();
                 Require(
-                    text.Length <= 12 && !text.Any(c => char.IsControl(c) || c is '<' or '>'),
+                    System.Text.Encoding.UTF8.GetByteCount(text) <= 12
+                        && !text.Any(c => char.IsControl(c) || c is '<' or '>'),
                     "Invalid label separator"
                 );
             }
-        state.Map("binloc_label_settings")[wid.ToString()] = prefs.DeepClone();
+        state.Map("location_label_settings")[wid.ToString()] = prefs.DeepClone();
         return null;
     }
 
@@ -939,8 +996,6 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             "Missing conflicting-movement count"
         );
         var complete = proof.I(handoff ? "extra" : "other") == 0 && counts.All(n => n == 1);
-        if (op.I("product_lot_id") > 0 && op["location_target"] is not null)
-            complete = complete && proof.B("location");
         var none = proof.I(handoff ? "extra" : "other") == 0 && counts.All(n => n == 0);
         Require(
             complete || (reconcile && none),

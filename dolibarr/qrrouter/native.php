@@ -1,5 +1,5 @@
 <?php
-/** Read-only QR references from native Dolibarr cards and Binloc's neighboring tabs. */
+/** Read-only QR references from native Dolibarr cards and location tabs. */
 $res = 0;
 if (is_file(__DIR__ . '/../../main.inc.php')) {
     $res = include __DIR__ . '/../../main.inc.php';
@@ -58,7 +58,7 @@ try {
     exit();
 }
 
-// Use the native shell, retaining the warehouse/product navigation and Binloc tabs.
+// Use the native shell, retaining the warehouse/product navigation and extension tabs.
 $langs->load('qrrouter@qrrouter');
 llxHeader('', qrr_t('QR entries') . ' - ' . $target['ref']);
 if ($head) {
@@ -66,11 +66,11 @@ if ($head) {
 }
 print '<h1>' . qrr_h(qrr_t('QR entries')) . ': ' . qrr_h($target['ref']) . '</h1>';
 print '<p><a href="' . qrr_h($target['url']) . '">' . qrr_h(qrr_t('Back to native card')) . '</a>';
-if ($target['binloc_url'] !== '') {
+if ($target['locations_url'] !== '') {
     print ' &middot; <a href="' .
-        qrr_h($target['binloc_url']) .
+        qrr_h($target['locations_url']) .
         '">' .
-        qrr_h(qrr_t('Binloc locations')) .
+        qrr_h(qrr_t('QR Router locations')) .
         '</a>';
 }
 print ' &middot; <a href="' .
@@ -83,7 +83,7 @@ if ($kind === 'warehouse' && $bins && qrr_locations_right($user)) {
         $id .
         '">';
     print '<label>' .
-        qrr_h(qrr_t('Binloc locations')) .
+        qrr_h(qrr_t('QR Router locations')) .
         ' <select class="flat" name="bin_key"><option value="">' .
         qrr_h(qrr_t('All locations')) .
         '</option>';
@@ -156,6 +156,13 @@ foreach ($items as $code => $item) {
             '</a>';
     } else {
         print qrr_h($item['bin'] ?? '');
+    }
+    if (qrr_write_right($user)) {
+        print ' <a href="' .
+            qrr_h(qrr_app_link('edit/' . $code)) .
+            '">' .
+            qrr_h(qrr_t('Change location')) .
+            '</a>';
     }
     print '</td><td>' .
         qrr_h($item['qty'] ?? '?') .

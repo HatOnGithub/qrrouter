@@ -1,4 +1,4 @@
-# QR Router v0.3.8
+# QR Router v0.3.9
 
 QR-based inventory handling inside Dolibarr, originally developed as an internal tool for DeltaIoT.
 
@@ -7,8 +7,9 @@ Available under the [MIT License](LICENSE). Third-party dependencies retain thei
 ## Features
 
 - **Intended use:** label and identify warehouse items, locate them, track stock actions and manage employee loans from a phone or workstation.
-- **Dependencies:** an existing Dolibarr installation with Product, Stock, Lot/Serial and Binloc modules, plus the QR Router business service.
+- **Dependencies:** an existing Dolibarr installation with Product, Stock and Lot/Serial modules, plus the QR Router business service. Locations are stored internally; Binloc is optional for one-time import.
 - Individual items with native serial numbers, generic product labels and counted containers with native lots.
+- CSV inventory exports and validated imports for creation, registration and metadata updates.
 - Camera scanning and separate manual / USB scanner entry.
 - Warehouse moves, consumption, returns, quantity corrections and container transfers.
 - Employee checkout and checkin, location summaries and picking previews.

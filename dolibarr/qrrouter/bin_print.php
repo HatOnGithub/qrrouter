@@ -56,7 +56,7 @@ foreach ($bins as $name) {
             break;
         }
     }
-    $local = $example ? qrr_binloc_local_label($db, $wid, $example, $state) : $name;
+    $local = $example ? qrr_location_local_label($db, $wid, $example, $state) : $name;
     print '<h1>Bin ' .
         qrr_h($local) .
         '</h1><div class="meta">' .
@@ -127,7 +127,7 @@ foreach ($bins as $name) {
             $unk .
             ' container(s) have unknown quantities. Totals above are incomplete.</p>';
     }
-    print '<p class="meta">Locations are QR Router positions with Binloc bin codes. Actual warehouse stock is maintained separately in Dolibarr. Please reconcile before relying on this sheet for stock valuation.</p>';
+    print '<p class="meta">Locations are positions managed in QR Router. Actual warehouse stock is maintained separately in Dolibarr. Please reconcile before relying on this sheet for stock valuation.</p>';
     print '</section>';
 }
 qrr_layout_end();

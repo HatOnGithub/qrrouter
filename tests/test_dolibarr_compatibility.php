@@ -77,6 +77,8 @@ contract('core/lib/admin.lib.php', 'dolibarr_set_const', ['db', 'name', 'value',
 contract('core/modules/DolibarrModules.class.php', '_load_tables', ['reldir']);
 contract('core/modules/DolibarrModules.class.php', '_init', ['array_sql', 'options']);
 contract('core/modules/DolibarrModules.class.php', '_remove', ['array_sql', 'options']);
+contract('core/class/extrafields.class.php', 'addExtraField', ['attrname', 'label', 'type', 'pos', 'size', 'elementtype', 'unique', 'required', 'default_value', 'param', 'alwayseditable', 'perms', 'list', 'help', 'computed', 'entity', 'langfile', 'enabled']);
+contract('core/class/extrafields.class.php', 'fetch_name_optionals_label', ['elementtype']);
 $restricted = contract('core/lib/security.lib.php', 'restrictedArea', ['user', 'features', 'object', 'tableandshare', 'feature2', 'dbt_keyfield', 'dbt_select', 'isdraft']);
 
 class MovementDatabase {

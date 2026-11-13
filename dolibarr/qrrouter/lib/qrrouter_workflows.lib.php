@@ -1,5 +1,5 @@
 <?php
-/** Recoverable native stock workflows and lot-specific Binloc assignments. */
+/** Recoverable native stock workflows and lot-specific internal location assignments. */
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
@@ -42,7 +42,7 @@ function qrr_registration_fields($db, $user, $posted, $warehouses, $type) {
     if (strlen($nativeBatch) > 100) {
         throw new RuntimeException('Native batch value is too long');
     }
-    $choice = qrr_binloc_choice($db, $wid, $posted['qrr_levels'] ?? []);
+    $choice = qrr_location_choice($db, $wid, $posted['qrr_levels'] ?? []);
     qrr_item_validate(
         $type,
         $label,
@@ -135,14 +135,6 @@ function qrr_native_evidence($db, $op) {
     }
     $db->free($res);
     $proof = ['seen' => $seen, 'other' => $other];
-    if (!empty($op['product_lot_id']) && isset($op['location_target'])) {
-        $proof['location'] = qrr_native_location_matches(
-            $db,
-            $op['product_lot_id'],
-            $op['product_id'],
-            $op['location_target'],
-        );
-    }
     return $proof;
 }
 
@@ -256,14 +248,6 @@ function qrr_native_apply($db, $user, $entry, $op) {
                     ),
                 );
             }
-        }
-        if (!empty($entry['product_lot_id']) && isset($op['location_target'])) {
-            qrr_native_save_location(
-                $db,
-                $user,
-                array_merge($entry, $op['location_target']),
-                $entry['product_lot_id'],
-            );
         }
         if ($db->commit() <= 0) {
             throw new RuntimeException(

@@ -129,6 +129,29 @@
             <fa-icon [icon]="icons.register" aria-hidden="true" />
             {{ 'Register item' | t }}
           </a>
+          @if (!item.pending_operation && !item.pending_handoff) {
+            @if (confirmingDelete()) {
+              <div role="group" [attr.aria-label]="'Delete unassigned QR code' | t">
+                <p>
+                  {{
+                    'Delete this unassigned QR code? Printed copies will no longer be registered.'
+                      | t
+                  }}
+                </p>
+                <button mat-flat-button [disabled]="busy()" (click)="deleteUnassigned()">
+                  {{ 'Confirm deletion' | t }}
+                </button>
+                <button mat-button [disabled]="busy()" (click)="confirmingDelete.set(false)">
+                  {{ 'Cancel' | t }}
+                </button>
+              </div>
+            } @else {
+              <button mat-stroked-button [disabled]="busy()" (click)="confirmingDelete.set(true)">
+                <fa-icon [icon]="icons.delete" aria-hidden="true" />
+                {{ 'Delete unassigned QR code' | t }}
+              </button>
+            }
+          }
         }
         @if (available(item)) {
           <a mat-stroked-button [routerLink]="['/edit', item.code]">

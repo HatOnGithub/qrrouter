@@ -1,7 +1,9 @@
 # QR Product Router UI translations; generated keys are derived from the source English phrase.
 QRRUI_d3c7366db5a3=Les étiquettes attribuées affichent les détails du produit. Les étiquettes non attribuées affichent uniquement le code QR et son identifiant.
 Module503871Name=QR Product Router
-Module503871Desc=Gestion des articles QR, contenants comptés, emplacements Binloc et opérations d’entrepôt
+Module503871Desc=Gestion des articles QR, contenants comptés, emplacements internes et opérations d’entrepôt
+QRRSerialPrefix=Préfixe des numéros de série QR
+QRRSerialPrefixHelp=Préfixe des nouveaux numéros de série individuels QR Router, suivi de 24 caractères hexadécimaux aléatoires. Vide utilise SN-. Maximum 76 octets UTF-8 ; sans espaces ni balisage. Les numéros existants et les noms des contenants restent inchangés.
 Qrrouter=QR Product Router
 # Module connection settings
 QRRUI_5e79c27833d2=Configuration de QR Router
