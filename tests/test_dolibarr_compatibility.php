@@ -171,6 +171,62 @@ check($module->need_dolibarr_version === [21, 0, 2], 'Incorrect Dolibarr minimum
 check($module->phpmin === [8, 0], 'Incorrect PHP minimum');
 check(empty($module->need_dolibarr_max_version), 'An upper version cap blocks incremental upgrades');
 
+// Exercise activation through the real native field-creation methods, not just signatures.
+// An interrupted activation may leave the SQL column without its field definition.
+$extraFile = 'core/class/extrafields.class.php';
+eval('class ExtraFields {
+    public $db, $error = "", $errno = "", $attributes = [];
+    public function __construct($db) { $this->db = $db; }
+    public function fetch_name_optionals_label($element) {
+        if ($this->db->defined) {
+            $this->attributes[$element]["label"]["qrrouter_serial_prefix"] = "Existing prefix";
+        }
+    }
+    ' . native_function($source . '/' . $extraFile, 'addExtraField') . "\n"
+    . native_function($source . '/' . $extraFile, 'create') . "\n"
+    . native_function($source . '/' . $extraFile, 'create_label') . "\n}");
+mkdir($fixture . '/core/class', 0777, true);
+file_put_contents($fixture . '/' . $extraFile, '<?php /* Native methods supplied above. */');
+function dol_now() { return 1700000000; }
+class ActivationDatabase {
+    public $column = false, $defined = false, $adds = 0, $inserts = [];
+    public function prefix() { return 'llx_'; }
+    public function sanitize($value) { return $value; }
+    public function escape($value) { return str_replace("'", "''", (string) $value); }
+    public function idate($value) { return '2023-11-14 22:13:20'; }
+    public function DDLAddField($table, $name, $definition) {
+        $this->adds++;
+        check($table === 'llx_product_extrafields' && $name === 'qrrouter_serial_prefix', 'Wrong prefix field target');
+        check($definition['type'] === 'varchar' && (int) $definition['value'] === 76, 'Wrong prefix column definition');
+        if ($this->column) { return -1; }
+        $this->column = true;
+        return 1;
+    }
+    public function lasterror() { return 'Column already exists'; }
+    public function lasterrno() { return 'DB_ERROR_COLUMN_ALREADY_EXISTS'; }
+    public function query($sql) {
+        $this->inserts[] = $sql;
+        $this->defined = true;
+        return true;
+    }
+}
+class ActivationModule extends modQrrouter {
+    public $registrations = 0;
+    protected function _load_tables($reldir, $onlywithsuffix = '') { return 1; }
+    protected function _init($array_sql, $options = '') { $this->registrations++; return 1; }
+}
+$conf = (object) ['entity' => 1];
+foreach ([false, true] as $leftoverColumn) {
+    $activationDb = new ActivationDatabase();
+    $activationDb->column = $leftoverColumn;
+    $activation = new ActivationModule($activationDb);
+    check($activation->init() === 1 && $activation->registrations === 1, 'Activation failed creating native prefix field');
+    check(count($activationDb->inserts) === 1 && $activationDb->defined, 'Prefix field definition missing');
+    check(str_contains($activationDb->inserts[0], 'QRRSerialPrefixHelp'), 'Prefix field help missing');
+    check($activation->init() === 1 && $activation->registrations === 2, 'Reactivation failed');
+    check($activationDb->adds === 1 && count($activationDb->inserts) === 1, 'Reactivation overwrote existing prefix configuration');
+}
+
 // Run the real warehouse fetch: older releases populate statut without updating status.
 function dol_syslog($message, $level = 0) {}
 function getCountry($id, $mode) { return ['label' => 'Fixture', 'code' => 'XX']; }
