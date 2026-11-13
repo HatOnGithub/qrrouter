@@ -51,4 +51,15 @@ same_translation(
     'Printable translations remain escaped'
 );
 
+require_once __DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_print.lib.php';
+$langs = (object) ['defaultlang' => 'nl_BE'];
+same_translation(qrr_print_locale(), 'nl_NL', 'Print locale defaults to supported account language');
+same_translation(qrr_print_locale('fr_FR'), 'fr_FR', 'Explicit print language');
+same_translation(qrr_print_translations('nl_NL')['Warehouse inventory'], 'Magazijninventaris', 'Print-only report translation');
+same_translation(qrr_print_translations('en_US')['Warehouse'], 'Warehouse', 'English explicitly overrides account language');
+same_translation($langs->defaultlang, 'nl_BE', 'Print choice does not mutate account language');
+try {
+    qrr_print_locale('../en_US');
+    throw new RuntimeException('Invalid print locale accepted');
+} catch (InvalidArgumentException $error) { $checks++; }
 echo 'Passed ' . $checks . " translation checks.\n";

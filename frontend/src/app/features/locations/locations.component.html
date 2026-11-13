@@ -21,20 +21,55 @@
       </mat-form-field>
       @if (data(); as data) {
         <mat-form-field appearance="outline">
-          <mat-label>{{ 'Bin' | t }}</mat-label>
-          <mat-select [(ngModel)]="bin" (ngModelChange)="load()">
-            <mat-option value="">{{ 'No bin assigned' | t }}</mat-option>
-            @for (b of data.bins; track b) {
-              <mat-option [value]="b">{{ b }}</mat-option>
+          <mat-label>{{ 'Report by level' | t }}</mat-label>
+          <mat-select [(ngModel)]="reportLevel" (ngModelChange)="selectLevel()">
+            <mat-option [value]="0">{{ 'Exact bin / whole warehouse' | t }}</mat-option>
+            @for (level of levels(); track level.id) {
+              <mat-option [value]="level.id">{{ level.label }}</mat-option>
             }
           </mat-select>
         </mat-form-field>
+        @if (reportLevel) {
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Level value' | t }}</mat-label>
+            <mat-select [(ngModel)]="levelValue" (ngModelChange)="load()">
+              <mat-option value="">{{ 'All values' | t }}</mat-option>
+              @for (option of reportValues(); track option.value) {
+                <mat-option [value]="option.value">{{ option.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        } @else {
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Search bins' | t }}</mat-label>
+            <input matInput type="search" [(ngModel)]="binSearch" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Bin' | t }}</mat-label>
+            <mat-select [(ngModel)]="bin" (ngModelChange)="selectBin()">
+              <mat-select-trigger>{{ bin || ('All bins' | t) }}</mat-select-trigger>
+              <mat-option value="">{{ 'All bins' | t }}</mat-option>
+              @for (b of matchingBins(); track b) {
+                <mat-option [value]="b">{{ b }}</mat-option>
+              }
+              @if (bin && !matchingBins().includes(bin)) {
+                <mat-option class="hidden-bin" [value]="bin">{{ bin }}</mat-option>
+              }
+              @if (!matchingBins().length && binSearch.trim()) {
+                <mat-option disabled>{{ 'No matching bins' | t }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
       }
     </div>
     @if (busy()) {
       <mat-progress-bar mode="indeterminate" />
     }
     @if (data(); as data) {
+      @if (data.summary.scope) {
+        <h2>{{ data.summary.scope }}</h2>
+      }
       <table>
         <thead>
           <tr>
@@ -100,12 +135,26 @@
       <div class="actions">
         <a
           mat-stroked-button
-          [href]="api.link('bin_print.php', { warehouse_id: warehouse, bin: bin })"
+          [href]="
+            api.link('bin_print.php', {
+              warehouse_id: warehouse,
+              bin: bin,
+              level_id: reportLevel,
+              level_value: levelValue,
+            })
+          "
           target="_blank"
           rel="noopener"
         >
           <fa-icon [icon]="icons.print" aria-hidden="true" />
-          {{ 'Print bin inventory' | t }}
+          {{
+            (reportLevel && levelValue
+              ? 'Print location report'
+              : bin
+                ? 'Print bin inventory'
+                : 'Print warehouse inventory'
+            ) | t
+          }}
         </a>
       </div>
       <h2>{{ 'Warehouse stock comparison' | t }}</h2>
@@ -145,30 +194,11 @@
   </qrr-card>
   @if (warehouse && api.context()!.permissions.manage) {
     <qrr-card [title]="'Location levels' | t">
-      <p>{{ 'Enter one level name per line. Values are stored in QR Router.' | t }}</p>
-      <mat-form-field appearance="outline">
-        <mat-label>{{ 'Location level names' | t }}</mat-label>
-        <textarea matInput [(ngModel)]="levelNames" [disabled]="busy()" rows="3"></textarea>
-      </mat-form-field>
-      @for (level of levels(); track level.id) {
-        @if (level.datatype === 'list' || level.datatype === 'letter') {
-          <mat-form-field appearance="outline">
-            <mat-label>{{ 'Add location options' | t }}: {{ level.label }}</mat-label>
-            <textarea
-              matInput
-              [(ngModel)]="newOptions[level.id]"
-              [disabled]="busy()"
-              rows="2"
-            ></textarea>
-            <mat-hint>
-              {{ 'One new option per line. Existing option identities are preserved.' | t }}
-            </mat-hint>
-          </mat-form-field>
-        }
-      }
-      <button mat-flat-button [disabled]="busy()" (click)="saveLevels()">
-        {{ 'Save location levels' | t }}
-      </button>
+      <qrr-location-levels-editor
+        [levels]="levels()"
+        [disabled]="busy()"
+        (saved)="saveLevels($event)"
+      />
     </qrr-card>
   }
   @if (api.context()!.permissions.admin && api.context()!.location_import_available) {

@@ -150,6 +150,14 @@ qrr-root {
   .mat-mdc-unelevated-button {
     background: var(--qrr-action-background, ButtonFace);
   }
+  // Projected card actions stretch across the content grid; give them room to wrap.
+  qrr-card > .qrr-section > section > :is([mat-button], [mat-flat-button], [mat-stroked-button]) {
+    height: auto;
+    min-height: 48px;
+    padding-block: 12px;
+    line-height: 1.4;
+    white-space: normal;
+  }
   table {
     width: 100%;
     border-collapse: collapse;

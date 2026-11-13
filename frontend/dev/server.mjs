@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
-import { labelFormats, locales, scenarios } from './fixtures.mjs';
+import { labelFormats, locales, scenarios, translations } from './fixtures.mjs';
 import { MockError, MockStore } from './store.mjs';
 
 const escape = value =>
@@ -66,12 +66,27 @@ function send(response, status, body, type = 'application/json; charset=utf-8') 
 
 async function printPage(store, url) {
   const params = url.searchParams;
+  const locale = params.get('lang') || store.settings.locale;
+  if (!locales.includes(locale)) throw new MockError('Unsupported print language');
+  const words = translations(locale);
+  const t = text => words[text] || text;
+  const controls = `<form class="qrr-noprint" method="get"><label>${escape(t('Output language'))} <select name="lang">${locales.map(id => `<option value="${id}"${id === locale ? ' selected' : ''}>${{ en_US: 'English', nl_NL: 'Nederlands', fr_FR: 'Français' }[id]}</option>`).join('')}</select></label>${[
+    ...params,
+  ]
+    .filter(([key]) => key !== 'lang')
+    .map(([key, value]) => `<input type="hidden" name="${escape(key)}" value="${escape(value)}">`)
+    .join('')}<button>${escape(t('Apply language'))}</button></form>`;
   if (url.pathname.endsWith('/bin_print.php')) {
     const warehouse = store.warehouse(params.get('warehouse_id'));
     const bin = params.get('bin') || '';
-    const items = Object.values(store.data.state.items).filter(
-      item => item.warehouse_id === warehouse && (!bin || item.bin === bin)
-    );
+    const level_id = Number(params.get('level_id'));
+    const level_value = params.get('level_value') || '';
+    const summary = store.locations(warehouse, bin, level_id, level_value).summary;
+    const codes = new Set([
+      ...summary.tracked.map(item => item.code),
+      ...summary.totals.flatMap(row => row.codes),
+    ]);
+    const items = Object.values(store.data.state.items).filter(item => codes.has(item.code));
     const rows = items
       .map(
         item =>
@@ -80,7 +95,7 @@ async function printPage(store, url) {
       .join('');
     return page(
       'Bin content sheets',
-      `<p><a href="${escape(appLink('locations', { warehouse_id: warehouse, bin }))}">Back to bins</a></p><table><thead><tr><th>Bin</th><th>Item</th><th>Product</th><th>QR</th><th>Quantity</th></tr></thead><tbody>${rows}</tbody></table>`
+      `${controls}<h1>${escape(summary.scope || bin || t('Warehouse inventory'))}</h1><p><a href="${escape(appLink('locations', { warehouse_id: warehouse, bin, level_id, level_value }))}">${escape(t('Back to bins'))}</a></p><table><thead><tr>${['Bin', 'Item', 'Product', 'QR', 'Quantity'].map(text => `<th>${escape(t(text))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`
     );
   }
   const batch = params.get('batch');
@@ -106,7 +121,7 @@ async function printPage(store, url) {
   const css = profile
     ? `@media print{@page{size:${profile.width}mm ${profile.height}mm;margin:0}html,body{width:${profile.width}mm;margin:0;padding:0}h1{display:none}.label{display:flex;box-sizing:border-box;width:${profile.width}mm;height:${profile.height}mm;overflow:hidden;margin:0;padding:1mm;gap:1mm;break-after:page}.label:last-child{break-after:auto}.label svg{flex:0 0 ${profile.qr}mm;width:${profile.qr}mm;height:${profile.qr}mm}.label>div{min-width:0;max-height:100%;overflow:hidden}.label strong{font-size:10pt}.label span,.label small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7pt}}`
     : '';
-  return page(batch ? 'QR label batch' : 'QR label', labels.join(''), css);
+  return page(t(batch ? 'Printable QR batch' : 'Print QR label'), controls + labels.join(''), css);
 }
 
 export function createMockServer(defaultStore = new MockStore()) {

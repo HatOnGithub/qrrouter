@@ -1,4 +1,5 @@
 import { details, name, serial, PrintItem, Product, Profile } from './model.js';
+import { languageSelect } from './language.js';
 
 interface PrintData {
   items: PrintItem[];
@@ -13,6 +14,7 @@ interface PrintData {
   selection: Record<string, string | number>;
   batch: boolean;
   translations: Record<string, string>;
+  locale: string;
 }
 const data: PrintData = JSON.parse(document.getElementById('qrr-print-data')!.textContent!);
 const t = (value: string) => data.translations[value] || value;
@@ -31,6 +33,7 @@ const profile = data.profiles.find(option => option.id === data.format);
 const thermal = data.format !== 'a4';
 if (thermal && !profile) throw new Error('Unknown label format');
 document.title = t(data.title);
+document.documentElement.lang = data.locale.replace('_', '-');
 const style = element('style');
 style.textContent = profile
   ? `@page{size:${profile.width}mm ${profile.height}mm;margin:0}:root{--label-width:${profile.width}mm;--label-height:${profile.height}mm;--qr-size:${profile.qr}mm;--detail-font:${profile.font}pt;--min-detail-font:${profile.font - 2.5}pt}`
@@ -53,7 +56,11 @@ const button = element('button', '', t(thermal ? 'Print DYMO labels' : 'Print / 
 button.id = 'qrr-print';
 button.disabled = true;
 controls.append(button, link('Back to QR Router', data.back));
-if (thermal) controls.append(link('A4 layout', data.a4));
+if (thermal) {
+  const a4 = new URL(data.a4, window.location.href);
+  a4.searchParams.set('lang', data.locale);
+  controls.append(link('A4 layout', a4.href));
+}
 const status = element('p', '', t(data.items.length ? 'Loading QR images…' : 'No labels to print'));
 status.id = 'qrr-print-status';
 status.setAttribute('role', 'status');
@@ -78,6 +85,7 @@ if (!thermal) {
   select.append(option);
 }
 form.append(label, select);
+form.append(languageSelect(data.locale, t('Output language')));
 for (const [key, value] of Object.entries(data.selection)) {
   const input = element('input');
   input.type = 'hidden';
@@ -85,7 +93,7 @@ for (const [key, value] of Object.entries(data.selection)) {
   input.value = String(value);
   form.append(input);
 }
-const apply = element('button', '', t('Apply size'));
+const apply = element('button', '', t('Apply settings'));
 apply.type = 'submit';
 form.append(apply);
 controls.append(form);

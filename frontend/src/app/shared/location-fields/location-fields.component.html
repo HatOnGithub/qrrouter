@@ -24,6 +24,7 @@
         <input
           matInput
           [type]="level.datatype === 'number' ? 'number' : 'text'"
+          [attr.step]="level.datatype === 'number' ? 'any' : null"
           [ngModel]="value(level.id)"
           [ngModelOptions]="{ standalone: true }"
           (ngModelChange)="change(level.id, $event)"

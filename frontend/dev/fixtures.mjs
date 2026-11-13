@@ -124,6 +124,18 @@ export function createFixture(scenario = 'populated') {
       shipment: [{ id: 29, text: 'SHP-0029' }],
       salesorder: [{ id: 39, text: 'SO-0039' }],
     },
+    manufacturing_orders: [
+      {
+        id: 19,
+        text: 'MO-0019',
+        lines: [
+          { product_id: 1, qty: 6, role: 'toconsume' },
+          { product_id: 3, qty: 1, role: 'toconsume' },
+          { product_id: 2, qty: 1, role: 'toproduce' },
+          { product_id: 1, qty: 2, role: 'consumed' },
+        ],
+      },
+    ],
     // Existing serial available for registration without creating a new lot.
     lots: [{ id: 900, product_id: 2, serial: 'EXISTING-DRILL-01', warehouse_id: 1, qty: 1 }],
     thumbnails: {},

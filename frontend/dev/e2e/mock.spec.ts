@@ -1,6 +1,231 @@
 import { expect, test } from './fixtures';
 import type { Bootstrap } from '../../src/app/core/models/inventory';
 
+test('level datatypes drive location inputs and protect assigned levels', async ({
+  page,
+  mock,
+}) => {
+  const choose = async (name: string, option: string) => {
+    await page.getByRole('combobox', { name, exact: true }).click();
+    await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
+  };
+  await page.goto('/#/locations?warehouse_id=2');
+  await choose('Data type 1', 'Text');
+  await page.getByRole('button', { name: 'Add level', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Level name 3', exact: true }).fill('Bay');
+  await choose('Data type 3', 'Letters (A–Z)');
+  await page.getByRole('textbox', { name: 'Add location options: Bay', exact: true }).fill('AA');
+  await page.getByRole('button', { name: 'Add level', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Level name 4', exact: true }).fill('Section');
+  await choose('Data type 4', 'Option list');
+  await page
+    .getByRole('textbox', { name: 'Add location options: Section', exact: true })
+    .fill('North\nSouth');
+  await page.getByRole('button', { name: 'Save location levels', exact: true }).click();
+  await expect(page.getByText('Location levels saved', { exact: true })).toBeVisible();
+  await page.goto('/#/create');
+  await choose('QR type', 'Tracked Generic');
+  await page.getByRole('combobox', { name: 'Dolibarr product', exact: true }).fill('BOLT');
+  await page.getByRole('option', { name: /BOLT-M8/ }).click();
+  await choose('Warehouse', 'OTHER');
+  await page.getByRole('textbox', { name: 'Aisle', exact: true }).fill('West');
+  await page.getByRole('spinbutton', { name: 'Shelf', exact: true }).fill('12.5');
+  await choose('Bay', 'AA');
+  await choose('Section', 'South');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page).toHaveURL(/#\/items\//);
+  expect(
+    Object.values((await mock.bootstrap()).state.items).some(
+      item => item.bin === 'West-12.5-AA-South'
+    )
+  ).toBe(true);
+  await page.goto('/#/locations?warehouse_id=2');
+  await choose('Data type 1', 'Number');
+  await page.getByRole('button', { name: 'Save location levels', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Cannot change the datatype of a level with saved assignments'
+  );
+});
+
+test('location level rows add, validate and save without changing existing option identities', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#/locations?warehouse_id=1');
+  const editor = page.locator('qrr-location-levels-editor');
+  const save = editor.getByRole('button', { name: 'Save location levels', exact: true });
+  const add = editor.getByRole('button', { name: 'Add level', exact: true });
+  await editor.getByRole('textbox', { name: 'Level name 1', exact: true }).fill('Zone');
+  await add.click();
+  await expect(save).toBeDisabled();
+  await editor.getByRole('textbox', { name: 'Level name 3', exact: true }).fill('zone');
+  await expect(save).toBeDisabled();
+  await editor.getByRole('button', { name: 'Remove new level 3', exact: true }).click();
+  await expect(editor.getByRole('textbox', { name: 'Level name 3', exact: true })).toHaveCount(0);
+  await add.click();
+  await editor.getByRole('textbox', { name: 'Level name 3', exact: true }).fill('Position');
+  await editor.getByRole('textbox', { name: 'Add location options: Zone', exact: true }).fill('C');
+  await save.click();
+  await expect(page.getByText('Location levels saved', { exact: true })).toBeVisible();
+  const response = await request.get('/custom/qrrouter/api.php?resource=levels&warehouse_id=1');
+  const levels = await response.json();
+  expect(levels.map((level: { label: string }) => level.label)).toEqual([
+    'Zone',
+    'Shelf',
+    'Position',
+  ]);
+  expect(levels[0].id).toBe(1);
+  expect(levels[0].options.slice(0, 2)).toEqual([
+    { id: 101, value: 'A' },
+    { id: 102, value: 'B' },
+  ]);
+  expect(levels[0].options[2].value).toBe('C');
+  await page.reload();
+  await expect(editor.getByRole('textbox', { name: 'Level name 3', exact: true })).toHaveValue(
+    'Position'
+  );
+  for (let index = 4; index <= 8; index++) {
+    await add.click();
+    await editor
+      .getByRole('textbox', { name: 'Level name ' + index, exact: true })
+      .fill('Level ' + index);
+  }
+  await expect(add).toBeDisabled();
+  await editor.getByRole('button', { name: 'Remove new level 8', exact: true }).click();
+  await expect(add).toBeEnabled();
+  const overflow = await editor.evaluate(node => ({
+    width: node.clientWidth,
+    scroll: node.scrollWidth,
+    children: [...node.querySelectorAll<HTMLElement>('*')]
+      .filter(child => child.getBoundingClientRect().right > node.getBoundingClientRect().right + 1)
+      .map(child => ({
+        tag: child.tagName,
+        css: child.className,
+        width: child.clientWidth,
+        right: child.getBoundingClientRect().right,
+      }))
+      .slice(0, 8),
+  }));
+  expect(overflow.scroll, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width + 1);
+});
+
+test('manufacturing picking uses component requirements and clears the previous source', async ({
+  page,
+}) => {
+  await page.goto('/#/picking');
+  await page.getByRole('combobox', { name: 'Order type', exact: true }).click();
+  await page
+    .getByRole('listbox')
+    .getByRole('option', { name: 'Manufacturing order', exact: true })
+    .click();
+  await page.getByRole('combobox', { name: 'Manufacturing order', exact: true }).fill('MO');
+  await page.getByRole('option', { name: 'MO-0019', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Warehouse', exact: true }).click();
+  await page.getByRole('option', { name: 'MAIN', exact: true }).click();
+  await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
+  await expect(
+    page.locator('h2').getByRole('link', { name: 'MO-0019', exact: true })
+  ).toHaveAttribute('href', /mrp\/mo_card.php\?id=19/);
+  await expect(page.locator('tbody')).toContainText('BOLT-M8');
+  await expect(page.locator('tbody')).toContainText('CABLE-CAT6');
+  await expect(page.locator('tbody')).not.toContainText('DRILL-18V');
+  await expect(
+    page.getByRole('button', { name: 'Print / Save as PDF', exact: true })
+  ).toBeEnabled();
+  await page.getByRole('combobox', { name: 'Order type', exact: true }).click();
+  await page
+    .getByRole('listbox')
+    .getByRole('option', { name: 'Customer order', exact: true })
+    .click();
+  await expect(page.locator('tbody')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Generate preview', exact: true })).toBeDisabled();
+});
+
+test('picking output language changes without changing the module language', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/picking');
+  await mock.select('Output language', 'Nederlands');
+  await expect(page.getByRole('heading', { name: 'QR-picklijst', exact: true })).toBeVisible();
+  await expect(
+    page.locator('.module-navigation').getByRole('link', { name: 'Inventory', exact: true })
+  ).toBeVisible();
+  await mock.select('Output language', 'English');
+  await expect(
+    page.getByRole('heading', { name: 'QR-aware picking sheet', exact: true })
+  ).toBeVisible();
+});
+
+test('location reports filter and print by level for read-only users', async ({
+  page,
+  mock,
+  request,
+}) => {
+  await mock.reset('read-only');
+  await page.goto('/#/locations?warehouse_id=1');
+  await page.getByRole('combobox', { name: 'Report by level', exact: true }).click();
+  await page.getByRole('option', { name: 'Aisle', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Level value', exact: true }).click();
+  await page.getByRole('option', { name: 'A', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Aisle: A', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Workshop drill', exact: true })).toBeVisible();
+  const print = page.getByRole('link', { name: 'Print location report', exact: true });
+  const href = (await print.getAttribute('href'))!;
+  expect(href).toContain('level_id=1');
+  expect(href).toContain('level_value=101');
+  const printed = await request.get(href);
+  expect(printed.ok()).toBeTruthy();
+  expect(await printed.text()).toContain('Aisle: A');
+  expect(await printed.text()).not.toContain('Network cable');
+  await page.goto('/#/locations?warehouse_id=1&level_id=2&level_value=2');
+  await expect(page.getByRole('heading', { name: 'Shelf: 2', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Workshop drill', exact: true })).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Level value', exact: true }).click();
+  await page.getByRole('option', { name: 'All values', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Workshop drill', exact: true })).toBeVisible();
+});
+
+test('location inventory searches bins and defaults to the whole warehouse', async ({
+  page,
+  mock,
+}) => {
+  const cable = await mock.item('Network cable');
+  await page.goto('/#/locations?warehouse_id=1');
+  const bin = page.getByRole('combobox', { name: 'Bin', exact: true });
+  const search = page.getByRole('searchbox', { name: 'Search bins', exact: true });
+  const drill = page.getByRole('link', { name: 'Workshop drill', exact: true });
+  const cableLocation = page.getByRole('link', {
+    name: 'Change location ' + cable.code,
+    exact: true,
+  });
+  await expect(bin).toContainText('All bins');
+  await expect(drill).toBeVisible();
+  await expect(cableLocation).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Print warehouse inventory', exact: true })
+  ).toBeVisible();
+  await search.fill('b-2');
+  await bin.click();
+  await expect(page.getByRole('option', { name: 'A-1', exact: true })).toHaveCount(0);
+  await page.getByRole('option', { name: 'B-2', exact: true }).click();
+  await expect(drill).toHaveCount(0);
+  await expect(cableLocation).toBeVisible();
+  await search.fill('no-such-bin');
+  await expect(bin).toContainText('B-2');
+  await bin.click();
+  await expect(page.getByRole('option', { name: 'No matching bins', exact: true })).toBeDisabled();
+  await page.getByRole('option', { name: 'All bins', exact: true }).click();
+  await expect(drill).toBeVisible();
+  await expect(cableLocation).toBeVisible();
+  await page.getByRole('combobox', { name: 'Warehouse', exact: true }).click();
+  await page.getByRole('option', { name: 'OTHER', exact: true }).click();
+  await expect(search).toHaveValue('');
+  await expect(drill).toHaveCount(0);
+  await expect(cableLocation).toHaveCount(0);
+});
+
 test('unassigned QR deletion requires confirmation and removes it from print batches', async ({
   page,
   mock,
@@ -85,6 +310,7 @@ test('assigned batches share product and location and open printable labels', as
   await page.getByRole('textbox', { name: 'Item name / label', exact: true }).fill('Bulk drills');
   await mock.lookup('Dolibarr product', 'DRILL', /DRILL-18V/);
   await mock.select('Warehouse', 'MAIN');
+  await mock.select('Aisle', 'A');
   await page.getByRole('spinbutton', { name: 'Shelf', exact: true }).fill('3');
   await page.getByRole('spinbutton', { name: 'Number of labels', exact: true }).fill('3');
   await create.click();
@@ -100,7 +326,7 @@ test('assigned batches share product and location and open printable labels', as
       label: 'Bulk drills',
       product_id: 2,
       warehouse_id: 1,
-      bin_values: { 2: '3' },
+      bin_values: { 1: 101, 2: '3' },
     });
   }
   const popupPromise = page.waitForEvent('popup');
@@ -288,7 +514,7 @@ test('edits persist across refresh and real QR label previews open', async ({ pa
   const popupPromise = page.waitForEvent('popup');
   await page.getByRole('link', { name: 'Print', exact: true }).first().click();
   const popup = await popupPromise;
-  await expect(popup.getByRole('heading', { name: 'QR label batch' })).toBeVisible();
+  await expect(popup.getByRole('heading', { name: 'Printable QR batch' })).toBeVisible();
   await expect(popup.locator('svg')).toHaveCount(3);
   await expect(popup.locator('.label span, .label small')).toHaveCount(0);
   await popup.close();

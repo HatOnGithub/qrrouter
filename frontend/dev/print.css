@@ -49,6 +49,9 @@ nav {
   margin-bottom: 20px;
 }
 @media print {
+  .qrr-noprint {
+    display: none;
+  }
   nav,
   .mock-notice {
     display: none;

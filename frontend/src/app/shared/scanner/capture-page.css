@@ -22,6 +22,8 @@
   min-height: 52px;
   width: 100%;
   padding-inline: var(--qrr-button-padding, 12px);
+  padding-block: 12px;
+  height: auto;
   background: var(--qrr-action-background, ButtonFace);
   color: var(--qrr-action-text, ButtonText);
   font-weight: 700;

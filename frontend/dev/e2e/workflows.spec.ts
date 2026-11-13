@@ -298,12 +298,12 @@ test('camera warehouse moves appear in bin printouts and picking previews withou
   await expect(
     page.locator('tbody').getByRole('link', { name: drill.label, exact: true })
   ).toHaveCount(0);
-  const allocated = await page.locator('tbody tr td:last-child').allTextContents();
+  const allocated = await page.locator('tbody tr:has(a) td:last-child').allTextContents();
   expect(allocated.reduce((sum, quantity) => sum + Number(quantity), 0)).toBe(12);
   await mock.select('Warehouse', 'OTHER');
   await expect(page.locator('tbody tr')).toHaveCount(0);
   await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
-  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await expect(page.locator('tbody tr:has(a)')).toHaveCount(1);
   await expect(page.locator('tbody tr')).toContainText([drill.label]);
   expect((await mock.bootstrap()).state).toEqual(moved);
 });

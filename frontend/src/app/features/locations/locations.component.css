@@ -2,3 +2,7 @@
   display: grid;
   gap: 20px;
 }
+
+.hidden-bin {
+  display: none;
+}

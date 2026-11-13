@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 
+import type { Bootstrap } from '../src/app/core/models/inventory';
 import { validCode } from '../src/app/shared/scanner/codes';
 import { readFile, writeFile } from 'node:fs/promises';
 import { readRecords, recordsCsv } from '../src/app/features/csv/csv';
@@ -12,6 +13,31 @@ async function choose(page: Page, label: string, option: string): Promise<void> 
   await page.getByRole('combobox', { name: label, exact: true }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
 }
+
+test('print language preserves label size and identifiers when switching to A4', async ({
+  page,
+}) => {
+  const bootstrap: Bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
+  const item = Object.values(bootstrap.state.items).find(item => item.type === 'tracked')!;
+  await page.route('**/qr.php?code=*', route =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><rect width="240" height="240" fill="black"/></svg>',
+    })
+  );
+  await page.goto(`label.php?code=${item.code}&format=dymo-54x101`);
+  await page.getByLabel('Output language', { exact: true }).selectOption('fr_FR');
+  await page.getByRole('button', { name: 'Apply settings', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr-FR');
+  await expect(page.locator('.qrr-id-code')).toHaveText(item.code);
+  await expect(page.locator('.qrr-label-detail.name')).toContainText(item.label);
+  await expect(page.getByLabel('Langue de sortie', { exact: true })).toHaveValue('fr_FR');
+  const a4 = page.locator('a[href*="format=a4"]');
+  await expect(a4).toHaveAttribute('href', /lang=fr_FR/);
+  await a4.click();
+  await expect(page.getByLabel('Langue de sortie', { exact: true })).toHaveValue('fr_FR');
+  await expect(page.locator('.qrr-printed-code')).toContainText(item.code);
+});
 async function blank(page: Page): Promise<string> {
   const bootstrap = await (await page.request.get('api.php?resource=bootstrap')).json();
   const response = await page.request.post('api.php?action=bulk', {
@@ -183,7 +209,7 @@ test('DYMO labels add details and preserve physical dimensions at every size', a
     ).toBe(true);
   }
   await page.getByRole('combobox', { name: 'Label size' }).selectOption('dymo-32x57');
-  await page.getByRole('button', { name: 'Apply size' }).click();
+  await page.getByRole('button', { name: 'Apply settings' }).click();
   await expect(page).toHaveURL(new RegExp('code=' + code));
   await expect(page.getByRole('combobox', { name: 'Label size' })).toHaveValue('dymo-32x57');
 
@@ -556,6 +582,24 @@ test('picking preview uses native order lookup and server allocation', async ({ 
   ).toBeEnabled();
 });
 
+test('manufacturing pick sheets load native components without produced or consumed rows', async ({
+  page,
+}) => {
+  await open(page, 'picking');
+  await choose(page, 'Order type', 'Manufacturing order');
+  await page.getByRole('combobox', { name: 'Manufacturing order', exact: true }).fill('MO');
+  await page.getByRole('option', { name: /MO-0019/ }).click();
+  await choose(page, 'Warehouse', 'MAIN');
+  await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
+  await expect(
+    page.locator('h2').getByRole('link', { name: 'MO-0019', exact: true })
+  ).toHaveAttribute('href', /mrp\/mo_card.php\?id=19/);
+  await expect(page.locator('tbody')).toContainText('PART-003');
+  await expect(page.locator('tbody')).not.toContainText('SERIAL-004');
+  const quantities = await page.locator('tbody tr td:last-child').allTextContents();
+  expect(quantities.reduce((sum, quantity) => sum + Number(quantity), 0)).toBe(3);
+});
+
 test('box transfer is available from navigation and updates both container quantities', async ({
   page,
 }) => {
@@ -606,7 +650,7 @@ test('bin printouts open from locations and return to the selected warehouse', a
   await page.locator('nav').getByRole('link', { name: 'Bins and locations', exact: true }).click();
   await choose(page, 'Warehouse', 'MAIN');
   const popupPromise = page.waitForEvent('popup');
-  await page.getByRole('link', { name: 'Print bin inventory', exact: true }).click();
+  await page.getByRole('link', { name: 'Print warehouse inventory', exact: true }).click();
   const printout = await popupPromise;
   await expect(
     printout.getByRole('heading', { name: 'Bin content sheets', exact: true })
@@ -620,7 +664,7 @@ test('bin printouts open from locations and return to the selected warehouse', a
     'MAIN'
   );
   await expect(
-    printout.getByRole('link', { name: 'Print bin inventory', exact: true })
+    printout.getByRole('link', { name: 'Print warehouse inventory', exact: true })
   ).toBeVisible();
   await printout.close();
 });
@@ -956,14 +1000,15 @@ test('warehouse links configure internal locations and edit assignments without 
   const locations = page.getByRole('link', { name: 'Locations', exact: true });
   await expect(locations).toHaveAttribute('href', /#\/locations\?warehouse_id=1$/);
   await locations.click();
-  await page
-    .getByRole('textbox', { name: 'Location level names', exact: true })
-    .fill('Shelf\nPosition');
+  await page.getByRole('textbox', { name: 'Level name 1', exact: true }).fill('Shelf');
+  await page.getByRole('button', { name: 'Add level', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Level name 2', exact: true }).fill('Position');
+  await choose(page, 'Data type 2', 'Number');
   await page.getByRole('button', { name: 'Save location levels', exact: true }).click();
   await expect(page.getByText('Location levels saved', { exact: true })).toBeVisible();
   await open(page, 'edit/' + code);
   await page.getByRole('textbox', { name: 'Shelf', exact: true }).fill('Rack B');
-  await page.getByRole('textbox', { name: 'Position', exact: true }).fill('7');
+  await page.getByRole('spinbutton', { name: 'Position', exact: true }).fill('7');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page).toHaveURL(new RegExp('#/items/' + code));
   const state = (await (await page.request.get('api.php?resource=bootstrap')).json()).state;
@@ -971,7 +1016,7 @@ test('warehouse links configure internal locations and edit assignments without 
   await page.goto('native.php?kind=product&id=3');
   const row = page.getByRole('row').filter({ hasText: 'Internal location browser item' });
   await row.getByRole('link', { name: 'Change location', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Position', exact: true })).toHaveValue('7');
+  await expect(page.getByRole('spinbutton', { name: 'Position', exact: true })).toHaveValue('7');
 });
 
 test('unassigned deletion uses the native gateway and rejects assigned QR codes', async ({

@@ -1,0 +1,67 @@
+<p>{{ 'Configure one location level per row. Values are stored in QR Router.' | t }}</p>
+<div class="level-rows">
+  @for (row of rows(); track row.key; let index = $index) {
+    <div class="level-row">
+      <span class="level-number" aria-hidden="true">{{ index + 1 }}</span>
+      <div class="level-fields">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>{{ 'Level name' | t }} {{ index + 1 }}</mat-label>
+          <input matInput [(ngModel)]="row.name" [disabled]="disabled()" required maxlength="64" />
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>{{ 'Data type' | t }} {{ index + 1 }}</mat-label>
+          <mat-select [(ngModel)]="row.datatype" [disabled]="disabled()">
+            @for (type of datatypes; track type.value) {
+              <mat-option [value]="type.value">{{ type.label | t }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        @if (row.datatype === 'list' || row.datatype === 'letter') {
+          <mat-form-field class="level-options" appearance="outline" subscriptSizing="dynamic">
+            <mat-label>{{ 'Add location options' | t }}: {{ row.name }}</mat-label>
+            <textarea
+              matInput
+              [(ngModel)]="row.additions"
+              [disabled]="disabled()"
+              rows="2"
+            ></textarea>
+            <mat-hint>
+              {{
+                (row.datatype === 'letter'
+                  ? 'Letters start with A–Z. Add extra letter values, one per line.'
+                  : 'One new option per line. Existing option identities are preserved.'
+                ) | t
+              }}
+            </mat-hint>
+          </mat-form-field>
+        }
+      </div>
+      @if (!row.level) {
+        <button
+          mat-icon-button
+          [disabled]="disabled()"
+          (click)="remove(row)"
+          [attr.aria-label]="('Remove new level' | t) + ' ' + (index + 1)"
+        >
+          <fa-icon [icon]="icons.remove" aria-hidden="true" />
+        </button>
+      }
+    </div>
+  }
+</div>
+@if (rows().length && !valid()) {
+  <p class="muted" role="status">{{ 'Level names must be nonempty and unique.' | t }}</p>
+}
+<div class="actions">
+  <button mat-stroked-button [disabled]="disabled() || rows().length >= 8" (click)="add()">
+    <fa-icon [icon]="icons.add" aria-hidden="true" />
+    {{ 'Add level' | t }}
+  </button>
+  <button mat-flat-button [disabled]="disabled() || !valid()" (click)="save()">
+    {{ 'Save location levels' | t }}
+  </button>
+</div>
+<p class="muted">
+  {{ 'Up to eight levels. Existing level identities and options are preserved.' | t }}
+</p>
+<p class="muted">{{ 'Datatypes can only be changed before a level has saved assignments.' | t }}</p>

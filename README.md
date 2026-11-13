@@ -1,4 +1,4 @@
-# QR Router v0.3.10
+# QR Router v0.3.11
 
 QR-based inventory handling inside Dolibarr, originally developed as an internal tool for DeltaIoT.
 

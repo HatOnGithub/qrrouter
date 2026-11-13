@@ -129,6 +129,7 @@ export interface PickRow {
   type: string;
 }
 export interface BinSummary {
+  scope?: string;
   tracked: (Item & { _product: Product })[];
   totals: {
     product_id: number;

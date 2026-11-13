@@ -28,6 +28,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--php', default='php')
 parser.add_argument('--extension-dir')
 parser.add_argument('--browser', action='store_true')
+parser.add_argument('--browser-grep', help='Run only matching browser tests (requires --browser).')
 args = parser.parse_args()
 php = [str(Path(args.php).resolve())] if Path(args.php).is_file() else [args.php]
 if args.extension_dir:
@@ -65,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix='qrrouter-angular-') as directory:
     data = tmp / 'data'
     data.mkdir()
     shutil.copytree(root / 'dolibarr/qrrouter', webroot / 'custom/qrrouter')
-    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'custom/binloc/lib', 'commande/class', 'core/lib', 'core/modules']:
+    for folder in ['product/class', 'product/stock/class', 'custom/binloc/class', 'custom/binloc/lib', 'commande/class', 'mrp/class', 'core/lib', 'core/modules']:
         (webroot / folder).mkdir(parents=True, exist_ok=True)
     main = fixture.MAIN.replace("if(str_contains($sql,'FROM llx_entrepot')){", "if(str_contains($sql,'FROM llx_product WHERE')){$this->rows=[(object)['rowid'=>3,'ref'=>'PART-003','label'=>'Fixture Part']];}elseif(str_contains($sql,'FROM llx_entrepot')){")
     main = main.replace("elseif(str_contains($sql,'FROM llx_entrepot')){", 'else' + native_contract.QUERIES.lstrip())
@@ -121,8 +122,9 @@ $GLOBALS['user']=new class($role) {
   if($a===['categorie','lire'])return $this->role!=='no-tags';
   if($a===['stock','lire'])return $this->role!=='no-stock';
   if($a===['binloc','read'])return $this->role!=='no-binloc';
-  if($a===['commande','lire'])return $this->role!=='operator';
-  if($a===['mrp','read']||$a===['expedition','lire'])return false;
+  if($a===['commande','lire'])return !in_array($this->role,['operator','manufacturing-reader'],true);
+  if($a===['mrp','read'])return in_array($this->role,['manufacturing-reader','restricted-manufacturing'],true);
+  if($a===['expedition','lire'])return false;
   if($a===['qrrouter','manage'])return in_array($this->role,['manager','operator','restricted'],true);
   if($a===['stock','mouvement','creer']||$a===['produit','creer']||$a===['binloc','write'])return $this->role==='operator';
   return false;
@@ -132,11 +134,26 @@ function isModEnabled($module){$role=$_GET['role']??'';return !(($module==='qrro
 function restrictedArea($actor,$feature,$id=0,$table='',$feature2='',$key='fk_soc',$select='rowid',$draft=0,$mode=0){
  if($mode!==1)throw new RuntimeException('Object checks must use non-terminating mode');
  $allowed=['produit'=>[3,4],'stock'=>[1,2],'commande'=>[39],'mrp'=>[19],'expedition'=>[29],'user'=>[8,9]];
- return in_array((int)$id,$allowed[$feature]??[],true)&&!(($_GET['role']??'')==='restricted'&&$feature==='commande')?1:0;
+ return in_array((int)$id,$allowed[$feature]??[],true)&&!(($_GET['role']??'')==='restricted'&&$feature==='commande')&&!(($_GET['role']??'')==='restricted-manufacturing'&&$feature==='mrp')?1:0;
 }
 """)
     commande = """<?php
 class Commande { public $entity=1,$ref='SO-0039',$lines=[]; public function __construct($db){} public function fetch($id){return (int)$id===39?1:-1;} public function fetch_lines(){$this->lines=[(object)['fk_product'=>3,'qty'=>3,'product_ref'=>'PART-003','product_label'=>'Fixture Part']];} }
+"""
+    manufacturing = """<?php
+class Mo {
+ public $entity=1,$ref='MO-0019',$lines=[];
+ public function __construct($db){}
+ public function fetch($id){return (int)$id===19?1:-1;}
+ public function fetchLines(){
+  $this->lines=[(object)['fk_product'=>3,'qty'=>2,'role'=>'toconsume'],
+   (object)['fk_product'=>3,'qty'=>1,'role'=>'toconsume'],
+   (object)['fk_product'=>4,'qty'=>99,'role'=>'toproduce'],
+   (object)['fk_product'=>3,'qty'=>1,'role'=>'consumed'],
+   (object)['fk_product'=>4,'qty'=>99,'role'=>'produced'],
+   (object)['fk_product'=>3,'qty'=>0,'role'=>'toconsume']];return 1;
+ }
+}
 """
     admin = """<?php
 function dolibarr_set_const($db, $name, $value, $type='chaine', $visible=0, $note='', $entity=1) {
@@ -164,6 +181,7 @@ function setEventMessages($message, $errors=null, $style='mesgs') {}
                             'custom/binloc/class/binlocproductlocation.class.php': native_contract.LOCATION,
                             'custom/binloc/lib/binloc.lib.php': native_contract.LIBRARY,
                             'commande/class/commande.class.php': commande,
+                            'mrp/class/mo.class.php': manufacturing,
                             'native.php': "<?php require __DIR__.'/main.inc.php'; llxHeader('', 'Native Dolibarr page'); llxFooter();",
                             'core/lib/product.lib.php': """<?php
 function product_prepare_head($object){return [['/product/card.php?id='.$object->id,'Product','card'],['/custom/binloc/tab_product_locations.php?id='.$object->id,'Binloc','binloc'],['/custom/qrrouter/native.php?kind=product&id='.$object->id,'QR entries','qrrouter']];}
@@ -284,6 +302,8 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             with client.open(base + 'api.php?resource=bootstrap&testlang=' + locale) as response:
                 localized = json.load(response)
                 assert localized['locale'] == locale and localized['translations']['Inventory'] == translated
+        assert request('print-translations', params={'lang': 'nl_NL'})['Warehouse inventory'] == 'Magazijninventaris'
+        request('print-translations', params={'lang': '../en_US'}, expected=400)
         with client.open(base + 'api.php?resource=bootstrap&testentities=1') as response:
             decoded = json.load(response)['translations']['Inventory']
             assert decoded == entity_expected
@@ -445,6 +465,23 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
                 except HTTPError as error:
                     assert error.code == 403, (endpoint, role, error.code)
         operator = request(role='operator')
+        manufacturing_reader = request(role='manufacturing-reader')
+        assert not manufacturing_reader['permissions']['manage'] and not manufacturing_reader['permissions']['orders']
+        assert manufacturing_reader['permissions']['references']['production']
+        assert request('manufacturing-orders', role='manufacturing-reader')[0]['id'] == 19
+        manufacturing_params = {'warehouse_id': 1, 'order_id': 19, 'order_type': 'production'}
+        before_manufacturing = native_path.read_bytes()
+        manufacturing_picks = request('picking', role='manufacturing-reader', params=manufacturing_params)
+        assert sum(row['take'] for row in manufacturing_picks) == 3
+        assert all(row['product']['ref'] == 'PART-003' for row in manufacturing_picks)
+        assert native_path.read_bytes() == before_manufacturing
+        request('manufacturing-orders', role='reader', expected=403)
+        request('picking', role='reader', params=manufacturing_params, expected=403)
+        assert request('manufacturing-orders', role='restricted-manufacturing') == []
+        request('picking', role='restricted-manufacturing', params=manufacturing_params, expected=403)
+        request('picking', params={**manufacturing_params, 'order_id': 999}, expected=403)
+        request('picking', params={**manufacturing_params, 'order_type': 'shipment'}, expected=400)
+        request('manufacturing-orders', role='disabled-mrp', expected=403)
         assert not operator['permissions']['orders'] and not any(operator['permissions']['references'].values())
         assert set(operator['users']) <= {'8'}
         request('orders', role='operator', expected=403)
@@ -537,6 +574,17 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         assert request()['state']['items'][new_box]['bin'] == 'B'
         with client.open(base + 'api.php?resource=locations&warehouse_id=1') as response:
             assert 'B' in json.load(response)['bins']
+        level_report = request('locations', role='reader', params={'warehouse_id': 1, 'level_id': 1, 'level_value': 'B'})
+        assert any(new_box in row['codes'] for row in level_report['summary']['totals'])
+        assert not level_report['summary']['tracked']
+        with client.open(base + 'bin_print.php?warehouse_id=1&level_id=1&level_value=B') as response:
+            report_html = response.read().decode()
+            assert level_report['summary']['scope'] in report_html
+            assert '6 units in containers.' in report_html and 'Native new serial' not in report_html
+        with client.open(base + 'bin_print.php?warehouse_id=1&level_id=1&level_value=B&lang=nl_NL') as response:
+            localized_report = response.read().decode()
+            assert 'Bekende aantallen:' in localized_report and 'eenheden in containers.' in localized_report
+            assert '"level_value":"B"' in localized_report and '"locale":"nl_NL"' in localized_report
         workflow('correct', new_box, quantities={new_box: 7})
         assert native()['batches']['4']['1']['BOX-NEW'] == 7
         total_before = native()['stock']['4']['1']
@@ -718,7 +766,10 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         print('Gateway integration PASS: native workflows, real C# state, CSRF, permissions, trusted facts, product/order lookups, Angular hosting and no API-key exposure.', flush=True)
         if args.browser:
             env = dict(os.environ, QRR_E2E_URL=base, QRR_E2E_ITEM=tracked, QRR_E2E_BOX=box)
-            subprocess.run(['npm.cmd' if os.name == 'nt' else 'npm', 'run', 'e2e'], cwd=root / 'frontend', env=env, check=True)
+            browser_command = ['npm.cmd' if os.name == 'nt' else 'npm', 'run', 'e2e']
+            if args.browser_grep:
+                browser_command += ['--', '--grep', args.browser_grep]
+            subprocess.run(browser_command, cwd=root / 'frontend', env=env, check=True)
     except Exception:
         service_log.flush()
         php_log.flush()

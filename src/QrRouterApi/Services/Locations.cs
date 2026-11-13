@@ -127,6 +127,17 @@ public static class Locations
         );
         Require(names.Count is > 0 and <= 8, "Configure between one and eight location levels");
         var current = Levels(state, warehouse);
+        var datatypes = data["datatypes"] as JsonArray;
+        var optionAdditions = data["option_additions"] as JsonArray;
+        Require(
+            data["datatypes"] is null || datatypes is not null && datatypes.Count == names.Count,
+            "Choose one datatype per location level"
+        );
+        Require(
+            data["option_additions"] is null
+                || optionAdditions is not null && optionAdditions.Count == names.Count,
+            "Invalid location option additions"
+        );
         var inUse = state
             .Map("items")
             .Any(p => p.Value!.I("warehouse_id") == warehouse && p.Value.S("bin") != "");
@@ -152,17 +163,56 @@ public static class Locations
                         ("options", new JsonArray())
                     );
             level["label"] = name;
-            if (
-                level.S("datatype") is "list" or "letter"
-                && data["options"]?[level.I("id").ToString()] is JsonArray additions
-            )
+            var datatype = datatypes?[i]?.ToString() ?? level.S("datatype");
+            Require(
+                datatype is "text" or "number" or "letter" or "list",
+                "Unsupported location datatype"
+            );
+            var id = level.I("id").ToString();
+            if (i < current.Count && datatype != level.S("datatype"))
+            {
+                var used = state
+                    .Map("items")
+                    .Any(pair =>
+                        pair.Value!.I("warehouse_id") == warehouse
+                        && (
+                            pair.Value?["bin_values"]?[id]?.ToString() is string value
+                                && value != ""
+                            || pair.Value.S("bin") != ""
+                                && pair.Value?["bin_values"] is not JsonObject { Count: > 0 }
+                        )
+                    );
+                Require(!used, "Cannot change the datatype of a level with saved assignments");
+            }
+            level["datatype"] = datatype;
+            var additions = optionAdditions is not null
+                ? optionAdditions[i] as JsonArray
+                : data["options"]?[id] as JsonArray;
+            Require(
+                optionAdditions is null || additions is not null,
+                "Invalid location option additions"
+            );
+            if (datatype is "list" or "letter")
             {
                 var options = level["options"] as JsonArray ?? [];
                 var next = options.Count == 0 ? 1 : options.Max(option => option!.I("id")) + 1;
-                foreach (var value in additions)
+                if (datatype == "letter" && options.Count == 0)
+                {
+                    foreach (var letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                        options.Add(Object(("id", next++), ("value", letter.ToString())));
+                }
+                foreach (var value in additions ?? [])
                 {
                     var text = Creation.Text(Object(("option", value)), "option", 64);
                     Require(text != "", "Location options must have a value");
+                    if (datatype == "letter")
+                    {
+                        Require(
+                            text.All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z'),
+                            "Letter options must contain letters only"
+                        );
+                        text = text.ToUpperInvariant();
+                    }
                     if (
                         !options.Any(option =>
                             string.Equals(
@@ -176,6 +226,13 @@ public static class Locations
                 }
                 if (level["options"] is null)
                     level["options"] = options;
+                if (datatype == "letter")
+                    Require(
+                        options.All(option =>
+                            option.S("value").All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z')
+                        ),
+                        "Letter options must contain letters only"
+                    );
             }
             configured.Add(level);
         }

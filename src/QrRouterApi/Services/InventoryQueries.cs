@@ -100,11 +100,45 @@ public static class InventoryQueries
 
     private static JsonNode BinSummary(JsonObject state, JsonObject data)
     {
+        var levelId = data.I("level_id");
+        var levelValue = data.S("level_value").Trim();
+        var level =
+            levelId > 0
+                ? Locations
+                    .Levels(state, data.I("warehouse_id"))
+                    .FirstOrDefault(level => level!.I("id") == levelId)
+                : null;
+        Require(levelId == 0 || level is not null, "Unknown report location level");
+        Require(
+            levelValue.Length <= 140 && !levelValue.Any(char.IsControl),
+            "Invalid report location value"
+        );
+        Require(levelValue == "" || levelId > 0, "Choose a report location level");
+        var levelLabel = levelValue;
+        if (levelValue != "" && level.S("datatype") is "list" or "letter")
+        {
+            var option = (level!["options"] as JsonArray ?? []).FirstOrDefault(option =>
+                option!.I("id").ToString() == levelValue
+            );
+            Require(option is not null, "Location option is unavailable");
+            levelLabel = option.S("value");
+        }
         var tracked = new List<JsonNode>();
         var totals = new Dictionary<int, JsonObject>();
         foreach (
             var item in Items(state)
-                .Where(i => Visible(i, data.I("warehouse_id")) && i.S("bin") == data.S("bin"))
+                .Where(i =>
+                    Visible(i, data.I("warehouse_id"))
+                    && (data.S("bin") == "" || i.S("bin") == data.S("bin"))
+                    && (
+                        levelValue == ""
+                        || string.Equals(
+                            i["bin_values"]?[levelId.ToString()]?.ToString().Trim(),
+                            levelValue,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                )
         )
         {
             var pid = item.I("product_id");
@@ -133,6 +167,7 @@ public static class InventoryQueries
             ((JsonArray)total["codes"]!).Add(item.S("code"));
         }
         return Object(
+            ("scope", levelValue != "" ? level.S("label") + ": " + levelLabel : ""),
             ("tracked", tracked.OrderBy(i => i.S("code"), Natural)),
             ("totals", totals.Values.OrderBy(i => i["product"].S("ref"), Natural))
         );

@@ -443,10 +443,10 @@ function qrr_layout_start($title) {
         qrr_h(qrr_t($title)) .
         '</h2>';
 }
-function qrr_layout_end() {
+function qrr_layout_end($translate = true) {
     print '</div>';
     $content = ob_get_clean();
-    print qrr_translate_markup($content);
+    print $translate ? qrr_translate_markup($content) : $content;
     llxFooter();
 }
 function qrr_products_index($db, $ids) {

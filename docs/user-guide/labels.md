@@ -2,6 +2,12 @@
 
 [Guide index](README.md)
 
+## Choose the output language
+
+On an individual or batch print preview, choose **Output language** (English, Nederlands or Français) and select **Apply settings**. The selected language stays in place when changing label size or switching to A4. On location reports, choose the language and select **Apply language**; warehouse, bin and level filters are retained. Picking sheets have their own **Output language** selector before printing.
+
+This changes printed headings, captions and instructions without changing your Dolibarr interface language. Saved product names, item names, details, serials, location names and QR IDs remain as entered. Print controls are hidden on paper and in saved PDFs.
+
 ## Print blank labels for later registration
 
 1. Open **Print QR labels**.

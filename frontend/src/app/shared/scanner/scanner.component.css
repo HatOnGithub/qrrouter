@@ -149,6 +149,8 @@ textarea {
 .add-codes {
   width: 100%;
   min-height: 48px;
+  height: auto;
+  padding-block: 12px;
   margin-top: 14px;
   background: var(--qrr-action-background, ButtonFace);
   color: var(--qrr-action-text, ButtonText);

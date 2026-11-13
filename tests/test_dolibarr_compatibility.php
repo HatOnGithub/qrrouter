@@ -58,6 +58,7 @@ function contract($file, $method, $parameters) {
     // New mandatory arguments would break existing positional calls.
     $arguments = explode(',', substr($signature, strpos($signature, '(') + 1, strrpos($signature, ')') - strpos($signature, '(') - 1));
     foreach (array_slice($arguments, count($parameters)) as $argument) {
+        if (trim($argument) === '') { continue; }
         check(str_contains($argument, '='), 'New mandatory argument: ' . $method);
     }
     return $definition;
@@ -79,6 +80,12 @@ contract('core/modules/DolibarrModules.class.php', '_init', ['array_sql', 'optio
 contract('core/modules/DolibarrModules.class.php', '_remove', ['array_sql', 'options']);
 contract('core/class/extrafields.class.php', 'addExtraField', ['attrname', 'label', 'type', 'pos', 'size', 'elementtype', 'unique', 'required', 'default_value', 'param', 'alwayseditable', 'perms', 'list', 'help', 'computed', 'entity', 'langfile', 'enabled']);
 contract('core/class/extrafields.class.php', 'fetch_name_optionals_label', ['elementtype']);
+contract('mrp/class/mo.class.php', 'fetch', ['id', 'ref']);
+contract('mrp/class/mo.class.php', 'fetchLines', []);
+foreach (['fk_product', 'qty', 'role'] as $field) {
+    check(preg_match("/'" . $field . "'\\s*=>/", file_get_contents($source . '/mrp/class/moline.class.php')) === 1,
+        'Missing native manufacturing line field: ' . $field);
+}
 $restricted = contract('core/lib/security.lib.php', 'restrictedArea', ['user', 'features', 'object', 'tableandshare', 'feature2', 'dbt_keyfield', 'dbt_select', 'isdraft']);
 
 class MovementDatabase {

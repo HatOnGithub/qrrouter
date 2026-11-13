@@ -362,6 +362,43 @@ try
     );
     var bins = (JsonArray)Cmd("query-known-bins", Object(("warehouse_id", 1)))!;
     Check(bins.Count == 1 && bins[0]!.GetValue<string>() == "A-2", "Known bin deduplication");
+    var locationState = Object(("items", Object()));
+    foreach (
+        var (code, bin, wid, status, locationPending) in new[]
+        {
+            ("AAAAAA", "A-1", 1, "available", false),
+            ("BBBBBB", "B-2", 1, "available", false),
+            ("CCCCCC", "", 1, "available", false),
+            ("DDDDDD", "A-1", 2, "available", false),
+            ("EEEEEE", "A-1", 1, "consumed", false),
+            ("FFFFFF", "A-1", 1, "available", true),
+        }
+    )
+        locationState.Map("items")[code] = Object(
+            ("code", code),
+            ("type", "tracked"),
+            ("product_id", 4),
+            ("warehouse_id", wid),
+            ("bin", bin),
+            ("status", status),
+            ("pending_operation", locationPending ? Object(("id", "pending")) : null)
+        );
+    JsonArray LocationRows(JsonObject filter) =>
+        (JsonArray)InventoryQueries.Execute(locationState, "query-bin-summary", filter)["tracked"]!;
+    Check(
+        LocationRows(Object(("warehouse_id", 1), ("bin", ""))).Count == 3,
+        "No bin filter includes all warehouse locations and unlocated items, excluding unavailable records"
+    );
+    Check(
+        LocationRows(Object(("warehouse_id", 1), ("bin", "A-1"))).Single()!.S("code") == "AAAAAA",
+        "Selected bin narrows the warehouse inventory"
+    );
+    Check(
+        LocationRows(Object(("warehouse_id", 1), ("visible_codes", new[] { "CCCCCC" })))
+            .Single()!
+            .S("code") == "CCCCCC",
+        "Whole-warehouse inventory respects native visibility"
+    );
     var restrictedSummary = (JsonObject)
         Cmd(
             "query-bin-summary",

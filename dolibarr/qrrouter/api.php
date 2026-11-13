@@ -49,6 +49,10 @@ function qrr_api_translations() {
 }
 function qrr_api_get($resource) {
     global $db, $user, $langs;
+    if ($resource === 'print-translations') {
+        qrr_api_permit(qrr_inventory_right($user));
+        return (object) qrr_print_translations(qrr_print_locale(GETPOST('lang', 'alphanohtml')));
+    }
     if ($resource === 'bootstrap') {
         $inventory = qrr_browser_inventory($db);
         $inventory['products'] = qrr_product_search_metadata($db, $inventory['products']);
@@ -156,9 +160,14 @@ function qrr_api_get($resource) {
                 "%')";
         }
         $sql .= ' ORDER BY c.rowid DESC LIMIT 50';
-    } elseif ($resource === 'references') {
-        qrr_api_permit(qrr_write_right($user));
-        $type = (string) GETPOST('type', 'alphanohtml');
+    } elseif ($resource === 'references' || $resource === 'manufacturing-orders') {
+        if ($resource === 'references') {
+            qrr_api_permit(qrr_write_right($user));
+        }
+        $type =
+            $resource === 'manufacturing-orders'
+                ? 'production'
+                : (string) GETPOST('type', 'alphanohtml');
         $schema = qrr_reference_schema($type);
         qrr_api_permit(qrr_reference_right($user, $type));
         $sql =
@@ -183,21 +192,35 @@ function qrr_api_get($resource) {
         $products = qrr_products_index($db, array_column($state['items'], 'product_id'));
         return [
             'bins' => qrr_known_bins($state['items'], $wid),
-            'summary' => qrr_bin_summary($state['items'], $wid, $bin, $products),
+            'summary' => qrr_bin_summary(
+                $state['items'],
+                $wid,
+                $bin,
+                $products,
+                GETPOST('level_id', 'int'),
+                GETPOST('level_value', 'alphanohtml'),
+            ),
             'qr' => qrr_warehouse_summary($state['items'], $wid),
             'native' => (object) qrr_stock_totals($db, array_keys($products)),
         ];
     } elseif ($resource === 'picking') {
-        qrr_api_permit(qrr_orders_right($user));
+        $type = (string) GETPOST('order_type', 'alphanohtml') ?: 'salesorder';
+        if (!in_array($type, ['salesorder', 'production'], true)) {
+            throw new InvalidArgumentException('Unsupported picking source');
+        }
+        qrr_api_permit(qrr_reference_right($user, $type));
         $wid = (int) GETPOST('warehouse_id', 'int');
         $warehouses = qrr_warehouses($db);
         if (!isset($warehouses[$wid])) {
             throw new InvalidArgumentException('Unknown warehouse');
         }
-        $order = qrr_order_lines($db, (int) GETPOST('order_id', 'int'));
+        $order = qrr_order_lines($db, (int) GETPOST('order_id', 'int'), $type);
         $state = qrr_browser_inventory($db)['state'];
         $products = qrr_products_index($db, array_column($order['lines'], 'product_id'));
-        return qrr_pick_proposal($order['lines'], $state['items'], $wid, $products);
+        $lines = array_values(
+            array_filter($order['lines'], fn($line) => isset($products[$line['product_id']])),
+        );
+        return qrr_pick_proposal($lines, $state['items'], $wid, $products);
     } else {
         throw new InvalidArgumentException('Unknown resource');
     }
@@ -208,7 +231,7 @@ function qrr_api_get($resource) {
     $out = [];
     while ($row = $db->fetch_object($rs)) {
         if (
-            ($resource === 'orders' || $resource === 'references') &&
+            in_array($resource, ['orders', 'references', 'manufacturing-orders'], true) &&
             !qrr_reference_visible(
                 $user,
                 $resource === 'orders' ? 'salesorder' : $type,
@@ -363,6 +386,8 @@ function qrr_api_post($action, $data) {
         return qrr_command('location-configure', [
             'warehouse_id' => qrr_api_int($data, 'warehouse_id'),
             'names' => $data['names'] ?? [],
+            'datatypes' => $data['datatypes'] ?? null,
+            'option_additions' => $data['option_additions'] ?? null,
             'options' => (object) ($data['options'] ?? []),
             'warehouses' => (object) qrr_warehouses($db),
         ]);

@@ -5,14 +5,24 @@
 ## Browse bins and locations
 
 1. Open **Bins and locations**.
-2. Choose a **Warehouse**, then a **Bin**. Choose **No bin assigned** to inspect items without a location.
+2. Choose a **Warehouse**. **All bins** shows its full QR-managed inventory, including items without a location. Type in **Search bins** to narrow the bin choices, then choose a **Bin** to filter its contents. Select **All bins** again to clear the bin filter.
 3. Review tracked items and product totals for generic units, container units and unknown containers.
 4. Select an item or native product link for more detail.
-5. Use **Print bin inventory** to open a printable contents list.
+5. Use **Print bin inventory** or **Print warehouse inventory** to print the selected scope.
 
 **Warehouse stock comparison** shows QR observations alongside native stock. Viewing or printing this page does not adjust stock. Investigate differences before using a stock-changing workflow.
 
 Location printouts remain separate from QR item labels. No QR code or bin scan is required; use the warehouse and location fields to choose where an item belongs.
+
+## Report by location level
+
+1. Choose a **Warehouse** on **Bins and locations**.
+2. Under **Report by level**, select a configured level, such as Aisle, Rack or Shelf.
+3. Choose a **Level value**. For example, selecting Aisle A includes items on every shelf and bin in that aisle. Selecting Shelf 2 includes that shelf value across the warehouse.
+4. Review the tracked items and product totals, then select **Print location report** for the same selection.
+5. Choose **All values** to see the full warehouse again, or **Exact bin / whole warehouse** to return to the searchable bin selector.
+
+Reports match saved level identities and values, independently of label formatting. Items with no value for the selected level are excluded from that level's report. Viewing and printing reports requires read access; location management permission is not needed. The stock comparison remains warehouse-wide.
 
 ## Adjust the local location display
 
@@ -26,13 +36,15 @@ These settings change the displayed location format only. The full stored QR Rou
 ## Generate a picking sheet
 
 1. Open **Picking**.
-2. Search **Customer order** and select the exact order.
+2. Choose **Order type**: **Customer order** or **Manufacturing order**, then search and select the exact order. The choices depend on your native Dolibarr read permissions; QR management permission is not required to view or print a sheet.
 3. Choose the **Warehouse**.
 4. Select **Generate preview**.
 5. Review the proposed bins, products, QR entries and quantities. Item and product links open their details.
 6. Select **Print / Save as PDF** to take the sheet to the warehouse.
 
 The sheet is a planning preview. It uses requested order quantities, not the remaining unshipped balance, and does not reserve, consume or decrement stock. Record the actual stock action separately using the appropriate workflow.
+
+For manufacturing orders, the sheet uses the planned component lines marked **to consume** on the order. Quantities are already scaled by Dolibarr; they are not multiplied by the finished-product quantity again. Finished products and recorded consumption/production lines are excluded. Previous consumption is not subtracted from the plan. Repeated component lines share available QR quantities, and shortages appear as **Not allocated**. Draft orders without component lines show an empty-preview message; configure the components in Dolibarr first.
 
 ## Open QR entries from Dolibarr
 
@@ -45,10 +57,11 @@ Employee cards link to current QR loans. Customer orders, manufacturing orders a
 ## Configure internal locations
 
 1. Open **Bins and locations** and choose the warehouse.
-2. Under **Location levels**, enter one level name per line, such as Aisle, Rack and Shelf. Save before assigning items. A new warehouse starts with a single free-text **Location** field.
-3. You can append levels later. Levels already in use cannot be removed. For imported lists, use **Add location options** to add values without changing existing option identities.
-4. To assign or change a location, select **Change location** beside an item, edit its location values and save. To move stock to another warehouse, use the scanner's **Move** action instead.
-5. Native warehouse cards have a **Locations** link and tab. Product and serial/lot cards link to their QR entries, where **Change location** opens the same editor. The native serial list also links directly to associated QR items.
+2. Under **Location levels**, edit each level name in its numbered row. Select **Add level** for another row, such as Rack or Shelf, then **Save location levels**. Up to eight levels are supported. Blank and duplicate names must be corrected before saving. Unsaved new rows can be removed; existing identities and options are retained. Save before assigning items. A new warehouse starts with a single free-text **Location** field.
+3. Choose a **Data type** per row: **Text** for free-form values, **Number** for numeric values, **Letters (A–Z)** for letter choices, or **Option list** for named choices. New letter levels start with A–Z; add AA, AB or other letter sequences if needed. For option lists, enter one option per line. Numeric values are checked when assigning a location.
+4. You can append levels later. Datatypes can only change while that specific level has no saved assignments; existing option identities and locations are preserved. Levels already in use cannot be removed. For imported lists, use **Add location options** to add values without changing existing option identities.
+5. To assign or change a location, select **Change location** beside an item, edit its location values and save. To move stock to another warehouse, use the scanner's **Move** action instead.
+6. Native warehouse cards have a **Locations** link and tab. Product and serial/lot cards link to their QR entries, where **Change location** opens the same editor. The native serial list also links directly to associated QR items.
 
 Definitions and assignments are saved in QR Router's service database. Dolibarr owns warehouse stock, quantities and serial/lot identities. A native stock move to a different warehouse clears the old QR location; assign a location in the new warehouse.
 

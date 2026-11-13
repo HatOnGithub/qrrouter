@@ -7,10 +7,12 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
 /** Produce individual tracked rows, and one total per product for generic items and boxes.
  * Unknown box quantities have their own count and never contribute to summed totals.
  */
-function qrr_bin_summary($items, $wid, $bin, $products = []) {
+function qrr_bin_summary($items, $wid, $bin, $products = [], $levelId = 0, $levelValue = '') {
     $summary = qrr_command('query-bin-summary', [
         'warehouse_id' => (int) $wid,
         'bin' => (string) $bin,
+        'level_id' => (int) $levelId,
+        'level_value' => (string) $levelValue,
         'products' => (object) $products,
         'visible_codes' => array_keys($items),
     ]);
@@ -39,25 +41,41 @@ function qrr_warehouse_summary($items, $wid) {
         'visible_codes' => array_keys($items),
     ]);
 }
-function qrr_order_lines($db, $id) {
+function qrr_order_lines($db, $id, $type = 'salesorder') {
     global $user;
     if ($id <= 0) {
-        return [];
+        throw new InvalidArgumentException('Select an order');
     }
-    if (!qrr_reference_visible($user, 'salesorder', $id)) {
-        throw new DomainException('Customer order is inaccessible');
+    if (!in_array($type, ['salesorder', 'production'], true)) {
+        throw new InvalidArgumentException('Unsupported picking source');
     }
-    require_once DOL_DOCUMENT_ROOT . '/commande/class/commande.class.php';
-    $cmd = new Commande($db);
+    if (!qrr_reference_visible($user, $type, $id)) {
+        throw new DomainException('Order is inaccessible');
+    }
+    if ($type === 'production') {
+        require_once DOL_DOCUMENT_ROOT . '/mrp/class/mo.class.php';
+        $cmd = new Mo($db);
+    } else {
+        require_once DOL_DOCUMENT_ROOT . '/commande/class/commande.class.php';
+        $cmd = new Commande($db);
+    }
     if ($cmd->fetch($id) <= 0) {
         throw new RuntimeException('Order not found');
     }
     if ((int) $cmd->entity !== (int) $GLOBALS['conf']->entity) {
         throw new RuntimeException('Order outside current entity');
     }
-    $cmd->fetch_lines();
+    $result = $type === 'production' ? $cmd->fetchLines() : $cmd->fetch_lines();
+    if ($result < 0) {
+        throw new RuntimeException('Order lines unavailable');
+    }
     $out = [];
     foreach ($cmd->lines as $line) {
+        // MO quantities already describe the planned component requirements.
+        // Output products and recorded consumption/production are not pick demands.
+        if ($type === 'production' && ($line->role ?? '') !== 'toconsume') {
+            continue;
+        }
         $pid = (int) ($line->fk_product ?? 0);
         if (!$pid) {
             continue;

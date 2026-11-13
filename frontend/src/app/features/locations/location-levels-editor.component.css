@@ -1,0 +1,52 @@
+:host {
+  display: block;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline: 2px;
+}
+
+.level-rows {
+  display: grid;
+  gap: 12px;
+}
+
+.level-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.level-number {
+  flex: 0 0 24px;
+  padding-top: 16px;
+  font-weight: 600;
+}
+
+.level-fields {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+
+.level-fields mat-form-field {
+  width: 100%;
+}
+
+@media (min-width: 600px) {
+  .level-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .level-options {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .level-row {
+    gap: 6px;
+  }
+  .level-number {
+    flex-basis: 18px;
+  }
+}

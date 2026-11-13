@@ -83,6 +83,7 @@ export class LookupComponent implements OnChanges {
   protected objectType(): string {
     if (this.resource() === 'products') return 'product';
     if (this.resource() === 'orders') return 'salesorder';
+    if (this.resource() === 'manufacturing-orders') return 'production';
     return this.resource() === 'references' ? this.type() : '';
   }
 

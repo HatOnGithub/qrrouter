@@ -17,6 +17,25 @@ after(async () => {
 });
 beforeEach(() => store.reset());
 
+test('manufacturing picks include only components, consume available allocations once and do not mutate stock', () => {
+  const before = structuredClone(store.data);
+  const rows = store.read(
+    'picking',
+    new URLSearchParams({ warehouse_id: '1', order_type: 'production', order_id: '19' })
+  );
+  assert.equal(
+    rows.reduce((sum, row) => sum + row.take, 0),
+    7
+  );
+  assert.equal(
+    rows.some(row => row.product.ref === 'DRILL-18V'),
+    false
+  );
+  assert.deepEqual(store.data, before);
+  store.settings.scenario = 'read-only';
+  assert.throws(() => store.read('manufacturing-orders', new URLSearchParams()), /permission/);
+});
+
 test('new serials use the product prefix in single and bulk creation without accepting browser overrides', () => {
   store.data.products[2].serial_prefix = 'DRILL-';
   const code = store.command('create', {

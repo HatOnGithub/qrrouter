@@ -87,13 +87,24 @@ export class MockStore {
     this.warehouse(id);
     const values = {};
     const parts = [];
+    let gap = false;
     for (const level of this.data.state.location_levels?.[id] || this.data.levels) {
       const value = levels[level.id];
-      if (value === undefined || value === '') continue;
-      const text = level.options.length
+      if (value === undefined || value === '') {
+        gap = true;
+        continue;
+      }
+      requireValue(!gap, 'Choose location levels in order, without gaps');
+      const text = ['list', 'letter'].includes(level.datatype)
         ? level.options.find(option => option.id === Number(value))?.value
         : String(value);
       requireValue(text !== undefined && text.length <= 64, 'Invalid location value');
+      if (level.datatype === 'number')
+        requireValue(
+          /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(String(value)) &&
+            Number.isFinite(Number(value)),
+          'Numeric location required'
+        );
       values[level.id] = value;
       parts.push(text);
     }
@@ -106,6 +117,11 @@ export class MockStore {
   }
 
   read(resource, params) {
+    if (resource === 'print-translations') {
+      const locale = params.get('lang') || this.settings.locale;
+      requireValue(locales.includes(locale), 'Unsupported print language');
+      return translations(locale);
+    }
     const data = this.data;
     const query = (params.get('q') || '').toLowerCase();
     const matching = rows => rows.filter(row => row.text.toLowerCase().includes(query));
@@ -140,6 +156,13 @@ export class MockStore {
         }))
       );
     if (resource === 'orders') return matching(data.orders.map(({ id, text }) => ({ id, text })));
+    if (resource === 'manufacturing-orders') {
+      requireValue(
+        this.permissions().references.production,
+        'Missing manufacturing order permission'
+      );
+      return matching(data.manufacturing_orders.map(({ id, text }) => ({ id, text })));
+    }
     if (resource === 'references') return matching(data.references[params.get('type')] || []);
     if (resource === 'levels') {
       this.warehouse(params.get('warehouse_id'));
@@ -160,31 +183,67 @@ export class MockStore {
       };
     }
     if (resource === 'locations')
-      return this.locations(this.warehouse(params.get('warehouse_id')), params.get('bin') || '');
+      return this.locations(
+        this.warehouse(params.get('warehouse_id')),
+        params.get('bin') || '',
+        Number(params.get('level_id')),
+        params.get('level_value') || ''
+      );
     if (resource === 'picking') {
       const warehouse = this.warehouse(params.get('warehouse_id'));
-      const order = data.orders.find(row => row.id === Number(params.get('order_id')));
-      requireValue(order, 'Unknown customer order');
-      return order.lines.flatMap(line => {
-        let remaining = line.qty;
-        const rows = [];
-        for (const item of Object.values(data.state.items).sort((a, b) =>
-          a.bin.localeCompare(b.bin)
-        )) {
-          if (
-            remaining <= 0 ||
-            item.product_id !== line.product_id ||
-            item.warehouse_id !== warehouse ||
-            !usable(item) ||
-            item.qty === null
-          )
-            continue;
-          const take = Math.min(remaining, item.qty);
-          if (take > 0) rows.push({ ...item, product: data.products[item.product_id], take });
-          remaining -= take;
-        }
-        return rows;
-      });
+      const type = params.get('order_type') || 'salesorder';
+      requireValue(['salesorder', 'production'].includes(type), 'Unsupported picking source');
+      requireValue(
+        type !== 'production' || this.permissions().references.production,
+        'Missing manufacturing order permission'
+      );
+      const order = (type === 'production' ? data.manufacturing_orders : data.orders).find(
+        row => row.id === Number(params.get('order_id'))
+      );
+      requireValue(order, 'Unknown order');
+      const available = Object.values(data.state.items)
+        .sort((a, b) => a.bin.localeCompare(b.bin))
+        .filter(
+          item =>
+            usable(item) &&
+            item.bin &&
+            item.qty !== null &&
+            !item.checkout &&
+            !item.pending_handoff &&
+            !item.pending_operation
+        )
+        .map(item => ({ item, remaining: item.qty }));
+      return order.lines
+        .filter(line => type !== 'production' || line.role === 'toconsume')
+        .flatMap(line => {
+          let remaining = line.qty;
+          const rows = [];
+          for (const allocation of available) {
+            const item = allocation.item;
+            if (
+              remaining <= 0 ||
+              item.product_id !== line.product_id ||
+              item.warehouse_id !== warehouse ||
+              !usable(item) ||
+              item.qty === null
+            )
+              continue;
+            const take = Math.min(remaining, allocation.remaining);
+            if (take > 0) rows.push({ ...item, product: data.products[item.product_id], take });
+            remaining -= take;
+            allocation.remaining -= take;
+          }
+          if (remaining > 0)
+            rows.push({
+              bin: 'NOT ALLOCATED',
+              code: '',
+              label: '',
+              product: data.products[line.product_id],
+              take: remaining,
+              type: 'missing',
+            });
+          return rows;
+        });
     }
     throw new MockError('Unknown resource', 404);
   }
@@ -247,9 +306,32 @@ export class MockStore {
     return state;
   }
 
-  locations(warehouse, bin) {
+  locations(warehouse, bin, levelId = 0, levelValue = '') {
+    levelValue = levelValue.trim();
+    const level = (this.data.state.location_levels?.[warehouse] || this.data.levels).find(
+      level => level.id === levelId
+    );
+    requireValue(!levelId || level, 'Unknown report location level');
+    requireValue(!levelValue || levelId, 'Choose a report location level');
+    let label = levelValue;
+    if (levelValue && ['list', 'letter'].includes(level.datatype)) {
+      const option = level.options.find(option => String(option.id) === levelValue);
+      requireValue(option, 'Location option is unavailable');
+      label = option.value;
+    }
+    const matches = item =>
+      (!bin || item.bin === bin) &&
+      (!levelValue ||
+        String(item.bin_values?.[levelId] ?? '')
+          .trim()
+          .toLowerCase() === levelValue.toLowerCase());
     const items = Object.values(this.data.state.items).filter(
-      item => item.warehouse_id === warehouse && item.type !== 'unassigned'
+      item =>
+        item.warehouse_id === warehouse &&
+        item.type !== 'unassigned' &&
+        item.status !== 'consumed' &&
+        !item.pending_handoff &&
+        !item.pending_operation
     );
     const totals = {};
     const qr = {};
@@ -260,7 +342,7 @@ export class MockStore {
       else qr[item.product_id].known += item.qty;
       native[item.product_id] ||= {};
       native[item.product_id][warehouse] = qr[item.product_id].known;
-      if (item.bin !== bin || item.type === 'tracked') continue;
+      if (!matches(item) || item.type === 'tracked') continue;
       const row = (totals[item.product_id] ||= {
         product_id: item.product_id,
         product: this.data.products[item.product_id],
@@ -278,8 +360,9 @@ export class MockStore {
       qr,
       native,
       summary: {
+        scope: levelValue ? `${level.label}: ${label}` : '',
         tracked: items
-          .filter(item => item.type === 'tracked' && item.bin === bin)
+          .filter(item => item.type === 'tracked' && matches(item))
           .map(item => ({ ...item, _product: this.data.products[item.product_id] })),
         totals: Object.values(totals),
       },
@@ -568,8 +651,18 @@ export class MockStore {
           new Set(names.map(name => name.toLowerCase())).size === names.length,
         'Location level names must be nonempty and unique'
       );
-      state.location_levels ||= {};
-      state.location_levels[payload.warehouse_id] = names.map((label, index) => {
+      requireValue(
+        payload.datatypes == null ||
+          (Array.isArray(payload.datatypes) && payload.datatypes.length === names.length),
+        'Choose one datatype per location level'
+      );
+      requireValue(
+        payload.option_additions == null ||
+          (Array.isArray(payload.option_additions) &&
+            payload.option_additions.length === names.length),
+        'Invalid location option additions'
+      );
+      const configured = names.map((label, index) => {
         const level = structuredClone(
           old[index] || {
             id: Math.max(...old.map(level => level.id)) + index - old.length + 1,
@@ -578,15 +671,43 @@ export class MockStore {
           }
         );
         level.label = label;
+        const datatype = payload.datatypes?.[index] ?? level.datatype;
+        requireValue(
+          ['text', 'number', 'letter', 'list'].includes(datatype),
+          'Unsupported location datatype'
+        );
+        if (old[index] && datatype !== level.datatype)
+          requireValue(
+            !Object.values(state.items).some(
+              item =>
+                item.warehouse_id === payload.warehouse_id &&
+                (String(item.bin_values?.[level.id] ?? '') !== '' ||
+                  (item.bin && !Object.keys(item.bin_values || {}).length))
+            ),
+            'Cannot change the datatype of a level with saved assignments'
+          );
+        level.datatype = datatype;
+        const additions = payload.option_additions?.[index] ?? payload.options?.[level.id] ?? [];
+        requireValue(Array.isArray(additions), 'Invalid location option additions');
         if (['list', 'letter'].includes(level.datatype)) {
-          for (const raw of payload.options?.[level.id] || []) {
-            const value = String(raw)
+          if (datatype === 'letter' && !level.options.length) {
+            level.options = Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ', (value, index) => ({
+              id: index + 1,
+              value,
+            }));
+          }
+          for (const raw of additions) {
+            let value = String(raw)
               .replace(/<[^>]*>/g, '')
               .trim();
             requireValue(
               value && Buffer.byteLength(value, 'utf8') <= 64,
               'Invalid location option'
             );
+            if (datatype === 'letter') {
+              requireValue(/^[A-Za-z]+$/.test(value), 'Letter options must contain letters only');
+              value = value.toUpperCase();
+            }
             if (!level.options.some(option => option.value.toLowerCase() === value.toLowerCase())) {
               level.options.push({
                 id: Math.max(0, ...level.options.map(option => option.id)) + 1,
@@ -594,9 +715,16 @@ export class MockStore {
               });
             }
           }
+          if (datatype === 'letter')
+            requireValue(
+              level.options.every(option => /^[A-Za-z]+$/.test(option.value)),
+              'Letter options must contain letters only'
+            );
         }
         return level;
       });
+      state.location_levels ||= {};
+      state.location_levels[payload.warehouse_id] = configured;
       return state.location_levels[payload.warehouse_id];
     }
     if (action === 'label-settings') {

@@ -24,6 +24,8 @@ FILES = [
     'user/class/user.class.php',
     'core/modules/modStock.class.php',
     'commande/class/commande.class.php',
+    'mrp/class/mo.class.php',
+    'mrp/class/moline.class.php',
 ]
 TABLES = {
     'product_batch': ['fk_product_stock', 'qty', 'batch', 'eatby', 'sellby'],

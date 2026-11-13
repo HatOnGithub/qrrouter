@@ -3,6 +3,7 @@
 if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
+require_once __DIR__ . '/qrrouter_print.lib.php';
 
 function qrr_label_profiles() {
     static $profiles;
@@ -48,49 +49,21 @@ function qrr_print_document(
     $selection = [],
     $batch = false
 ) {
-    $words = [
-        'DYMO 550 labels',
-        'Print DYMO labels',
-        'Print / Save as PDF',
-        'Back to QR Router',
-        'A4 layout',
-        'Label size',
-        'Apply size',
-        'Product not assigned',
-        'Reference not assigned',
-        'QR label',
-        'Lot',
-        'Warehouse',
-        'Bin',
-        'Quantity',
-        'Location',
-        'Item',
-        'Type',
-        'Status',
-        'Details',
-        'Tracked Individual',
-        'Tracked Generic',
-        'Counted Container',
-        'On loan',
-        'Consumed',
-        'In stock',
-        'Loading QR images…',
-        'No labels to print',
-        'Labels ready. Long details may be shortened; the QR ID is always complete.',
-        'QR image failed to load. Refresh before printing.',
-        'Select your printer and matching label paper in the print dialog. Use landscape orientation, 100% scale, no margins, and turn off headers and footers.',
-    ];
-    $translations = [];
-    foreach ($words as $word) {
-        $translations[$word] = qrr_t($word);
+    try {
+        $locale = qrr_print_locale(GETPOST('lang', 'alphanohtml'));
+    } catch (InvalidArgumentException $error) {
+        http_response_code(400);
+        exit($error->getMessage());
     }
+    $translations = qrr_print_translations($locale);
     $payload = [
         'items' => array_values($items),
         'products' => (object) qrr_products_index($db, array_column($items, 'product_id')),
         'warehouses' => (object) qrr_warehouses($db),
         'profiles' => qrr_label_profiles(),
         'format' => $format,
-        'title' => qrr_t($title),
+        'title' => $translations[$title] ?? $title,
+        'locale' => $locale,
         'base' => rtrim(qrr_base(), '/') . '/',
         'back' => $backUrl,
         'a4' => $a4Url,
@@ -114,6 +87,9 @@ function qrr_print_document(
         qrr_h(qrr_base() . 'spa/print/main.js') .
         '"></script>' .
         '<noscript>' .
-        qrr_h(qrr_t('JavaScript is required to prepare this print layout.')) .
+        qrr_h(
+            $translations['JavaScript is required to prepare this print layout.'] ??
+                'JavaScript is required to prepare this print layout.',
+        ) .
         '</noscript></body></html>';
 }
