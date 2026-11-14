@@ -427,6 +427,9 @@ test('generic labels default to the Dolibarr product short name and support an o
   await page.getByRole('spinbutton', { name: 'Number of labels', exact: true }).fill('1');
   await page.getByRole('button', { name: 'Create assigned batch', exact: true }).click();
   await expect(page).toHaveURL(/#\/labels\?batch=/);
+  // The URL changes before the lazy labels page finishes loading. Finish that navigation
+  // before opening the new item so pending imports are not aborted on slower browsers.
+  await expect(page.getByRole('heading', { name: 'Print QR labels', exact: true })).toBeVisible();
   const batch = new URL(page.url().split('#')[1], 'http://mock').searchParams.get('batch')!;
   const state = await mock.bootstrap();
   const code = state.state.batches[batch].codes[0];

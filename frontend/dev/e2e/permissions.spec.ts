@@ -38,16 +38,16 @@ test('independent action grants control QR details, direct workflows and printin
   await expect(page.getByRole('link', { name: 'Print label', exact: true })).toHaveCount(0);
 
   grants = new Set(['delete']);
-  await page.goto('/#/items/' + unused.code);
-  await page.reload();
+  // A distinct document loads the new bootstrap grant once. Reloading immediately after
+  // hash navigation cancels lazy imports and reports artificial WebKit/Firefox errors.
+  await page.goto('/?grant=delete#/items/' + unused.code);
   await expect(
     page.getByRole('button', { name: 'Delete unassigned QR code', exact: true })
   ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Register item', exact: true })).toHaveCount(0);
 
   grants = new Set(['consume']);
-  await page.goto('/#/scan');
-  await page.reload();
+  await page.goto('/?grant=consume#/scan');
   await expect(page.getByRole('link', { name: /Consume items/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /Move items/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Register items', exact: true })).toHaveCount(0);
@@ -57,8 +57,7 @@ test('independent action grants control QR details, direct workflows and printin
   ).toBeVisible();
 
   grants = new Set(['print']);
-  await page.goto('/#/labels');
-  await page.reload();
+  await page.goto('/?grant=print#/labels');
   await expect(page.getByRole('button', { name: 'Create batch', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Print', exact: true }).first()).toBeVisible();
 });

@@ -69,6 +69,42 @@ test('blank frames do not invent identifiers', () => {
   );
 });
 
+test('small Code 128 labels survive video-range levels against a darker surround', () => {
+  const code = makeCode(4);
+  const [label, lw, lh] = pixels('code128', code);
+  const width = 640,
+    height = 480,
+    targetWidth = 216;
+  const targetHeight = Math.round((lh * targetWidth) / lw);
+  for (const background of [48, 64, 80, 96]) {
+    for (const [black, white] of [
+      [0, 255],
+      [16, 235],
+      [24, 220],
+    ]) {
+      const rgba = new Uint8ClampedArray(width * height * 4).fill(255);
+      for (let i = 0; i < width * height; i++)
+        rgba.fill(black + (background * (white - black)) / 255, i * 4, i * 4 + 3);
+      for (let y = 0; y < targetHeight; y++)
+        for (let x = 0; x < targetWidth; x++) {
+          const source =
+            (Math.floor((y * lh) / targetHeight) * lw + Math.floor((x * lw) / targetWidth)) * 4;
+          const target =
+            ((Math.floor((height - targetHeight) / 2) + y) * width +
+              (width - targetWidth) / 2 +
+              x) *
+            4;
+          rgba.fill(black + (label[source] * (white - black)) / 255, target, target + 3);
+        }
+      assert.equal(
+        new BarcodeDecoder().decode(rgba, width, height),
+        code,
+        `background=${background}, black=${black}, white=${white}`
+      );
+    }
+  }
+});
+
 for (const bcid of ['qrcode', 'datamatrix']) {
   test(`${bcid} retains case-sensitive location and physical-bin routes`, () => {
     const location =

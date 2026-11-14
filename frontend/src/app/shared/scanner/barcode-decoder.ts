@@ -15,6 +15,7 @@ import {
 
 /** A secondary 1D threshold avoids treating a dark surround as the white-label histogram peak. */
 class ContrastBinarizer extends HybridBinarizer {
+  fraction = 1 / 4;
   override getBlackRow(y: number, row: BitArray): BitArray {
     const values = this.getLuminanceSource().getRow(y);
     let low = 255;
@@ -23,7 +24,7 @@ class ContrastBinarizer extends HybridBinarizer {
       low = Math.min(low, value);
       high = Math.max(high, value);
     }
-    const threshold = low + (high - low) / 4;
+    const threshold = low + (high - low) * this.fraction;
     row = new BitArray(values.length);
     for (let x = 0; x < values.length; x++) if (values[x] < threshold) row.set(x);
     return row;
@@ -70,19 +71,24 @@ export class BarcodeDecoder {
         }
       }
       const linear = this.readers[1];
-      try {
-        return linear
-          .decode(new BinaryBitmap(new ContrastBinarizer(luminance)), this.hints)
-          .getText();
-      } catch (error) {
-        if (!(
-          error instanceof NotFoundException ||
-          error instanceof ChecksumException ||
-          error instanceof FormatException
-        ))
-          throw error;
-      } finally {
-        linear.reset();
+      // Video color conversion and antialiasing change the separation between dark bars,
+      // the surround and white paper. One fixed fraction can merge the surround into bars.
+      // Bound the fallback to three thresholds and normal row sampling to keep blank frames cheap.
+      for (const fraction of [1 / 4, 1 / 8, 3 / 8]) {
+        const contrast = new ContrastBinarizer(luminance);
+        contrast.fraction = fraction;
+        try {
+          return linear.decode(new BinaryBitmap(contrast)).getText();
+        } catch (error) {
+          if (!(
+            error instanceof NotFoundException ||
+            error instanceof ChecksumException ||
+            error instanceof FormatException
+          ))
+            throw error;
+        } finally {
+          linear.reset();
+        }
       }
     }
     return null;

@@ -29,6 +29,8 @@ Mock Playwright tests use a session header to isolate each attempt's state and s
 
 Finish source/build changes before starting browser checks: Angular rebuild/live reload can interrupt a workflow. Avoid running production and mock browser suites concurrently when their output directories overlap; one runner can clear another's artifacts. Use `--grep` for a focused issue, then broaden only if the change affects more flows.
 
+The Playwright mock server disables component HMR and live reload so navigation tests use stable modules. Permission scenarios that need a fresh bootstrap navigate to a distinct document; reloading immediately after a hash-route change can cancel a pending lazy import. After an action redirects, wait for the destination view before navigating again. Barcode decoder regressions include small labels, dark surrounds and limited video-range luminance levels to cover cross-browser camera conversion.
+
 For pending details, verify collapse/expand, per-QR stock effects, unavailable details and visibility without Recovery. Gateway tests must also inject raw private fields and hidden product/warehouse changes to establish that summaries never expose them.
 
 ## Changing a domain command

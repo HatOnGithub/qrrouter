@@ -25,7 +25,9 @@ export default defineConfig({
     { name: 'webkit', use: { browserName: 'webkit' } },
   ],
   webServer: {
-    command: 'node dev/start-mock.mjs --port 4300',
+    // Component HMR adds asynchronous imports that can be cancelled by navigation/reload.
+    // E2E runs need stable application modules; interactive development keeps HMR enabled.
+    command: 'node dev/start-mock.mjs --port 4300 --no-hmr --no-live-reload',
     url: 'http://127.0.0.1:4300',
     env: { QRR_MOCK_PORT: '0' },
     reuseExistingServer: false,
