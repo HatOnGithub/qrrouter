@@ -21,7 +21,17 @@ export default defineConfig({
         launchOptions: { args: ['--autoplay-policy=user-gesture-required'] },
       },
     },
-    { name: 'firefox', use: { browserName: 'firefox' } },
+    {
+      name: 'firefox',
+      use: {
+        browserName: 'firefox',
+        launchOptions: {
+          // Fresh test contexts can classify localhost as a bounce tracker before
+          // the first automated click on slow runners. This is a first-party mock.
+          firefoxUserPrefs: { 'privacy.bounceTrackingProtection.mode': 0 },
+        },
+      },
+    },
     { name: 'webkit', use: { browserName: 'webkit' } },
   ],
   webServer: {

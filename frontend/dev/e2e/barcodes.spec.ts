@@ -5,7 +5,6 @@ for (const symbology of ['QRCODE', 'DATAMATRIX', 'C128', 'PDF417']) {
     page,
     mock,
   }) => {
-    test.setTimeout(30000);
     const item = await mock.item('Network cable');
     expect(item.code).toHaveLength(6);
     await page.goto('/#/workflow/move');
