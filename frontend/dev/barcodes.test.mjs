@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import bwip from 'bwip-js';
 import { BarcodeDecoder } from '../src/app/shared/scanner/barcode-decoder.ts';
 import { validCode } from '../src/app/shared/scanner/codes.ts';
@@ -103,6 +104,23 @@ test('small Code 128 labels survive video-range levels against a darker surround
       );
     }
   }
+});
+
+test('Code 128 survives the antialiased Linux WebKit camera scanline', () => {
+  // Grayscale scanline from our generated 222263 label in the failed Linux camera test.
+  // Keep the surrounding video pixels: cropping to the white label hides the failure.
+  const row = JSON.parse(
+    readFileSync(new URL('./fixtures/code128-video-row.json', import.meta.url))
+  );
+  const width = row.length,
+    height = 120;
+  const rgba = new Uint8ClampedArray(width * height * 4).fill(255);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const value = y >= 40 && y < 80 ? row[x] : 80;
+      rgba.fill(value, (y * width + x) * 4, (y * width + x) * 4 + 3);
+    }
+  assert.equal(new BarcodeDecoder().decode(rgba, width, height), makeCode(4));
 });
 
 for (const bcid of ['qrcode', 'datamatrix']) {

@@ -144,6 +144,26 @@ export const test = base.extend<{ mock: MockApplication }>({
       await mock.reset();
       await use(mock);
       if (info.status !== info.expectedStatus) {
+        // Screenshots rescale the preview. Preserve the actual video pixels used by the
+        // scanner so platform-specific color conversion and narrow bars can be reproduced.
+        if (info.tags.includes('@virtual-camera') && !page.isClosed()) {
+          const frame = await page.evaluate(() => {
+            const video = document.querySelector('qrr-scanner video');
+            if (!(video instanceof HTMLVideoElement) || video.readyState < 2 || !video.videoWidth)
+              return null;
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 800 / video.videoWidth);
+            canvas.width = Math.round(video.videoWidth * scale);
+            canvas.height = Math.round(video.videoHeight * scale);
+            canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/png').split(',')[1];
+          });
+          if (frame)
+            await info.attach('camera-video-frame', {
+              body: Buffer.from(frame, 'base64'),
+              contentType: 'image/png',
+            });
+        }
         await info.attach('browser-errors', {
           body: JSON.stringify(errors, null, 2),
           contentType: 'application/json',

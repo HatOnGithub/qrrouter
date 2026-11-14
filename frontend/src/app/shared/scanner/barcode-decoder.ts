@@ -73,10 +73,12 @@ export class BarcodeDecoder {
       const linear = this.readers[1];
       // Video color conversion and antialiasing change the separation between dark bars,
       // the surround and white paper. One fixed fraction can merge the surround into bars.
-      // Bound the fallback to three thresholds and normal row sampling to keep blank frames cheap.
-      for (const fraction of [1 / 4, 1 / 8, 3 / 8]) {
+      // Antialiased narrow bars can disappear between coarse thresholds (notably after
+      // WebKit's video conversion). Search the dark half in 1/32 steps, with at most
+      // thirteen attempts and normal row sampling to keep blank-frame work bounded.
+      for (let step = 4; step <= 16; step++) {
         const contrast = new ContrastBinarizer(luminance);
-        contrast.fraction = fraction;
+        contrast.fraction = step / 32;
         try {
           return linear.decode(new BinaryBitmap(contrast)).getText();
         } catch (error) {
