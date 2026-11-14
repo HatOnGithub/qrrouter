@@ -39,6 +39,8 @@ The frontend mock remains temporary, in-memory sample data for development; it d
 
 ## Responsibility boundaries
 
+The [code documentation](code/README.md) explains the implementation contracts in detail, including state persistence, permission projections, synchronization/recovery and where to extend each feature.
+
 - `frontend/src/app/features`: interface pages and workflow interaction. Keep styles with the component that owns them.
 - `frontend/src/app/shared`: reusable controls, capture and location input.
 - `frontend/src/app/core`: browser models and services.
@@ -75,6 +77,8 @@ docker buildx build --target dolibarr-module --output type=local,dest=artifacts/
 The result is `artifacts/docker-module/qrrouter`. For installation from published assets, see [Installation](installation.md).
 
 ## Validate changes
+
+The gateway tests use pinned official barcode renderers. Prepare their source cache first with `python tests/dolibarr_compatibility.py --download --php /path/to/php`; the compatibility suite can reuse the same cache offline afterward. `npm run test:barcodes` in `frontend` checks multi-format decoding while preserving the short ID contract.
 
 ### Service and gateway
 

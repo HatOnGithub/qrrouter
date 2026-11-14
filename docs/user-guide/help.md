@@ -16,7 +16,26 @@ When the URL is unchanged, leaving a previously saved API key blank keeps it. Re
 
 ## Missing pages or actions
 
-Menu entries and actions depend on permissions. Ask an administrator to check QR read/manage rights and native product, stock, employee or document rights for the action you need. A read-only user can inspect permitted records but cannot perform management workflows.
+Menu entries, direct pages and actions depend on permissions. All non-administrators need **Use QR Router**, **Read QR inventory and scan labels**, and native product/stock read access. Grant only the additional QR permissions needed for their tasks. Native object access, entity sharing and document permissions are checked separately; a QR grant never overrides a native restriction.
+
+| QR permission    | Allows                                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create           | Create labels, register inventory and create physical bins                                                                                     |
+| Modify           | Edit QR metadata and internal locations; pack or unpack items                                                                                  |
+| Delete           | Delete unused, unassigned QR labels; native records and stocked QR items cannot be deleted here                                                |
+| Move             | Move items and physical bins                                                                                                                   |
+| Consume / Return | Perform the corresponding stock workflow                                                                                                       |
+| Adjust           | Count or correct containers and transfer their contents                                                                                        |
+| Loans            | Check items out to employees and check them back in                                                                                            |
+| Picking          | Save and manually complete pick lists; guarded consumption also needs Consume                                                                  |
+| Print            | Open label and inventory-report printouts                                                                                                      |
+| Recovery         | Reconcile or recover pending operations; the original action's permission is also required                                                     |
+| Configure        | Manage location definitions and label formats; connection settings, imports and employee mapping administration still require an administrator |
+| History          | View permitted operation records on QR details and the history page                                                                            |
+
+Native stock movements require **Stock > Create/modify stock movements**. Creating a new native lot or serial also requires native product-create permission. QR metadata edits do not write native stock or rename native lot/serial identities. Automatically creating an employee warehouse requires native warehouse-create permission. History requires native stock-movement read access as well as its QR permission. User and order selectors respect native employee and document access.
+
+The former broad **manage** permission now controls configuration only. It does not imply Create, Modify, Delete or any stock workflow. Refresh the module's permission definitions after upgrading and explicitly grant module access and the required action rights to users or groups.
 
 ## Camera or entry problems
 
@@ -35,6 +54,8 @@ Menu entries and actions depend on permissions. Ask an administrator to check QR
 
 ## Pending synchronization banner
 
+Open **More details** to see a table of the requested changes for each QR: the previous and intended values, including quantity and warehouse where relevant. An item's pending-operation notice also shows planned stock movements. These are the original requested changes; Dolibarr may already have applied them. Only records and locations you can access are included. Viewing details does not require the Recovery permission.
+
 1. Let the original request finish. Do not submit the creation or stock action again.
 2. Wait at least 30 seconds, then select **Recover synchronization** when available.
 3. Refresh and check the resulting items. Recovery can finish an operation whose native stock changes already committed.
@@ -50,3 +71,15 @@ If recovery fails, keep the pending entry and contact the administrator with the
 4. Refresh and inspect the quantity, warehouse and operation status before proceeding.
 
 For a batch with mixed results, completed items remain completed. Resolve the failed or pending rows individually instead of rerunning successful items.
+
+## Action history
+
+Administrators and users granted **View QR operation history** can open **Action history** to review inventory changes, registration, stock actions, physical-bin moves, pick-list activity and recovery. Entries show the time, acting user, operation, outcome and affected records, with quantity, location and reason where recorded. Started operations and their completion or cancellation appear as separate events; a started event alone does not establish completion.
+
+The **Movement history** section on a QR's details page shows actions affecting that exact QR, with a refresh button and **Open operation history page** link. That link opens the separate page filtered to the same QR. Select **All QR entries** to return to the full history.
+
+Administrators can grant **View QR operation history** through Dolibarr's user or group permissions for QR Router, alongside module access, inventory read access, native product/stock read and native stock-movement read permissions. This right does not grant inventory management or stock changes. After updating, if a new right is missing from the permissions screen, disable and re-enable the QR Router module to refresh its permission definitions.
+
+Search by QR identifier, bin, location or reason, or filter by user, action and date range. Dates use the browser's local time; **Through date** includes that entire day. Use **Previous** and **Next** for older entries and **Apply filters / Refresh** to reload results. Links open affected items, physical bins and orders. Historical user and QR IDs remain visible when their current records are unavailable.
+
+History is stored per entity in the service database and survives restarts. Viewing it does not change inventory or create action records. Scans, previews and rejected requests that made no changes are excluded. Non-administrators see only entries whose affected QR items, warehouses, bins and documents remain accessible through their native permissions. Older audit entries without verifiable visibility metadata and entries for unavailable records remain available to administrators.

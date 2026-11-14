@@ -344,6 +344,7 @@ internal static class LocationTests
                 EntityId = 81,
                 Admin = false,
                 Manage = false,
+                Use = true,
             },
             "query-bin-summary",
             Data(("level_id", 4), ("level_value", "12"))

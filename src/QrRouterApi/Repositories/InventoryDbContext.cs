@@ -3,6 +3,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace QrRouterApi.Repositories;
 
+/// <summary>
+/// JSON domain records and separate audit rows. The computed warehouse column indexes
+/// document locations. Apply model changes through EF migrations, not EnsureCreated.
+/// </summary>
 public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> options)
     : DbContext(options)
 {

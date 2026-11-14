@@ -42,7 +42,7 @@ class modQrrouter extends DolibarrModules {
         $this->const = [];
         $this->tabs = [];
         $qrRead =
-            'isModEnabled("qrrouter") && isModEnabled("product") && isModEnabled("stock") && isModEnabled("productbatch") && $user->id > 0 && (int) ($user->status ?? $user->statut ?? 1) === 1 && empty($user->socid) && ($user->admin || (($user->hasRight("qrrouter", "read") || $user->hasRight("qrrouter", "manage")) && $user->hasRight("produit", "lire") && $user->hasRight("stock", "lire")))';
+            'isModEnabled("qrrouter") && isModEnabled("product") && isModEnabled("stock") && isModEnabled("productbatch") && $user->id > 0 && (int) ($user->status ?? $user->statut ?? 1) === 1 && empty($user->socid) && ($user->admin || ($user->hasRight("qrrouter", "use") && $user->hasRight("qrrouter", "read") && $user->hasRight("produit", "lire") && $user->hasRight("stock", "lire")))';
         foreach (
             ['product' => 'product', 'stock' => 'warehouse', 'productlot' => 'lot']
             as $native => $kind
@@ -63,14 +63,53 @@ class modQrrouter extends DolibarrModules {
                 $qrRead .
                 ':/qrrouter/index.php#/locations?warehouse_id=__ID__',
         ];
+        // Numeric IDs persist in user/group grants. Keep identities stable when adding rights;
+        // manage controls configuration and must never imply the independent action grants.
         $this->rights = [];
         $this->rights[] = [5038711, 'Read QR inventory and scan labels', 'r', 1, 'read'];
         $this->rights[] = [
             5038712,
-            'Create QR labels and change QR inventory locations or quantities',
+            'Configure QR locations, label formats and module administration',
             'w',
             0,
             'manage',
+        ];
+        $this->rights[] = [5038713, 'View QR operation history', 'r', 0, 'history'];
+        $this->rights[] = [5038714, 'Use QR Router', 'r', 0, 'use'];
+        $this->rights[] = [
+            5038715,
+            'Create QR labels, items and physical bins; register labels',
+            'w',
+            0,
+            'create',
+        ];
+        $this->rights[] = [
+            5038716,
+            'Modify QR metadata, locations and bin membership',
+            'w',
+            0,
+            'modify',
+        ];
+        $this->rights[] = [5038717, 'Delete unused QR labels', 'd', 0, 'delete'];
+        $this->rights[] = [5038718, 'Move QR inventory and physical bins', 'w', 0, 'move'];
+        $this->rights[] = [5038719, 'Consume QR inventory', 'w', 0, 'consume'];
+        $this->rights[] = [50387110, 'Return consumed QR inventory', 'w', 0, 'return'];
+        $this->rights[] = [
+            50387111,
+            'Count, correct and transfer container quantities',
+            'w',
+            0,
+            'adjust',
+        ];
+        $this->rights[] = [50387112, 'Check out and check in employee loans', 'w', 0, 'loans'];
+        $this->rights[] = [50387113, 'Save and manually complete pick lists', 'w', 0, 'picking'];
+        $this->rights[] = [50387114, 'Print QR labels and inventory reports', 'r', 0, 'print'];
+        $this->rights[] = [
+            50387115,
+            'Reconcile and recover pending QR operations',
+            'w',
+            0,
+            'recover',
         ];
         $this->menu = [
             [
@@ -83,8 +122,7 @@ class modQrrouter extends DolibarrModules {
                 'langs' => 'qrrouter@qrrouter',
                 'position' => 120,
                 'enabled' => '1',
-                'perms' =>
-                    '$user->admin || $user->rights->qrrouter->read || $user->rights->qrrouter->manage',
+                'perms' => $qrRead,
                 'target' => '',
                 'user' => 0,
             ],

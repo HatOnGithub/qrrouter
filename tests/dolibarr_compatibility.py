@@ -26,6 +26,14 @@ FILES = [
     'commande/class/commande.class.php',
     'mrp/class/mo.class.php',
     'mrp/class/moline.class.php',
+    'core/modules/barcode/doc/tcpdfbarcode.modules.php',
+    'core/modules/barcode/modules_barcode.class.php',
+    'core/lib/barcode.lib.php',
+    'includes/tecnickcom/tcpdf/tcpdf_barcodes_1d.php',
+    'includes/tecnickcom/tcpdf/tcpdf_barcodes_2d.php',
+    'includes/tecnickcom/tcpdf/include/barcodes/qrcode.php',
+    'includes/tecnickcom/tcpdf/include/barcodes/datamatrix.php',
+    'includes/tecnickcom/tcpdf/include/barcodes/pdf417.php',
 ]
 TABLES = {
     'product_batch': ['fk_product_stock', 'qty', 'batch', 'eatby', 'sellby'],

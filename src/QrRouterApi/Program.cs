@@ -23,6 +23,9 @@ if (args is ["--healthcheck"])
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+// External settings survive replacement of application files. Reapply environment/CLI
+// providers so deployment overrides retain higher priority than the optional file.
 var configFile = Environment.GetEnvironmentVariable("QRR_CONFIG_FILE");
 if (!string.IsNullOrEmpty(configFile))
 {
@@ -46,6 +49,8 @@ builder.Services.AddControllers();
 builder.Services.AddSingleton<IStateRepository, StateRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 var app = builder.Build();
+
+// Wrap authentication/controllers so expected failures share the JSON error contract.
 app.UseMiddleware<ErrorHandlerMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));

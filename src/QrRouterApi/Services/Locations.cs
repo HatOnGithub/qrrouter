@@ -8,6 +8,12 @@ namespace QrRouterApi.Services;
 // Entity-scoped location definitions and assignments live in the service database.
 public static class Locations
 {
+    private static IEnumerable<JsonNode?> Assignments(JsonObject state) =>
+        state
+            .Map("items")
+            .Select(pair => pair.Value)
+            .Concat(state.Map("physical_bins").Select(pair => pair.Value));
+
     private static void Warehouse(JsonObject data) =>
         Require(
             data.I("warehouse_id") > 0
@@ -26,6 +32,10 @@ public static class Locations
             )
         );
 
+    /// <summary>
+    /// Validate ordered level values; derive display text, canonical key and stable values
+    /// together. Label formatting may change independently of level/option identities.
+    /// </summary>
     public static JsonObject Choice(JsonObject state, JsonObject data)
     {
         var warehouse = data.I("warehouse_id");
@@ -110,6 +120,8 @@ public static class Locations
         return Object(("bin", bin), ("bin_key", string.Join('|', keys)), ("bin_values", values));
     }
 
+    // Both item and physical-bin assignments protect used identities and datatypes. A label
+    // rename is not permission to replace the underlying level or its assigned options.
     public static JsonNode Configure(JsonObject state, JsonObject data)
     {
         Warehouse(data);
@@ -117,11 +129,11 @@ public static class Locations
         var names =
             data["names"] as JsonArray ?? throw new ArgumentException("Enter location level names");
         Require(
-            !state
-                .Map("items")
-                .Any(pair =>
-                    pair.Value?["pending_operation"] is not null
-                    || pair.Value?["pending_handoff"] is not null
+            !Assignments(state)
+                .Any(item =>
+                    item?["pending_operation"] is not null
+                    || item?["pending_handoff"] is not null
+                    || item?["pending_move"] is not null
                 ),
             "Resolve pending stock operations before changing location definitions"
         );
@@ -138,9 +150,8 @@ public static class Locations
                 || optionAdditions is not null && optionAdditions.Count == names.Count,
             "Invalid location option additions"
         );
-        var inUse = state
-            .Map("items")
-            .Any(p => p.Value!.I("warehouse_id") == warehouse && p.Value.S("bin") != "");
+        var inUse = Assignments(state)
+            .Any(item => item.I("warehouse_id") == warehouse && item.S("bin") != "");
         Require(
             !inUse || names.Count >= current.Count,
             "Cannot remove location levels while locations are in use"
@@ -171,15 +182,13 @@ public static class Locations
             var id = level.I("id").ToString();
             if (i < current.Count && datatype != level.S("datatype"))
             {
-                var used = state
-                    .Map("items")
-                    .Any(pair =>
-                        pair.Value!.I("warehouse_id") == warehouse
+                var used = Assignments(state)
+                    .Any(item =>
+                        item.I("warehouse_id") == warehouse
                         && (
-                            pair.Value?["bin_values"]?[id]?.ToString() is string value
-                                && value != ""
-                            || pair.Value.S("bin") != ""
-                                && pair.Value?["bin_values"] is not JsonObject { Count: > 0 }
+                            item?["bin_values"]?[id]?.ToString() is string value && value != ""
+                            || item.S("bin") != ""
+                                && item?["bin_values"] is not JsonObject { Count: > 0 }
                         )
                     );
                 Require(!used, "Cannot change the datatype of a level with saved assignments");
@@ -243,9 +252,16 @@ public static class Locations
         return configured.DeepClone();
     }
 
+    /// <summary>Apply label preferences for display only; this text is not the location identity.</summary>
     public static string Display(JsonObject state, JsonObject data)
     {
         var item = state.Map("items")[data.S("code")];
+        if (item is null && data["levels"] is JsonObject)
+        {
+            var choice = Choice(state, data);
+            choice["warehouse_id"] = data.I("warehouse_id");
+            item = choice;
+        }
         if (item is null)
             return "";
         var warehouse = item.I("warehouse_id");
@@ -292,6 +308,10 @@ public static class Locations
             );
             if (state.Map("location_levels")[pair.Key] is not null)
                 continue;
+            Require(
+                !state.Map("physical_bins").Any(bin => bin.Value.I("warehouse_id") == wid),
+                "Import locations before creating physical bins in this warehouse"
+            );
             Require(
                 pair.Value?["levels"] is JsonArray { Count: > 0 },
                 "Invalid imported location levels"

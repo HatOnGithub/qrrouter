@@ -82,3 +82,65 @@
 .qrr-batchlabel .qrr-printed-code {
   font-size: 8pt;
 }
+body[data-barcode-layout='linear'] .qrr-qr-label {
+  grid-template-rows: minmax(0, 1fr) 16mm 4mm;
+}
+body[data-barcode-layout='linear'] .qrr-qr-label > div {
+  align-self: end;
+}
+body[data-barcode-layout='linear'] .qrr-qr-label img {
+  width: 100%;
+  height: 14mm;
+  object-fit: contain;
+  padding-inline: 3mm;
+}
+.qrr-print-image {
+  object-fit: contain;
+}
+body[data-barcode-layout='matrix'] .qrr-qr-label {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: 31mm 3mm minmax(0, 1fr);
+  column-gap: 2mm;
+  text-align: left;
+}
+body[data-barcode-layout='matrix'] .qrr-qr-label > header {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+body[data-barcode-layout='matrix'] .qrr-qr-label > div:not(.qrr-a4-extra) {
+  grid-column: 1;
+  grid-row: 1;
+}
+body[data-barcode-layout='matrix'] .qrr-qr-label img {
+  width: 100%;
+  height: 30mm;
+}
+body[data-barcode-layout='matrix'] .qrr-printed-code {
+  grid-column: 1;
+  grid-row: 2;
+}
+.qrr-a4-extra {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-column: 1 / -1;
+  grid-row: 3;
+  gap: 0.5mm 1mm;
+  font:
+    8pt/1.1 Arial,
+    sans-serif;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+body[data-barcode-layout='matrix'] .qrr-batchlabel {
+  grid-template-rows: 23mm 3mm minmax(0, 1fr);
+}
+body[data-barcode-layout='matrix'] .qrr-batchlabel img {
+  height: 22mm;
+}
+.qrr-printed-ref {
+  display: block;
+  font:
+    8pt/1.1 Arial,
+    sans-serif;
+  overflow-wrap: anywhere;
+}

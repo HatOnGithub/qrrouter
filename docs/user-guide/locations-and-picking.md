@@ -12,7 +12,17 @@
 
 **Warehouse stock comparison** shows QR observations alongside native stock. Viewing or printing this page does not adjust stock. Investigate differences before using a stock-changing workflow.
 
-Location printouts remain separate from QR item labels. No QR code or bin scan is required; use the warehouse and location fields to choose where an item belongs.
+Location labels remain separate from QR item labels. Select **Print bin labels** for location QR labels, or **Print bin inventory** for a contents report with the selected location's QR. Scan a location label to open current contents, then select **Refresh contents** to reload them. During a move, **Scan destination bin** selects the location and shows its current contents. The same location-level definitions and validation apply to manual entry and scanned destinations.
+
+## Pack and move physical bins
+
+1. Open **Physical bins**, name a new bin and select its current warehouse and location levels.
+2. Select **Create physical bin**, then print its permanent QR label.
+3. Select **Pack or unpack items**, scan item labels and select **Pack selected items**. Items must already be at the bin's current location. Packing changes membership without changing stock.
+4. Select **Scan destination bin** or fill in the destination warehouse and location levels. Review the destination contents and select **Confirm bin move**.
+5. Each packed item moves through its normal native stock operation. Interrupted moves retain their original destination and lock packed items against conflicting work. Reconcile pending item operations, then select **Resume bin move**; completed items are skipped.
+
+The bin retains its permanent QR identity when it moves. Scanning its QR opens current contents; scanning it in the Move workflow opens the bin's move page. Moving an item separately, changing its location, checking it out or fully consuming it removes its membership. Location definitions used by a physical bin remain protected even when the bin is empty.
 
 ## Report by location level
 
@@ -42,9 +52,19 @@ These settings change the displayed location format only. The full stored QR Rou
 5. Review the proposed bins, products, QR entries and quantities. Item and product links open their details.
 6. Select **Print / Save as PDF** to take the sheet to the warehouse.
 
-The sheet is a planning preview. It uses requested order quantities, not the remaining unshipped balance, and does not reserve, consume or decrement stock. Record the actual stock action separately using the appropriate workflow.
+For customer orders, the sheet uses requested quantities minus consumption already recorded by QR Router for that order, including pending picks. It does not use Dolibarr's remaining unshipped balance or reserve stock. Returns do not automatically reopen the allowance because they do not identify the order to credit. Record actual stock actions through the appropriate workflow.
 
 For manufacturing orders, the sheet uses the planned component lines marked **to consume** on the order. Quantities are already scaled by Dolibarr; they are not multiplied by the finished-product quantity again. Finished products and recorded consumption/production lines are excluded. Previous consumption is not subtracted from the plan. Repeated component lines share available QR quantities, and shortages appear as **Not allocated**. Draft orders without component lines show an empty-preview message; configure the components in Dolibarr first.
+
+## Save and resume a customer-order pick list
+
+Select **Save pick list** to retain the requested product quantities and source warehouse. **Saved pick lists** shows requested, QR-picked, pending, manually fulfilled and remaining quantities, with open, in-progress and completed statuses. Lists survive refreshes and service restarts. There is one saved list per customer order, with quantities captured when first saved. Manufacturing-order sheets remain planning previews.
+
+Use **Resume picking**, or **Pick with scanner safeguards** from a customer-order preview, to open consumption against that order. Loading a list also saves it. Only allocated QR labels in the selected warehouse are accepted, and quantities cannot exceed the allocation. The server checks again when committing each item, counting other operators' completed and pending picks. Reload when allocations change. Scanner checks also reject items ineligible for the selected workflow.
+
+## Complete a list using untracked stock
+
+When remaining quantities have been supplied from stock outside QR tracking, select **Complete manually**, enter a reason and select **Confirm manual completion**. This records the remaining quantities as manually fulfilled, retaining the user, time and reason. It does not register items or post stock movements; record any required native stock adjustment separately in Dolibarr. Resolve pending picks before completing manually. Completed lists cannot be picked again through the guarded workflow.
 
 ## Open QR entries from Dolibarr
 

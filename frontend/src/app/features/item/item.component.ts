@@ -4,6 +4,7 @@ import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { available } from '@core/models/inventory';
 import { ConsumptionService } from '@services/consumption.service';
+import { HistoryComponent } from '@features/history/history.component';
 import {
   faArrowRightFromBracket,
   faArrowRightToBracket,
@@ -21,10 +22,11 @@ import {
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 
+/** Public QR details with independently gated actions, pending intent and permission-scoped history. */
 @Component({
   selector: 'qrr-item',
   standalone: true,
-  imports: [SharedModule],
+  imports: [SharedModule, HistoryComponent],
   templateUrl: './item.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './item.component.css',

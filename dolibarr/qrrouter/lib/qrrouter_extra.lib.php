@@ -14,7 +14,13 @@ function qrr_bin_summary($items, $wid, $bin, $products = [], $levelId = 0, $leve
         'level_id' => (int) $levelId,
         'level_value' => (string) $levelValue,
         'products' => (object) $products,
-        'visible_codes' => array_keys($items),
+        'visible_codes' => qrr_item_codes(
+            array_filter(
+                $items,
+                fn($item) => (int) $item['warehouse_id'] === (int) $wid &&
+                    ($bin === '' || (string) $item['bin'] === (string) $bin),
+            ),
+        ),
     ]);
     // The service aggregates internal records. Rebuild rows from the authorized browser fields.
     $summary['tracked'] = array_values(
@@ -32,15 +38,16 @@ function qrr_bin_summary($items, $wid, $bin, $products = [], $levelId = 0, $leve
 function qrr_known_bins($items, $wid) {
     return qrr_command('query-known-bins', [
         'warehouse_id' => (int) $wid,
-        'visible_codes' => array_keys($items),
+        'visible_codes' => qrr_item_codes(array_filter($items, fn($item) => !empty($item['bin']))),
     ]);
 }
 function qrr_warehouse_summary($items, $wid) {
     return qrr_command('query-warehouse-summary', [
         'warehouse_id' => (int) $wid,
-        'visible_codes' => array_keys($items),
+        'visible_codes' => qrr_item_codes($items),
     ]);
 }
+/** Read native requirements after record authorization; browsers cannot author trusted order lines. */
 function qrr_order_lines($db, $id, $type = 'salesorder') {
     global $user;
     if ($id <= 0) {
@@ -94,11 +101,12 @@ function qrr_order_lines($db, $id, $type = 'salesorder') {
     return ['order' => $cmd, 'lines' => $out];
 }
 /** Greedy allocation by existing bin code, tracked individually; independent stock amounts (no reservations). */
-function qrr_pick_proposal($lines, $items, $wid, $products) {
+function qrr_pick_proposal($lines, $items, $wid, $products, $orderId = 0) {
     return qrr_command('query-pick', [
         'lines' => $lines,
+        'order_id' => (int) $orderId,
         'warehouse_id' => (int) $wid,
         'products' => (object) $products,
-        'visible_codes' => array_keys($items),
+        'visible_codes' => qrr_item_codes($items),
     ]);
 }

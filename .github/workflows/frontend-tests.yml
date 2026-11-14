@@ -48,6 +48,9 @@ jobs:
       - name: Test print models
         run: npm run test:labels
 
+      - name: Verify barcode decoder round trips
+        run: npm run test:barcodes
+
       - name: Test CSV files
         run: npm run test:csv
 
@@ -120,11 +123,11 @@ jobs:
       - name: Verify service authentication and entity isolation
         run: python3 tests/http_smoke.py
 
-      - name: Verify PHP gateway authorization and field privacy
-        run: python3 tests/angular_integration.py --php php
-
       - name: Verify supported Dolibarr native APIs
         run: python3 tests/dolibarr_compatibility.py --download --php php
+
+      - name: Verify PHP gateway authorization and field privacy
+        run: python3 tests/angular_integration.py --php php
 
   release:
     name: Build and publish release

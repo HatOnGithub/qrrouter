@@ -65,7 +65,7 @@ The connection key is saved through Dolibarr's native configuration. Leave an al
 
 1. Create the required products and warehouses in Dolibarr. Enable lot/serial tracking for products used by individual serials or containers. Optionally set **QR serial number prefix** in each product's additional attributes; blank uses `SN-` for new individual serials.
 2. Open **QR Router > Bins and locations**, choose a warehouse and save its location level names.
-3. Grant operators QR read/manage rights and the native product, stock, document rights needed for their work. QR permissions do not replace native permissions.
+3. Grant operators **Use QR Router**, inventory read and the specific Create, Modify, Move or other QR action permissions needed for their work, alongside the relevant native product, stock and document permissions. See the [permission guide](user-guide/help.md#missing-pages-or-actions). QR permissions do not replace native permissions.
 4. Create active employee users before using checkout. Administrators can map their personal warehouses, or checkout can create one when permitted.
 5. Open QR Router, create a test item or blank label batch, and follow the [user guide](user-guide/README.md).
 

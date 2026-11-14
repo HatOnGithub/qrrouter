@@ -5,6 +5,7 @@ public sealed class AppSettings
     public string ApiKey { get; set; } = "";
     public string DataDirectory { get; set; } = "";
 
+    /// <summary>Keep live inventory outside replaceable application files.</summary>
     public bool HasPersistentDataDirectory()
     {
         if (!Path.IsPathFullyQualified(DataDirectory))

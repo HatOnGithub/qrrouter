@@ -1,3 +1,7 @@
+/**
+ * Standalone print entry, separate from Angular. PHP supplies authorized embedded JSON;
+ * build labels with text nodes rather than interpreting product/QR text as markup.
+ */
 import { details, name, serial, PrintItem, Product, Profile } from './model.js';
 import { languageSelect } from './language.js';
 
@@ -7,6 +11,8 @@ interface PrintData {
   warehouses: Record<string, { ref: string }>;
   profiles: Profile[];
   format: string;
+  symbology: string;
+  barcode_formats: { id: string; label: string; layout: 'matrix' | 'linear' }[];
   title: string;
   base: string;
   back: string;
@@ -31,6 +37,10 @@ const link = (title: string, href: string) => {
 };
 const profile = data.profiles.find(option => option.id === data.format);
 const thermal = data.format !== 'a4';
+const barcode = data.barcode_formats.find(option => option.id === data.symbology);
+if (!barcode) throw new Error('Unsupported barcode format');
+document.body.dataset['barcodeLayout'] = barcode.layout;
+document.body.dataset['barcodeFormat'] = barcode.id;
 if (thermal && !profile) throw new Error('Unknown label format');
 document.title = t(data.title);
 document.documentElement.lang = data.locale.replace('_', '-');
@@ -59,9 +69,14 @@ controls.append(button, link('Back to QR Router', data.back));
 if (thermal) {
   const a4 = new URL(data.a4, window.location.href);
   a4.searchParams.set('lang', data.locale);
+  a4.searchParams.set('symbology', data.symbology);
   controls.append(link('A4 layout', a4.href));
 }
-const status = element('p', '', t(data.items.length ? 'Loading QR images…' : 'No labels to print'));
+const status = element(
+  'p',
+  '',
+  t(data.items.length ? 'Loading barcode images…' : 'No labels to print')
+);
 status.id = 'qrr-print-status';
 status.setAttribute('role', 'status');
 controls.append(status);
@@ -85,6 +100,18 @@ if (!thermal) {
   select.append(option);
 }
 form.append(label, select);
+const barcodeLabel = element('label', '', t('Barcode format'));
+barcodeLabel.htmlFor = 'qrr-barcode-format';
+const barcodeSelect = element('select');
+barcodeSelect.id = 'qrr-barcode-format';
+barcodeSelect.name = 'symbology';
+for (const format of data.barcode_formats) {
+  const option = element('option', '', format.label);
+  option.value = format.id;
+  option.selected = format.id === data.symbology;
+  barcodeSelect.append(option);
+}
+form.append(barcodeLabel, barcodeSelect);
 form.append(languageSelect(data.locale, t('Output language')));
 for (const [key, value] of Object.entries(data.selection)) {
   const input = element('input');
@@ -114,8 +141,11 @@ const prefixes: Record<string, string> = {
 for (const item of data.items) {
   const product = data.products[String(item.product_id)] || {};
   const image = element('img');
-  image.src = data.base + 'qr.php?' + new URLSearchParams({ code: item.code });
-  image.alt = 'QR ' + item.code;
+  image.src =
+    data.base +
+    (data.symbology === 'QRCODE' ? 'qr.php?' : 'barcode.php?') +
+    new URLSearchParams({ code: item.code, symbology: data.symbology });
+  image.alt = barcode.label + ' ' + item.code;
   image.className = 'qrr-print-image';
   image.width = 240;
   image.height = 240;
@@ -125,8 +155,10 @@ for (const item of data.items) {
   );
   if (item.type === 'unassigned') article.classList.add('qrr-label-id-only');
   if (item.code.length > 16) article.classList.add('long-id');
-  article.setAttribute('aria-label', t('QR label') + ' ' + item.code);
+  article.setAttribute('aria-label', t('Barcode label') + ' ' + item.code);
   if (profile) {
+    if (profile.level >= 2 && barcode.layout === 'matrix')
+      article.classList.add('qrr-matrix-large');
     const qr = element('div', 'qrr-qr-column');
     qr.append(image, element('strong', 'qrr-id-code', item.code));
     const fields = details(
@@ -165,7 +197,16 @@ for (const item of data.items) {
       );
       content.append(row);
     }
-    article.append(qr, content);
+    if (profile.level >= 2 && barcode.layout === 'matrix' && fields.length > 3) {
+      // Primary identification sits beside the top-left code. Secondary details use the full
+      // width underneath it, rather than leaving the lower-left label area unused.
+      const bottom = element('div', 'qrr-label-details qrr-label-bottom-details');
+      const rows = [...content.children];
+      for (const row of rows.slice(3)) bottom.append(row);
+      content.style.setProperty('--detail-rows', '3');
+      bottom.style.setProperty('--detail-rows', String(Math.ceil((fields.length - 3) / 2)));
+      article.append(qr, content, bottom);
+    } else article.append(qr, content);
   } else {
     const heading = element('header');
     heading.append(
@@ -177,11 +218,29 @@ for (const item of data.items) {
     );
     if (item.type !== 'unassigned' && serial(item))
       heading.append(element('small', 'qrr-printed-serial', 'SN ' + serial(item)));
+    if (item.type !== 'unassigned' && product.ref)
+      heading.append(element('small', 'qrr-printed-ref', 'REF ' + product.ref));
     const qr = element('div');
     qr.append(image);
     article.append(heading, qr);
     if (item.type !== 'unassigned')
-      article.append(element('small', 'qrr-printed-code', 'QR ' + item.code));
+      article.append(element('small', 'qrr-printed-code', 'ID ' + item.code));
+    const extra = element('div', 'qrr-a4-extra');
+    const fields = details(item, product, data.profiles.at(-1)!, '', t).filter(
+      field => !['name', 'serial', 'ref'].includes(field.kind)
+    );
+    for (const field of fields)
+      extra.append(
+        element(
+          'div',
+          '',
+          (prefixes[field.kind] ? t(prefixes[field.kind]) + ' ' : '') + field.value
+        )
+      );
+    if (fields.length) {
+      if (barcode.layout === 'linear') heading.append(extra);
+      else article.append(extra);
+    }
   }
   main.append(article);
 }
@@ -236,9 +295,9 @@ void Promise.all(
   button.disabled = !okay;
   status.textContent = t(
     okay
-      ? 'Labels ready. Long details may be shortened; the QR ID is always complete.'
+      ? 'Labels ready. Long details may be shortened; the identifier is always complete.'
       : results.length
-        ? 'QR image failed to load. Refresh before printing.'
+        ? 'Barcode image failed to load. Refresh before printing.'
         : 'No labels to print'
   );
 });

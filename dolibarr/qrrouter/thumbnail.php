@@ -1,4 +1,5 @@
 <?php
+/** Serve stored JPEGs only after the QR/native visibility checks, never by an unchecked path. */
 $res = 0;
 if (is_file(__DIR__ . '/../../main.inc.php')) {
     $res = include __DIR__ . '/../../main.inc.php';

@@ -45,7 +45,7 @@
         </div>
       }
       @if (inventory.context()) {
-        @if (inventory.context()!.state.pending_native) {
+        @if (inventory.context()!.state.pending_native; as pending) {
           <div class="alert" role="alert">
             <p>
               {{
@@ -53,7 +53,8 @@
                   | t
               }}
             </p>
-            @if (inventory.context()!.permissions.stock) {
+            <qrr-pending-details [pending]="pending" [operation]="pending.action" />
+            @if (inventory.can('recover')) {
               <button mat-button (click)="recoverNative()" [disabled]="recovering()">
                 <fa-icon [icon]="icons.refresh" aria-hidden="true" />
                 {{ 'Recover synchronization' | t }}

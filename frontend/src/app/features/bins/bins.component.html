@@ -1,0 +1,171 @@
+<h1>{{ 'Physical bins' | t }}</h1>
+<p>
+  {{
+    'A physical bin has a permanent QR code and contains items. Its storage location changes when the bin and its contents move.'
+      | t
+  }}
+</p>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() | t }}</p>
+}
+@if (notice()) {
+  <p role="status">{{ notice() | t }}</p>
+}
+<button mat-stroked-button (click)="load()" [disabled]="busy()">
+  {{ 'Refresh contents' | t }}
+</button>
+<mat-form-field appearance="outline">
+  <mat-label>{{ 'Physical bin' | t }}</mat-label>
+  <mat-select
+    [ngModel]="id()"
+    (ngModelChange)="id.set($event); codes.set([]); packing.set(false); results.set([])"
+  >
+    @for (bin of bins(); track bin.id) {
+      <mat-option [value]="bin.id">{{ bin.label }} · {{ bin.id }}</mat-option>
+    }
+  </mat-select>
+</mat-form-field>
+@if (selected(); as bin) {
+  <qrr-card [title]="bin.label">
+    <p>{{ bin.id }} · {{ api.context()!.warehouses[bin.warehouse_id]?.ref }} · {{ bin.bin }}</p>
+    @if (api.can('print')) {
+      <a
+        mat-stroked-button
+        [href]="api.link('physical_bin_print.php', { bin_id: bin.id })"
+        target="_blank"
+        rel="noopener"
+      >
+        {{ 'Print physical bin label' | t }}
+      </a>
+    }
+    @if (bin.pending_move) {
+      <p class="alert">
+        {{ 'Move in progress' | t }}:
+        {{ api.context()!.warehouses[bin.pending_move.target.warehouse_id]?.ref }} ·
+        {{ bin.pending_move.target.bin }}
+      </p>
+    }
+    <table>
+      <thead>
+        <tr>
+          <th>{{ 'Item / QR' | t }}</th>
+          <th>{{ 'Quantity' | t }}</th>
+          <th>{{ 'Location' | t }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (code of bin.codes; track code) {
+          @if (api.context()!.state.items[code]; as item) {
+            <tr>
+              <td>
+                <a [routerLink]="['/items', code]">{{ api.itemName(item) }}</a>
+                <small>{{ code }}</small>
+              </td>
+              <td>{{ item.qty ?? '?' }}</td>
+              <td>
+                {{ api.context()!.warehouses[item.warehouse_id]?.ref }} · {{ item.bin }}
+                @if (item.pending_operation || item.pending_handoff) {
+                  · {{ 'Pending' | t }}
+                }
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td colspan="3">{{ 'This physical bin is empty' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    @if (api.can('modify') && !bin.pending_move) {
+      <button mat-stroked-button (click)="packing.set(!packing())">
+        {{ 'Pack or unpack items' | t }}
+      </button>
+      @if (packing()) {
+        <p>
+          {{
+            'Items must already be at the same storage location. Packing and unpacking do not change stock.'
+              | t
+          }}
+        </p>
+        <qrr-capture [initial]="codes()" [validate]="validatePack" (changed)="codes.set($event)" />
+        <button mat-flat-button (click)="assign(false)" [disabled]="busy() || !codes().length">
+          {{ 'Pack selected items' | t }}
+        </button>
+        <button mat-stroked-button (click)="assign(true)" [disabled]="busy() || !codes().length">
+          {{ 'Unpack selected items' | t }}
+        </button>
+      }
+    }
+  </qrr-card>
+  @if (api.can('move') && api.context()!.permissions.stock) {
+    <qrr-card [title]="'Move whole physical bin' | t">
+      @if (!bin.pending_move) {
+        <qrr-destination
+          [warehouse]="warehouse"
+          [values]="levels"
+          (resolving)="resolving.set($event)"
+          (selected)="
+            warehouse = $event.warehouse_id; levels = $event.levels; initial = $event.levels
+          "
+        />
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'Destination warehouse' | t }}</mat-label>
+          <mat-select [(ngModel)]="warehouse" (ngModelChange)="levels = {}; initial = {}">
+            @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+              <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <qrr-location-fields
+          [warehouse]="warehouse"
+          [initial]="initial"
+          (selected)="levels = $event"
+        />
+      }
+      <p>
+        {{
+          'Moves every packed item. Each native stock operation is committed separately; interrupted moves stay visible until resumed.'
+            | t
+        }}
+      </p>
+      <button
+        mat-flat-button
+        (click)="move()"
+        [disabled]="busy() || resolving() || (!bin.pending_move && !warehouse)"
+      >
+        {{ (bin.pending_move ? 'Resume bin move' : 'Confirm bin move') | t }}
+      </button>
+      @for (result of results(); track result.code) {
+        <p [class.alert]="!result.ok">
+          <a [routerLink]="['/items', result.code]">{{ result.code }}</a>
+          : {{ result.message | t }}
+        </p>
+      }
+    </qrr-card>
+  }
+}
+@if (api.can('create')) {
+  <qrr-card [title]="'Create physical bin' | t">
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Physical bin name' | t }}</mat-label>
+      <input matInput [(ngModel)]="name" maxlength="140" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'Current warehouse' | t }}</mat-label>
+      <mat-select [(ngModel)]="createWarehouse" (ngModelChange)="createLevels = {}">
+        @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+          <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <qrr-location-fields [warehouse]="createWarehouse" (selected)="createLevels = $event" />
+    <button
+      mat-flat-button
+      (click)="create()"
+      [disabled]="busy() || !name.trim() || !createWarehouse"
+    >
+      {{ 'Create physical bin' | t }}
+    </button>
+  </qrr-card>
+}

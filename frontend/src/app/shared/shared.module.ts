@@ -12,6 +12,7 @@ import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { CardComponent } from './card/card.component';
 import { TranslatePipe } from './translate.pipe';
 import { NativeLinkComponent } from './native-link/native-link.component';
+import { PendingDetailsComponent } from './pending-details/pending-details.component';
 
 const modules = [
   CommonModule,
@@ -27,6 +28,7 @@ const modules = [
   CardComponent,
   TranslatePipe,
   NativeLinkComponent,
+  PendingDetailsComponent,
 ];
 @NgModule({ imports: modules, exports: modules })
 export class SharedModule {}

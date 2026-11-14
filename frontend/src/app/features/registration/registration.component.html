@@ -1,9 +1,10 @@
 <section class="scanner-page">
   <h1>{{ 'Register items' | t }}</h1>
-  @if (api.context()!.permissions.manage) {
+  @if (api.can('create')) {
     <qrr-card class="capture-card" [title]="'Select labels' | t">
       <qrr-capture
         [initial]="codes()"
+        [validate]="validateScan"
         (changed)="codes.set($event); thumbnail = ''"
         (thumbnail)="thumbnail = $event"
       />
@@ -19,6 +20,6 @@
       </button>
     </qrr-card>
   } @else {
-    <p class="alert">{{ 'QR management permission required' | t }}</p>
+    <p class="alert">{{ 'Permission required for this QR action' | t }}</p>
   }
 </section>

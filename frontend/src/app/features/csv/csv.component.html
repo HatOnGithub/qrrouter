@@ -16,7 +16,7 @@
     <button mat-button (click)="template()">{{ 'Download CSV template' | t }}</button>
   </div>
 </qrr-card>
-@if (api.context()!.permissions.manage) {
+@if (api.can('create') || api.can('modify')) {
   <qrr-card [title]="'Import CSV' | t">
     <p>
       {{

@@ -2,6 +2,10 @@ using System.Text.Json.Nodes;
 
 namespace QrRouterApi.Helpers;
 
+/// <summary>
+/// Helpers for the schema-2 document contract. Copy values when reparenting JsonNodes;
+/// Map also normalizes PHP's empty-array representation of an otherwise keyed collection.
+/// </summary>
 public static class Json
 {
     public static string S(this JsonNode? n, string key, string fallback = "") =>

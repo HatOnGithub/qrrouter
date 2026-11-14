@@ -1,3 +1,4 @@
+/** Minimal authorized print DTO; keep private synchronization state out of label rendering. */
 export interface PrintItem {
   code: string;
   type: string;
@@ -36,6 +37,7 @@ export const serial = (item: PrintItem): string =>
 export const name = (item: PrintItem, product: Product): string =>
   item.label?.trim() || product.label?.trim() || '';
 
+/** Select profile-appropriate detail rows without depending on Angular or the browser DOM. */
 export function details(
   item: PrintItem,
   product: Product,
@@ -56,11 +58,6 @@ export function details(
   if (result.length < 2) add('ref', t('Reference not assigned'), true);
   if (profile.level >= 1) {
     if (item.native_batch !== serial(item)) add('lot', item.native_batch);
-    if (profile.level === 1) add('location', [warehouse, item.bin].filter(Boolean).join(' / '));
-    else {
-      add('warehouse', warehouse);
-      add('bin', item.bin);
-    }
     if (item.qty !== null && item.qty !== undefined) add('qty', item.qty);
   }
   if (profile.level >= 2 && product.label?.trim() !== name(item, product))

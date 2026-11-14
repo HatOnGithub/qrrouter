@@ -1,6 +1,17 @@
 import { Routes } from '@angular/router';
 
+// Lazy features share the bootstrap session. Routes are navigation, not authorization guards;
+// feature controls and the PHP gateway must still enforce each independent capability.
 export const routes: Routes = [
+  {
+    path: 'history',
+    loadComponent: () =>
+      import('@features/history/history.component').then(m => m.HistoryComponent),
+  },
+  {
+    path: 'bins',
+    loadComponent: () => import('@features/bins/bins.component').then(m => m.BinsComponent),
+  },
   { path: '', pathMatch: 'full', redirectTo: 'inventory' },
   {
     path: 'csv',

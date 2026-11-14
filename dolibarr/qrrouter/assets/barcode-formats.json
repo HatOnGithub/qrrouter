@@ -1,0 +1,6 @@
+[
+  { "id": "QRCODE", "label": "QR Code", "layout": "matrix" },
+  { "id": "DATAMATRIX", "label": "Data Matrix", "layout": "matrix" },
+  { "id": "C128", "label": "Code 128", "layout": "linear" },
+  { "id": "PDF417", "label": "PDF417", "layout": "matrix" }
+]

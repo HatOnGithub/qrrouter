@@ -13,6 +13,8 @@ args = parser.parse_args()
 module = root / 'dolibarr/qrrouter'
 if (module / 'LICENSE').read_bytes() != (root / 'LICENSE').read_bytes():
     raise SystemExit('Project and Dolibarr module licenses must match.')
+# A module archive must pair matching PHP/frontend/service contracts, including standalone
+# print assets. The frontend package version is checked against every other release source.
 version = json.loads((root / 'frontend/package.json').read_text(encoding='utf-8'))['version']
 if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?', version):
     raise SystemExit('Project version must use major.minor.incremental, optionally followed by .hotfix.')

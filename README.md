@@ -12,11 +12,15 @@ Available under the [MIT License](LICENSE). Third-party dependencies retain thei
 - CSV inventory exports and validated imports for creation, registration and metadata updates.
 - Camera scanning and separate manual / USB scanner entry.
 - Warehouse moves, consumption, returns, quantity corrections and container transfers.
-- Employee checkout and checkin, location summaries and picking previews.
+- Movable physical bins with permanent QR labels, packing and recoverable whole-bin moves.
+- Employee checkout and checkin, location QR reports and saved customer-order pick lists with scanner safeguards and manual completion.
 - Individual and bulk QR label creation, including DYMO LabelWriter 550 printing.
+- QR, Data Matrix, Code 128 and PDF417 labels/scanning with the same six-character identifiers; barcode-aware 1D/2D print layouts.
 - Inventory search by name, QR ID, serial, product reference, tags and visible extra fields.
 - Links between QR entries and related Dolibarr records.
 - Persistent SQLite storage with automatic migration of existing JSON inventory.
+- Permission-controlled operation history on QR details and a separate history page, with searches, filters and retained audit records.
+- Independent module-access and action permissions, combined with native Dolibarr object and stock permissions.
 
 ## Installation
 
@@ -40,3 +44,5 @@ For installation errors, missing tables, service connectivity and retained stock
 ## Development
 
 See the [development guide](docs/development.md) for local setup, mocks, builds and tests.
+
+See the [code documentation](docs/code/README.md) for architecture, API contracts, permissions, persistence, synchronization/recovery and a source map.

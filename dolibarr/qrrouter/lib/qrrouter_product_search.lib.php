@@ -16,6 +16,10 @@ function qrr_search_field_expression($expression, $default = 1) {
     return (int) dol_eval((string) $expression, 1, 1, '2');
 }
 
+/**
+ * Enrich already-visible products with permitted plain-text tags/extra fields. Native field
+ * expressions and visibility still apply; this search projection must not expose hidden values.
+ */
 function qrr_product_search_metadata($db, $products) {
     global $user, $langs;
     if (!$products) {

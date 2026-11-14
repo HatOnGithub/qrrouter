@@ -13,6 +13,11 @@ public interface IInventoryService
     JsonNode? Execute(Actor actor, string action, JsonObject data);
 }
 
+/// <summary>
+/// QR domain coordinator. PHP supplies native facts/access; C# owns allowed patches and durable
+/// intent. NativeStage/Finish and Plan/Stage/Finish are separate recovery protocols, documented
+/// in docs/code/synchronization.md. Query callbacks do not persist observed changes.
+/// </summary>
 public sealed class InventoryService(IStateRepository repository) : IInventoryService
 {
     private static void Permit(bool allowed)
@@ -21,17 +26,65 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             throw new UnauthorizedAccessException("Missing Dolibarr permission");
     }
 
+    // No legacy Manage fallback: each action needs its independent grant after base access.
+    private static void Capability(Actor actor, string permission) =>
+        Permit(
+            actor.Admin
+                || (
+                    actor.Use
+                    && actor.Read
+                    && actor.Permissions?.Contains(permission, StringComparer.Ordinal) == true
+                )
+        );
+
+    private static string OperationPermission(string action) =>
+        action switch
+        {
+            "create" or "bulk" or "register" or "physical-bin-create" => "create",
+            "update" or "physical-bin-assign" => "modify",
+            "delete-unassigned" => "delete",
+            "move" or "physical-bin-move-start" or "physical-bin-move-finish" => "move",
+            "consume" => "consume",
+            "return" => "return",
+            "count" or "correct" or "box-transfer" => "adjust",
+            "checkout" or "checkin" => "loans",
+            "pick-list-save" or "pick-list-complete" => "picking",
+            "resolve-mapping" => "loans",
+            "mapping"
+            or "import"
+            or "label-settings"
+            or "location-configure"
+            or "location-import" => "manage",
+            _ => throw new ArgumentException("Unknown inventory operation"),
+        };
+
+    /// <summary>
+    /// Internal state/export read. HTTP defaults history off; PHP must still project this
+    /// private document before returning any inventory to a browser.
+    /// </summary>
     public JsonObject State(Actor actor, bool includeHistory = true)
     {
-        Permit(actor.Read || actor.Manage || actor.Admin);
+        Permit(actor.Admin || (actor.Use && actor.Read));
+        if (includeHistory)
+            Permit(actor.Admin || actor.History);
         return repository.Read(actor.EntityId, s => (JsonObject)s.DeepClone(), includeHistory);
     }
 
+    /// <summary>
+    /// Authorize prepared adapter commands. Query/plan helpers do not persist; mutations use
+    /// the repository transaction and recheck grants associated with stored pending intent.
+    /// </summary>
     public JsonNode? Execute(Actor actor, string action, JsonObject data)
     {
+        Permit(actor.Admin || (actor.Use && actor.Read));
+        if (action == "query-history")
+        {
+            Permit(actor.Admin || ((actor.Read || actor.Manage) && actor.History));
+            Permit(actor.Admin || data["visibility"] is JsonObject);
+            return repository.History(actor.EntityId, data);
+        }
         if (action.StartsWith("query-", StringComparison.Ordinal))
         {
-            Permit(actor.Read || actor.Manage || actor.Admin);
             return repository.Read(
                 actor.EntityId,
                 s =>
@@ -40,11 +93,11 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                     return InventoryQueries.Execute(s, action, data);
                 },
                 includeHistory: false,
+                // Picking needs consumption from every warehouse to enforce the order-wide allowance.
                 selection: action
                     is "query-bin-summary"
                         or "query-warehouse-summary"
                         or "query-known-bins"
-                        or "query-pick"
                     ? new StateSelection(
                         data.I("warehouse_id"),
                         (data["native_items"] as JsonObject)
@@ -56,7 +109,28 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                     : null
             );
         }
-        Permit(actor.Manage || actor.Admin);
+        if (action == "prepare-creation")
+            Capability(actor, data.S("operation") == "update" ? "modify" : "create");
+        else if (action == "validate")
+            Capability(actor, "create");
+        else if (action is "plan" or "handoff-plan" or "stage" or "handoff-stage")
+            Capability(actor, OperationPermission(data.S("kind")));
+        else if (action == "native-stage")
+            Capability(actor, OperationPermission(data.S("action")));
+        else if (
+            action
+            is not (
+                "finish"
+                or "reconcile"
+                or "handoff-finish"
+                or "handoff-reconcile"
+                or "native-finish"
+                or "native-cancel"
+            )
+        )
+            Capability(actor, OperationPermission(action));
+        if (action is "reconcile" or "handoff-reconcile" or "native-cancel")
+            Capability(actor, "recover");
         if (action == "prepare-creation")
             return Creation.Prepare(data);
         if (action == "validate")
@@ -83,7 +157,9 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                 },
                 includeHistory: false
             );
-        var context = AuditContext(data);
+        var context = AuditContext(data["fields"] as JsonObject ?? data);
+        if (data.S("action") != "")
+            context["kind"] = data.S("action");
         return repository.Update(
             actor.EntityId,
             actor.UserId,
@@ -96,6 +172,95 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                     "Complete the pending Dolibarr synchronization first"
                 );
                 RefreshNative(s, data);
+                if (
+                    action == "update"
+                    && Item(s, data.S("code")).S("type") == "unassigned"
+                    && data.S("type") != "unassigned"
+                )
+                    Capability(actor, "create");
+                // Read the original kind inside the transaction. Recovery alone, or a replacement
+                // request kind, must not authorize completing a different persisted action.
+                if (action is "finish" or "reconcile" or "handoff-finish" or "handoff-reconcile")
+                {
+                    var pendingItem = Item(s, data.S("code"));
+                    var operation =
+                        pendingItem["pending_handoff"] ?? pendingItem["pending_operation"];
+                    Require(operation is not null, "No pending operation");
+                    Capability(actor, OperationPermission(operation.S("kind")));
+                }
+                if (action is "native-finish" or "native-cancel")
+                {
+                    Require(s["pending_native"] is not null, "No pending native synchronization");
+                    Capability(actor, OperationPermission(s["pending_native"].S("action")));
+                }
+                if (s.Map("items")[data.S("code")] is JsonObject affectedItem)
+                {
+                    context["source_warehouse_id"] = affectedItem.I("warehouse_id");
+                    context["source_location"] = affectedItem.S("bin");
+                }
+                if (
+                    data.S("bin_id") != ""
+                    && s.Map("physical_bins")[data.S("bin_id")] is JsonObject affectedBin
+                )
+                {
+                    context["source_warehouse_id"] = affectedBin.I("warehouse_id");
+                    context["source_location"] = affectedBin.S("bin");
+                }
+                if (action is "finish" or "reconcile" or "handoff-finish" or "handoff-reconcile")
+                {
+                    var item = s.Map("items")[data.S("code")];
+                    if (
+                        (item?["pending_operation"] ?? item?["pending_handoff"])
+                        is JsonObject pending
+                    )
+                    {
+                        foreach (
+                            var key in new[]
+                            {
+                                "kind",
+                                "reason",
+                                "amount",
+                                "reference_type",
+                                "reference_id",
+                            }
+                        )
+                            if (pending[key] is not null)
+                                context[key == "amount" ? "quantity" : key] = pending[key].Copy();
+                        var target = pending["patch"] as JsonObject;
+                        context["warehouse_id"] =
+                            target?["warehouse_id"].Copy()
+                            ?? pending["to"].Copy()
+                            ?? item?["warehouse_id"].Copy();
+                        context["choice"] = Object(
+                            (
+                                "bin",
+                                target.S(
+                                    "bin",
+                                    pending.S("kind") == "checkout" ? "" : item.S("bin")
+                                )
+                            )
+                        );
+                    }
+                    if (item is not null && context.S("kind") is "move" or "checkout" or "checkin")
+                        context["quantity"] = item["qty"].Copy();
+                }
+                if (
+                    data.S("kind") is "move" or "checkout" or "checkin"
+                    && s.Map("items")[data.S("code")] is JsonObject movedItem
+                )
+                    context["quantity"] = movedItem["qty"].Copy();
+                if (
+                    action is "native-finish" or "native-cancel"
+                    && s["pending_native"] is JsonObject pendingNative
+                )
+                {
+                    context["kind"] = pendingNative.S("action");
+                    context["codes"] = new JsonArray(
+                        ((JsonObject)pendingNative["changes"]!)
+                            .Select(pair => JsonValue.Create(pair.Key) as JsonNode)
+                            .ToArray()
+                    );
+                }
                 var result = action switch
                 {
                     "native-stage" => NativeStage(s, data, actor),
@@ -116,6 +281,12 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                         : throw new UnauthorizedAccessException(
                             "Administrator permission required"
                         ),
+                    "pick-list-save" => PickLists.Save(s, data, actor),
+                    "pick-list-complete" => PickLists.Complete(s, data, actor),
+                    "physical-bin-create" => PhysicalBins.Create(s, data, actor),
+                    "physical-bin-assign" => PhysicalBins.Assign(s, data),
+                    "physical-bin-move-start" => PhysicalBins.StartMove(s, data, actor),
+                    "physical-bin-move-finish" => PhysicalBins.FinishMove(s, data),
                     "stage" => Stage(s, data, actor, false),
                     "handoff-stage" => Stage(s, data, actor, true),
                     "finish" => Finish(s, data, false, false),
@@ -147,6 +318,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                 || item["pending_handoff"] is not null
             )
                 continue;
+            var previousWarehouse = item.I("warehouse_id");
+            var previousBin = item.S("bin_key");
             foreach (
                 var key in new[]
                 {
@@ -163,9 +336,20 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             )
                 if (pair.Value?[key] is not null)
                     item[key] = pair.Value[key].Copy();
+            if (
+                item["pending_bin_move"] is null
+                && (
+                    previousWarehouse != item.I("warehouse_id")
+                    || previousBin != item.S("bin_key")
+                    || item.S("status") == "consumed"
+                )
+            )
+                item.Remove("physical_bin_id");
         }
     }
 
+    // Build a candidate without installing it. Root intent blocks unrelated mutations until
+    // PHP supplies committed native receipt bindings or claims safe cancellation.
     private static JsonNode NativeStage(JsonObject state, JsonObject data, Actor actor)
     {
         Permit(actor.Stock);
@@ -174,6 +358,12 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             data["fields"] ?? throw new ArgumentException("Missing native fields")
         );
         var action = data.S("action");
+        if (
+            action == "update"
+            && Item(state, fields.S("code")).S("type") == "unassigned"
+            && fields.S("type") != "unassigned"
+        )
+            Capability(actor, "create");
         var result = action switch
         {
             "create" => Create(candidate, fields),
@@ -246,6 +436,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         return pending.DeepClone();
     }
 
+    // Install the saved candidate with lot identities from PHP's receipt. Recover a lost
+    // response by reusing that receipt, never by independently reposting native stock.
     private static JsonNode? NativeFinish(JsonObject state, JsonObject data, Actor actor)
     {
         Permit(actor.Stock);
@@ -269,6 +461,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         return result;
     }
 
+    // PHP first persists cancellation natively so this ID cannot subsequently post stock.
     private static JsonNode? NativeCancel(JsonObject state, JsonObject data, Actor actor)
     {
         Permit(actor.Stock);
@@ -303,6 +496,9 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                 "reason",
                 "user_id",
                 "warehouse_id",
+                "order_id",
+                "bin_id",
+                "remove",
                 "count",
                 "args",
                 "product_id",
@@ -334,6 +530,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         && item.S("status") != "consumed"
         && item["checkout"] is null
         && item["pending_handoff"] is null
+        && item["pending_bin_move"] is null
         && item["pending_operation"] is null;
 
     private static int Units(JsonNode item)
@@ -377,6 +574,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         );
     }
 
+    // Shared normalized item contract. Null container quantity means unknown, not known empty.
     private static JsonObject Make(JsonObject data, string code)
     {
         var type = data.S("type", "unassigned");
@@ -569,6 +767,12 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             "Return or reconcile before editing"
         );
         var fresh = Make(data, data.S("code"));
+        if (item.I("product_lot_id") > 0)
+            Require(
+                item.S("native_batch") == fresh.S("native_batch")
+                    && item.S("serial") == fresh.S("serial"),
+                "The linked Dolibarr lot/serial identity cannot be changed here"
+            );
         if (item.S("type") != "unassigned")
         {
             Require(
@@ -589,6 +793,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             fresh.Remove("consumed_units");
         }
         fresh.Remove("created_at");
+        if (fresh.S("bin_key") != item.S("bin_key") || fresh.S("bin") != item.S("bin"))
+            item.Remove("physical_bin_id");
         foreach (var p in fresh)
             item[p.Key] = p.Value.Copy();
         return null;
@@ -714,11 +920,35 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         return null;
     }
 
+    /// <summary>
+    /// Derive an allowed QR patch and signed native effects from current state and choices.
+    /// Pending pick quantities count against the order-wide allowance. Caller-supplied patches
+    /// and effects are never accepted as the authoritative plan.
+    /// </summary>
     private static JsonObject Plan(JsonObject state, JsonObject data, Actor actor, bool handoff)
     {
         var item = Item(state, data.S("code"));
         var kind = data.S("kind");
         var args = data["args"] as JsonObject ?? new JsonObject();
+        var physicalBinMove = PhysicalBins.ValidateMove(state, item, kind, args);
+        if (args["pick_list"] is JsonObject pickList)
+        {
+            Require(!handoff && kind == "consume", "Pick lists require consumption");
+            Require(
+                pickList.I("order_id") > 0
+                    && args.S("reference_type") == "salesorder"
+                    && args.I("reference_id") == pickList.I("order_id"),
+                "Pick list reference mismatch"
+            );
+            var proposal = (JsonArray)InventoryQueries.Execute(state, "query-pick", pickList);
+            var limit = proposal
+                .Where(row => row.S("code") == item.S("code"))
+                .Sum(row => row!["take"]!.GetValue<double>());
+            Require(
+                args.I("quantity") > 0 && args.I("quantity") <= limit,
+                "Item or quantity is outside the remaining pick list; reload the pick list"
+            );
+        }
         var from = item.I("warehouse_id");
         var pid = item.I("product_id");
         var qty = item.S("type") == "box" ? item.I("qty", -1) : 1;
@@ -827,7 +1057,10 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         }
         else
         {
-            Require(Available(item), "Item is unassigned, consumed, checked out or pending");
+            Require(
+                physicalBinMove || Available(item),
+                "Item is unassigned, consumed, checked out or pending"
+            );
             switch (kind)
             {
                 case "move":
@@ -911,11 +1144,17 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
                     patch["bin_values"].Copy() ?? item["bin_values"].Copy() ?? new JsonObject()
                 )
             );
+        if (!physicalBinMove && kind is "move" or "return")
+            patch["physical_bin_id"] = null;
+        if (kind == "consume" && patch.S("status") == "consumed")
+            patch["physical_bin_id"] = null;
         op["effects"] = effects;
         op["patch"] = patch;
         return op;
     }
 
+    // Check the preflight revision and replan in the write transaction. Persist intent before
+    // PHP touches stock; only QR-only operations can apply immediately during staging.
     private static JsonNode Stage(JsonObject state, JsonObject data, Actor actor, bool handoff)
     {
         Require(
@@ -943,6 +1182,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         return op;
     }
 
+    // Plan owns this patch; consumption entries also feed order-wide pick progress.
     private static void Apply(JsonObject item, JsonObject op)
     {
         foreach (var p in (JsonObject)op["patch"]!)
@@ -967,6 +1207,8 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
         }
     }
 
+    // Complete evidence applies intent. After the delay, wholly absent expected movements can
+    // cancel it. Partial, duplicate or unrelated evidence retains intent for investigation.
     private static JsonNode Finish(JsonObject state, JsonObject data, bool handoff, bool reconcile)
     {
         var item = Item(state, data.S("code"));
@@ -1009,6 +1251,7 @@ public sealed class InventoryService(IStateRepository repository) : IInventorySe
             {
                 if (op.S("kind") == "checkout")
                 {
+                    item.Remove("physical_bin_id");
                     item["checkout"] = Object(
                         ("user_id", op.I("person_id")),
                         ("reason", op.S("reason")),

@@ -56,8 +56,10 @@ export class AppComponent {
     { path: '/scan', label: 'Scan QR', icon: faQrcode },
     { path: '/labels', label: 'Print QR labels', icon: faTags },
     { path: '/locations', label: 'Bins and locations', icon: faWarehouse },
+    { path: '/bins', label: 'Physical bins', icon: faBoxesStacked },
     { path: '/loans', label: 'Loans', icon: faRightLeft },
     { path: '/picking', label: 'Picking', icon: faClipboardList },
+    { path: '/history', label: 'Action history', icon: faClipboardList },
     { path: '/people', label: 'Personal warehouses', icon: faUserGear },
   ];
 
@@ -89,10 +91,12 @@ export class AppComponent {
   protected allowed(path: string): boolean {
     const p = this.inventory.context()?.permissions;
     if (path === '/people') return !!p?.admin;
-    if (path === '/picking') return !!p?.orders;
-    if (path === '/locations') return p?.locations !== false;
+    if (path === '/history') return !!p?.history || !!p?.admin;
+    if (path === '/picking') return !!p?.orders || !!p?.references?.production;
+    if (path === '/locations' || path === '/bins') return p?.locations !== false;
     if (['/inventory', '/scan', '/locations', '/loans'].includes(path)) return true;
     if (path.includes('checkout') || path.includes('checkin')) return !!p?.stock;
-    return !!p?.manage;
+    if (path === '/labels') return this.inventory.can('create') || this.inventory.can('print');
+    return this.inventory.can('create');
   }
 }

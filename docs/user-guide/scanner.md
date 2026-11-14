@@ -2,6 +2,8 @@
 
 [Guide index](README.md)
 
+The camera accepts the module's QR, Data Matrix, Code 128 and PDF417 labels. All formats carry the same item identifier and use the same action/permission checks. Hold the label steady with its complete barcode and surrounding blank margin visible; wide 1D barcodes may need more space in the frame. Manual/USB scanners submit the same decoded identifier.
+
 ## Camera and manual / USB entry
 
 1. Open **Scan QR** and select **QR camera**, **Manual / USB entry**, or a warehouse action.
@@ -40,7 +42,7 @@ An existing serial must have no QR association. Linking it preserves its native 
 1. Open **Scan QR > Move items**.
 2. Scan all items to move, then select **Review selected items**.
 3. Check the selected rows and their current locations; deselect anything to leave behind.
-4. Choose **Destination warehouse** and its QR Router location fields. Choose the same warehouse for a bin-only move.
+4. Select **Scan destination bin** and scan a location QR, or choose **Destination warehouse** and its QR Router location fields. A scanned destination shows its current contents. Choose the same warehouse for a bin-only move.
 5. Enter **Reason / purpose** if useful.
 6. Select **Confirm operation** and check each result.
 

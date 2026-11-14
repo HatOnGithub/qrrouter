@@ -2,6 +2,14 @@
 
 [Guide index](README.md)
 
+## Choose a barcode format
+
+Choose **Barcode format** on the batch page or an individual/batch print preview: **QR Code**, **Data Matrix**, **Code 128**, or **PDF417**. Select **Apply settings** in the preview. The same six-character identifier is encoded in every format; changing format does not register a new item or change stock. Existing QR labels continue to work.
+
+Compact 2D labels put the code on the left and information on the right. Larger 2D labels put the code at the top-left, with information to the right and underneath. Code 128 puts information above the wide barcode along the bottom. The readable identifier remains complete. Printer size and barcode format are separate choices.
+
+Storage-location and physical-bin printouts offer QR and Data Matrix for their longer route payloads. Numeric-only product formats such as EAN-13 are not suitable for the module's alphanumeric identifiers.
+
 ## Choose the output language
 
 On an individual or batch print preview, choose **Output language** (English, Nederlands or Français) and select **Apply settings**. The selected language stays in place when changing label size or switching to A4. On location reports, choose the language and select **Apply language**; warehouse, bin and level filters are retained. Picking sheets have their own **Output language** selector before printing.
@@ -49,6 +57,12 @@ Individual batches receive one unit per new serial. Container batches receive th
 4. In the browser print dialog, select the DYMO printer and matching paper size. Print at **100% / actual size**, with browser headers and footers disabled. Avoid scaling to fit another paper size.
 5. Print one label first and check its boundaries and QR readability before printing a batch.
 
-Printing uses the browser and printer driver. Assigned roll labels show the QR image and ID, then available details in priority order: short name, serial and product reference. Larger labels can show additional lot, location, quantity, status and item details. Long text is fitted or shortened within the label.
+Printing uses the browser and printer driver. Assigned roll labels show the QR image and ID, then available details in priority order: short name, serial and product reference. Larger labels can show additional lot, quantity, status and item details. Product labels omit warehouse and location because these can change. Long text is fitted or shortened within the label.
 
 Item names allow up to 140 UTF-8 bytes; serials and box names allow up to 100. Accented characters can use more than one byte. Shorten the text when the form shows a limit warning.
+
+## Location and physical-bin labels
+
+On **Bins and locations**, select **Print bin labels** for 101 × 54 mm labels showing the location QR and a large location code. **Print bin inventory** includes the selected location's QR with its current contents. Location QR codes retain level values rather than printed contents; scanning one loads a fresh report or selects a move destination.
+
+On **Physical bins**, select **Print physical bin label**. These labels show the bin's name and permanent ID. Moving the bin does not require replacing its label.

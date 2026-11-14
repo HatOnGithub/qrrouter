@@ -5,7 +5,10 @@ using static QrRouterApi.Helpers.Json;
 
 namespace QrRouterApi.Services;
 
-// Read models use the same authoritative state as commands; no client-supplied item snapshots.
+/// <summary>
+/// Read models over authoritative state and trusted catalogs, not browser item snapshots.
+/// Candidate visibility and order-wide consumption have different scopes when allocating picks.
+/// </summary>
 public static class InventoryQueries
 {
     private static readonly IComparer<string> Natural = Comparer<string>.Create(
@@ -42,6 +45,7 @@ public static class InventoryQueries
         item.S("type") != "unassigned"
         && item.S("status") != "consumed"
         && item["pending_handoff"] is null
+        && item["pending_bin_move"] is null
         && item["pending_operation"] is null
         && item.I("warehouse_id") == wid;
 
@@ -51,6 +55,8 @@ public static class InventoryQueries
 
     public static JsonNode Execute(JsonObject state, string action, JsonObject data)
     {
+        if (action == "query-pick")
+            return Pick(state, data);
         // The trusted adapter supplies the object visibility established by Dolibarr.
         if (data["visible_codes"] is JsonArray codes)
         {
@@ -93,6 +99,8 @@ public static class InventoryQueries
                     .ToArray()
             ),
             "query-batches" => Batches(state),
+            "query-pick-lists" => PickLists.All(state),
+            "query-physical-bins" => PhysicalBins.All(state),
             "query-pick" => Pick(state, data),
             _ => throw new ArgumentException("Unknown read model"),
         };
@@ -242,11 +250,37 @@ public static class InventoryQueries
         );
     }
 
+    // Count completed/pending sales-order consumes across all warehouses before restricting
+    // visible candidate stock. Greedy allocation is a proposal, not a stock reservation.
     private static JsonNode Pick(JsonObject state, JsonObject data)
     {
+        var saved = state.Map("pick_lists")[data.I("order_id").ToString()];
+        if (saved.S("status") == "manually_completed")
+            return new JsonArray();
+        var visible = (data["visible_codes"] as JsonArray)
+            ?.Select(n => n!.GetValue<string>())
+            .ToHashSet();
+        var used = new Dictionary<int, double>();
+        if (data.I("order_id") > 0)
+            foreach (var item in Items(state))
+            {
+                var entries = (item["consumption_log"] as JsonArray ?? []).AsEnumerable();
+                if (item["pending_operation"] is JsonObject pending)
+                    entries = entries.Append(pending);
+                foreach (var entry in entries)
+                    if (
+                        entry.S("kind") == "consume"
+                        && entry.S("reference_type") == "salesorder"
+                        && entry.I("reference_id") == data.I("order_id")
+                    )
+                        used[item.I("product_id")] =
+                            used.GetValueOrDefault(item.I("product_id"))
+                            + entry.I("quantity", entry.I("amount"));
+            }
         var available = Items(state)
             .Where(i =>
                 Visible(i, data.I("warehouse_id"))
+                && (visible is null || visible.Contains(i.S("code")))
                 && i["checkout"] is null
                 && i.S("bin") != ""
                 && i.I("product_id") > 0
@@ -257,11 +291,14 @@ public static class InventoryQueries
             .Select(i => new Allocation(i, i.S("type") == "box" ? i.I("qty") : 1))
             .ToList();
         var rows = new List<JsonObject>();
-        foreach (var node in data["lines"] as JsonArray ?? [])
+        foreach (var node in (saved?["lines"] ?? data["lines"]) as JsonArray ?? [])
         {
             var line = node ?? throw new ArgumentException("Invalid order line");
             var pid = line.I("product_id");
             var remaining = line["qty"]!.GetValue<double>();
+            var deducted = Math.Min(remaining, used.GetValueOrDefault(pid));
+            remaining -= deducted;
+            used[pid] = used.GetValueOrDefault(pid) - deducted;
             foreach (var item in available.Where(i => i.Item.I("product_id") == pid))
             {
                 if (remaining <= 0)

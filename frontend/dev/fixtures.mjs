@@ -5,6 +5,7 @@ export const scenarios = [
   'empty',
   'no-employees',
   'read-only',
+  'history-reader',
   'pending',
   'unavailable',
 ];
@@ -47,6 +48,9 @@ export function translations(locale) {
 
 export const labelFormats = JSON.parse(
   readFileSync(new URL('assets/label-profiles.json', moduleRoot), 'utf8')
+);
+export const barcodeFormats = JSON.parse(
+  readFileSync(new URL('assets/barcode-formats.json', moduleRoot), 'utf8')
 );
 
 export function createFixture(scenario = 'populated') {
@@ -238,8 +242,28 @@ export function createFixture(scenario = 'populated') {
       id: 'mock-sync-1',
       action: 'create',
       at: new Date(Date.now() - 60000).toISOString(),
+      changes: {
+        [makeCode(99)]: {
+          before: null,
+          after: {
+            ...fixture.state.items[makeCode(4)],
+            code: makeCode(99),
+            label: 'Pending cable',
+            qty: 1,
+          },
+        },
+      },
     };
-    fixture.state.items[makeCode(4)].pending_operation = { id: 'mock-move-1', kind: 'move', at };
+    fixture.state.items[makeCode(4)].pending_operation = {
+      id: 'mock-move-1',
+      kind: 'move',
+      at,
+      patch: { warehouse_id: 2, bin: 'B-02' },
+      effects: [
+        { warehouse_id: 1, delta: -1 },
+        { warehouse_id: 2, delta: 1 },
+      ],
+    };
   }
   if (scenario === 'empty') {
     fixture.state.items = {};

@@ -25,6 +25,24 @@ try {
     }
     $view = qrr_browser_inventory($db);
     $items = qrr_related_items($view['state']['items'], $kind, $id);
+    $query = trim((string) GETPOST('q', 'alphanohtml'));
+    if ($query !== '') {
+        $items = array_filter($items, function ($item) use ($query, $view) {
+            $product = $view['products'][(int) $item['product_id']] ?? [];
+            return stripos(
+                implode(' ', [
+                    $item['code'],
+                    $item['label'],
+                    $item['serial'] ?? '',
+                    $item['bin'] ?? '',
+                    $item['physical_bin_id'] ?? '',
+                    $product['ref'] ?? '',
+                    $product['label'] ?? '',
+                ]),
+                $query,
+            ) !== false;
+        });
+    }
     $bins = [];
     foreach ($items as $item) {
         if (!empty($item['bin_key'])) {
@@ -65,6 +83,17 @@ if ($head) {
     print dol_get_fiche_head($head, 'qrrouter', qrr_t('QR entries'), -1, 'barcode');
 }
 print '<h1>' . qrr_h(qrr_t('QR entries')) . ': ' . qrr_h($target['ref']) . '</h1>';
+print '<form method="get"><input type="hidden" name="kind" value="' .
+    qrr_h($kind) .
+    '"><input type="hidden" name="id" value="' .
+    $id .
+    '"><label>' .
+    qrr_h(qrr_t('Search items or locations')) .
+    ' <input name="q" value="' .
+    qrr_h($query) .
+    '"></label><button type="submit">' .
+    qrr_h(qrr_t('Search')) .
+    '</button></form>';
 print '<p><a href="' . qrr_h($target['url']) . '">' . qrr_h(qrr_t('Back to native card')) . '</a>';
 if ($target['locations_url'] !== '') {
     print ' &middot; <a href="' .
@@ -157,7 +186,7 @@ foreach ($items as $code => $item) {
     } else {
         print qrr_h($item['bin'] ?? '');
     }
-    if (qrr_write_right($user)) {
+    if (qrr_permission_right($user, 'modify')) {
         print ' <a href="' .
             qrr_h(qrr_app_link('edit/' . $code)) .
             '">' .
@@ -176,14 +205,18 @@ if (!$items) {
 print '</tbody></table></div>';
 if ($page > 1) {
     print '<a class="butAction" href="' .
-        qrr_h(qrr_related_url($kind, $id, ['bin_key' => $binKey, 'page' => $page - 1])) .
+        qrr_h(
+            qrr_related_url($kind, $id, ['bin_key' => $binKey, 'q' => $query, 'page' => $page - 1]),
+        ) .
         '">' .
         qrr_h(qrr_t('Previous')) .
         '</a> ';
 }
 if ($page < $pages) {
     print '<a class="butAction" href="' .
-        qrr_h(qrr_related_url($kind, $id, ['bin_key' => $binKey, 'page' => $page + 1])) .
+        qrr_h(
+            qrr_related_url($kind, $id, ['bin_key' => $binKey, 'q' => $query, 'page' => $page + 1]),
+        ) .
         '">' .
         qrr_h(qrr_t('Next')) .
         '</a>';

@@ -1,4 +1,5 @@
 <?php
+/** Batch print entry: select only visible items before preparing the standalone print payload. */
 $res = 0;
 if (is_file(__DIR__ . '/../../main.inc.php')) {
     $res = include __DIR__ . '/../../main.inc.php';
@@ -8,7 +9,7 @@ if (!$res) {
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
 require_once __DIR__ . '/lib/qrrouter_labels.lib.php';
-if (!qrr_inventory_right($user)) {
+if (!qrr_permission_right($user, 'print')) {
     accessforbidden();
 }
 $batch = strtoupper(trim((string) GETPOST('batch', 'alphanohtml')));

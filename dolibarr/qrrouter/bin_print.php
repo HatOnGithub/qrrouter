@@ -8,11 +8,13 @@ if (!$res) {
 }
 require_once __DIR__ . '/lib/qrrouter.lib.php';
 require_once __DIR__ . '/lib/qrrouter_print.lib.php';
-if (!qrr_inventory_right($user) || !qrr_locations_right($user)) {
+require_once __DIR__ . '/lib/qrrouter_barcodes.lib.php';
+if (!qrr_permission_right($user, 'print') || !qrr_locations_right($user)) {
     accessforbidden();
 }
 try {
     $locale = qrr_print_locale(GETPOST('lang', 'alphanohtml'));
+    $symbology = qrr_barcode_format(GETPOST('symbology', 'alphanohtml'), true)['id'];
 } catch (InvalidArgumentException $error) {
     http_response_code(400);
     exit($error->getMessage());
@@ -34,10 +36,27 @@ if (!qrr_bin_valid($bin)) {
     http_response_code(400);
     exit('Invalid bin code');
 }
-$bins = [$bin];
+$labelsOnly = (int) GETPOST('labels', 'int') === 1;
+$bins = $labelsOnly && $bin === '' ? qrr_known_bins($state['items'], $wid) : [$bin];
 $products = qrr_products_index($db, array_column($state['items'], 'product_id'));
 qrr_layout_start('Bin content sheets');
+qrr_barcode_selector(
+    $symbology,
+    [
+        'warehouse_id' => $wid,
+        'bin' => $bin,
+        'labels' => $labelsOnly ? 1 : 0,
+        'level_id' => $levelId,
+        'level_value' => $levelValue,
+        'lang' => $locale,
+    ],
+    true,
+);
 print '<style>@page{size:A5 portrait;margin:10mm}.qrr-binsheet{background:white;color:#111;padding:6mm;border:1px solid #aaa;min-height:172mm;box-sizing:border-box;page-break-after:always;font:11pt Arial,sans-serif}.qrr-binsheet h1{font-size:22pt;line-height:1.1;margin:0 0 3mm}.qrr-binsheet h2{font-size:13pt;margin:5mm 0 2mm}.qrr-binsheet table{border-collapse:collapse;width:100%;font-size:9.5pt}.qrr-binsheet th,.qrr-binsheet td{border-bottom:1px solid #ccc;padding:2mm;text-align:left;overflow-wrap:anywhere}.qrr-binsheet .qty{text-align:right;white-space:nowrap}.qrr-binsheet .meta{font-size:8pt;color:#555}.qrr-binsheet .warning{border:1px solid #b35b06;padding:2mm}.qrr-print-tool{margin:12px 0}@media print{.qrr>h2{display:none}body{background:white!important}.qrr-binsheet{border:0;padding:0;margin:0;min-height:0}.qrr-print-tool{display:none!important}.qrr{max-width:none!important}header,nav,footer,#id-left,.vmenu,.tabs,.qrr-noprint{display:none!important}}</style>';
+print '<style>.qrr-location-label{display:grid;grid-template-columns:32mm minmax(0,1fr);align-items:center;gap:4mm;margin:3mm 0 6mm;padding:3mm;border:1px solid #333;break-inside:avoid}.qrr-location-label img{width:32mm;height:32mm;image-rendering:pixelated}.qrr-location-code{display:block;font:700 26pt/1.1 monospace;overflow-wrap:anywhere}</style>';
+if ($labelsOnly) {
+    print '<style>@page{size:101mm 54mm;margin:0}.qrr-binsheet{width:101mm!important;min-height:54mm!important;height:54mm;padding:3mm!important;overflow:hidden}.qrr-location-label{border:0;margin:0;padding:0;height:48mm;grid-template-columns:36mm minmax(0,1fr)}.qrr-location-label img{width:36mm;height:36mm}.qrr-location-code{font-size:22pt}.qrr-binsheet>.meta{display:none}</style>';
+}
 print '<div class="qrr-print-tool qrr-noprint"><button class="qrr-btn" onclick="window.print()">' .
     $pt('Print / Save as PDF') .
     '</button> <a class="qrr-btn alt" href="' .
@@ -83,6 +102,24 @@ foreach ($bins as $name) {
         }
     }
     $local = $example ? qrr_location_local_label($db, $wid, $example, $state) : $name;
+    if ($example && !empty($example['bin_values']) && !$levelValue) {
+        $payload = qrr_location_qr($wid, $example['bin_values']);
+        qrr_resolve_location_qr($db, $payload);
+        print '<div class="qrr-location-label"><img src="' .
+            qrr_h(
+                qrr_link($symbology === 'QRCODE' ? 'qr.php' : 'barcode.php', [
+                    'location' => $payload,
+                    'symbology' => $symbology,
+                ]),
+            ) .
+            '" alt="Location QR"><strong class="qrr-location-code">' .
+            qrr_h($local) .
+            '</strong></div>';
+    }
+    if ($labelsOnly) {
+        print '</section>';
+        continue;
+    }
     print '<h1>' .
         (!empty($summary['scope'])
             ? qrr_h($summary['scope'])
@@ -209,9 +246,11 @@ foreach ($bins as $name) {
     print '</section>';
 }
 qrr_print_data($locale, [
+    'symbology' => $symbology,
     'warehouse_id' => $wid,
     'bin' => $bin,
     'level_id' => $levelId,
     'level_value' => $levelValue,
+    'labels' => $labelsOnly ? 1 : 0,
 ]);
 qrr_layout_end(false);

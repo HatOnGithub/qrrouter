@@ -123,7 +123,7 @@
     </table>
   </div>
   <div class="actions" action>
-    @if (api.context()!.permissions.manage) {
+    @if (api.can('create')) {
       <a mat-flat-button routerLink="/create">{{ 'Create QR item' | t }}</a>
       <a mat-stroked-button routerLink="/register">{{ 'Register items' | t }}</a>
     }

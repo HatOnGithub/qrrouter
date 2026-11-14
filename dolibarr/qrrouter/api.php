@@ -47,11 +47,30 @@ function qrr_api_translations() {
     }
     return (object) $result;
 }
+/** Read resources return authorized projections, never a raw private-service document. */
 function qrr_api_get($resource) {
     global $db, $user, $langs;
     if ($resource === 'print-translations') {
         qrr_api_permit(qrr_inventory_right($user));
         return (object) qrr_print_translations(qrr_print_locale(GETPOST('lang', 'alphanohtml')));
+    }
+    if ($resource === 'history') {
+        qrr_api_permit(qrr_history_right($user));
+        $code = trim((string) GETPOST('code', 'alphanohtml'));
+        if ($code !== '' && !qrr_code_valid($code)) {
+            throw new InvalidArgumentException('Invalid QR identifier');
+        }
+        return qrr_service('POST', 'query-history', [
+            'visibility' => !empty($user->admin) ? null : (object) qrr_history_visibility($db),
+            'code' => $code,
+            'page' => max(1, (int) GETPOST('page', 'int')),
+            'page_size' => 50,
+            'q' => trim((string) GETPOST('q', 'alphanohtml')),
+            'action' => (string) GETPOST('event', 'alphanohtml'),
+            'user_id' => (int) GETPOST('user_id', 'int'),
+            'from' => (string) GETPOST('from', 'alphanohtml'),
+            'to' => (string) GETPOST('to', 'alphanohtml'),
+        ]);
     }
     if ($resource === 'bootstrap') {
         $inventory = qrr_browser_inventory($db);
@@ -64,6 +83,7 @@ function qrr_api_get($resource) {
             'state' => $state,
             'consumption_references' => (object) $inventory['consumption_references'],
             'label_formats' => qrr_label_profiles(),
+            'barcode_formats' => qrr_barcode_formats(),
             'location_import_available' =>
                 !empty($user->admin) &&
                 isModEnabled('binloc') &&
@@ -72,9 +92,18 @@ function qrr_api_get($resource) {
             'users' => (object) $inventory['users'],
             'products' => (object) $inventory['products'],
             'permissions' => [
+                ...array_combine(
+                    qrr_permission_keys(),
+                    array_map(
+                        fn($right) => qrr_permission_right($user, $right),
+                        qrr_permission_keys(),
+                    ),
+                ),
+                'use' => qrr_read_right($user),
                 'manage' => qrr_write_right($user),
                 'stock' => qrr_stock_write_right($user),
                 'admin' => !empty($user->admin),
+                'history' => qrr_history_right($user),
                 'orders' => qrr_orders_right($user),
                 'locations' => qrr_locations_right($user),
                 'users' => qrr_users_read_all($user),
@@ -91,7 +120,9 @@ function qrr_api_get($resource) {
         ];
     }
     if ($resource === 'serial-check') {
-        qrr_api_permit(qrr_write_right($user));
+        qrr_api_permit(
+            qrr_permission_right($user, 'create') || qrr_permission_right($user, 'modify'),
+        );
         $serial = trim((string) GETPOST('serial', 'alphanohtml'));
         if ($serial === '' || strlen($serial) > 100) {
             throw new InvalidArgumentException('Enter a serial number of at most 100 bytes');
@@ -161,9 +192,6 @@ function qrr_api_get($resource) {
         }
         $sql .= ' ORDER BY c.rowid DESC LIMIT 50';
     } elseif ($resource === 'references' || $resource === 'manufacturing-orders') {
-        if ($resource === 'references') {
-            qrr_api_permit(qrr_write_right($user));
-        }
         $type =
             $resource === 'manufacturing-orders'
                 ? 'production'
@@ -180,6 +208,32 @@ function qrr_api_get($resource) {
             $sql .= " AND ref LIKE '%" . $db->escape($q) . "%'";
         }
         $sql .= ' ORDER BY rowid DESC LIMIT 100';
+    } elseif ($resource === 'physical-bins') {
+        qrr_api_permit(qrr_locations_right($user));
+        return qrr_physical_bins($db);
+    } elseif ($resource === 'location-qr') {
+        qrr_api_permit(qrr_locations_right($user));
+        $location = qrr_resolve_location_qr($db, (string) GETPOST('payload', 'alphanohtml'));
+        $state = qrr_browser_inventory($db)['state'];
+        $products = qrr_products_index($db, array_column($state['items'], 'product_id'));
+        $location['summary'] = qrr_bin_summary(
+            $state['items'],
+            $location['warehouse_id'],
+            $location['bin'],
+            $products,
+        );
+        $location['pending_count'] = count(
+            array_filter(
+                $state['items'],
+                fn($item) => (int) $item['warehouse_id'] === (int) $location['warehouse_id'] &&
+                    $item['bin'] === $location['bin'] &&
+                    (!empty($item['pending_operation']) ||
+                        !empty($item['pending_handoff']) ||
+                        !empty($item['pending_bin_move'])),
+            ),
+        );
+        $location['updated_at'] = gmdate('c');
+        return $location;
     } elseif ($resource === 'locations') {
         qrr_api_permit(qrr_locations_right($user));
         $wid = (int) GETPOST('warehouse_id', 'int');
@@ -203,6 +257,15 @@ function qrr_api_get($resource) {
             'qr' => qrr_warehouse_summary($state['items'], $wid),
             'native' => (object) qrr_stock_totals($db, array_keys($products)),
         ];
+    } elseif ($resource === 'pick-lists') {
+        qrr_api_permit(qrr_orders_right($user));
+        $lists = qrr_command('query-pick-lists', []);
+        return array_values(
+            array_filter(
+                $lists,
+                fn($list) => qrr_reference_visible($user, 'salesorder', (int) $list['order_id']),
+            ),
+        );
     } elseif ($resource === 'picking') {
         $type = (string) GETPOST('order_type', 'alphanohtml') ?: 'salesorder';
         if (!in_array($type, ['salesorder', 'production'], true)) {
@@ -220,7 +283,13 @@ function qrr_api_get($resource) {
         $lines = array_values(
             array_filter($order['lines'], fn($line) => isset($products[$line['product_id']])),
         );
-        return qrr_pick_proposal($lines, $state['items'], $wid, $products);
+        return qrr_pick_proposal(
+            $lines,
+            $state['items'],
+            $wid,
+            $products,
+            $type === 'salesorder' ? (int) GETPOST('order_id', 'int') : 0,
+        );
     } else {
         throw new InvalidArgumentException('Unknown resource');
     }
@@ -238,6 +307,9 @@ function qrr_api_get($resource) {
                 (int) $row->rowid,
             )
         ) {
+            continue;
+        }
+        if ($resource === 'products' && !qrr_product($db, (int) $row->rowid)) {
             continue;
         }
         $out[] = [
@@ -258,14 +330,128 @@ function qrr_api_get($resource) {
     $db->free($rs);
     return $out;
 }
+/**
+ * Browser command boundary: check the independent grant and rebuild command-specific fields.
+ * Native catalogs, proofs, choices and service actor headers must come from server helpers.
+ * The private protocol is documented in docs/code/api-contracts.md and synchronization.md.
+ */
 function qrr_api_post($action, $data) {
     global $db, $user;
-    qrr_api_permit(qrr_write_right($user));
+    qrr_require_operation_right($user, $action, $data);
+    if (
+        in_array($action, ['physical-bin-create', 'physical-bin-assign', 'physical-bin-move'], true)
+    ) {
+        qrr_api_permit(qrr_locations_right($user));
+        if ($action === 'physical-bin-create') {
+            $wid = qrr_api_int($data, 'warehouse_id');
+            if (!isset(qrr_warehouses($db)[$wid])) {
+                throw new InvalidArgumentException('Unknown warehouse');
+            }
+            return qrr_command($action, [
+                'label' => trim(strip_tags((string) ($data['label'] ?? ''))),
+                'warehouse_id' => $wid,
+                'choice' => qrr_location_choice($db, $wid, $data['levels'] ?? []),
+            ]);
+        }
+        $bin = qrr_physical_bin($db, (string) ($data['bin_id'] ?? ''));
+        if ($action === 'physical-bin-assign') {
+            $codes = qrr_workflow_codes($data['codes'] ?? []);
+            $visible = qrr_browser_inventory($db)['state']['items'];
+            foreach ($codes as $code) {
+                if (!isset($visible[$code])) {
+                    throw new DomainException('Item is unavailable');
+                }
+            }
+            return qrr_command($action, [
+                'bin_id' => $bin['id'],
+                'codes' => $codes,
+                'remove' => !empty($data['remove']),
+            ]);
+        }
+        qrr_api_permit(qrr_stock_write_right($user));
+        $wid = qrr_api_int($data, 'warehouse_id');
+        $choice = !empty($bin['pending_move'])
+            ? $bin['pending_move']['target']
+            : qrr_location_choice($db, $wid, $data['levels'] ?? []);
+        if (!empty($bin['pending_move'])) {
+            $wid = (int) $choice['warehouse_id'];
+        }
+        if (!isset(qrr_warehouses($db)[$wid])) {
+            throw new InvalidArgumentException('Unknown warehouse');
+        }
+        $move = qrr_command('physical-bin-move-start', [
+            'bin_id' => $bin['id'],
+            'warehouse_id' => $wid,
+            'choice' => $choice,
+        ]);
+        $results = [];
+        $target = $move['target'];
+        foreach ($move['codes'] as $code) {
+            try {
+                $item = qrr_load_state()['items'][$code];
+                qrr_require_item_visible($db, $item);
+                if (!empty($item['pending_operation']) || !empty($item['pending_handoff'])) {
+                    throw new RuntimeException(
+                        'Reconcile the pending item operation before resuming the bin move',
+                    );
+                }
+                if (
+                    (int) $item['warehouse_id'] !== (int) $target['warehouse_id'] ||
+                    $item['bin_key'] !== $target['bin_key'] ||
+                    $item['bin'] !== $target['bin']
+                ) {
+                    qrr_run_inventory_action(
+                        $db,
+                        $user,
+                        $code,
+                        'move',
+                        [
+                            'warehouse_id' => $target['warehouse_id'],
+                            'choice' => $target,
+                            'reason' => 'Move physical bin ' . $bin['id'],
+                            'physical_bin_move' => $bin['id'],
+                        ],
+                        qrr_warehouses($db),
+                    );
+                }
+                $results[] = ['code' => $code, 'ok' => true, 'message' => 'Completed'];
+            } catch (Throwable $e) {
+                $results[] = ['code' => $code, 'ok' => false, 'message' => qrr_public_error($e)];
+            }
+        }
+        $complete = !array_filter($results, fn($result) => !$result['ok']);
+        if ($complete) {
+            qrr_command('physical-bin-move-finish', ['bin_id' => $bin['id']]);
+        }
+        return ['complete' => $complete, 'results' => $results];
+    }
+    if ($action === 'pick-list-save' || $action === 'pick-list-complete') {
+        qrr_api_permit(qrr_orders_right($user));
+        $orderId = qrr_api_int($data, 'order_id');
+        qrr_check_reference($db, $user, 'salesorder', $orderId);
+        if ($action === 'pick-list-complete') {
+            return qrr_command($action, [
+                'order_id' => $orderId,
+                'reason' => trim(strip_tags((string) ($data['reason'] ?? ''))),
+            ]);
+        }
+        $wid = qrr_api_int($data, 'warehouse_id');
+        if (!isset(qrr_warehouses($db)[$wid])) {
+            throw new InvalidArgumentException('Unknown warehouse');
+        }
+        $order = qrr_order_lines($db, $orderId);
+        return qrr_command($action, [
+            'order_id' => $orderId,
+            'warehouse_id' => $wid,
+            'lines' => $order['lines'],
+        ]);
+    }
     if (in_array($action, ['native-recover', 'native-cancel'], true)) {
         $pending = qrr_service('GET', '')['pending_native'] ?? null;
         if (!$pending) {
             throw new InvalidArgumentException('No pending synchronization');
         }
+        qrr_require_operation_right($user, $pending['action']);
         if (time() - strtotime($pending['at']) < 30) {
             throw new RuntimeException(
                 'Synchronization may still be running; wait 30 seconds before recovery',
@@ -330,6 +516,10 @@ function qrr_api_post($action, $data) {
                 }
             }
             return ['codes' => $registered, 'warning' => $warning];
+        }
+        if ($action === 'update' && !empty($existing['product_lot_id'])) {
+            // QR metadata and internal locations do not change native lot identities or stock.
+            return qrr_command('update', $fields);
         }
         return in_array($fields['type'], ['tracked', 'box'], true)
             ? qrr_native_command($db, $user, $action, $fields)
@@ -402,6 +592,8 @@ function qrr_api_post($action, $data) {
         $code = qrr_input_code($data['code'] ?? '');
         $entry = qrr_load_state()['items'][$code] ?? [];
         qrr_require_item_visible($db, $entry);
+        $pending = $entry['pending_handoff'] ?? ($entry['pending_operation'] ?? []);
+        qrr_require_operation_right($user, 'workflow', ['kind' => $pending['kind'] ?? '']);
         if (!empty($entry['pending_handoff'])) {
             return qrr_reconcile_handoff($db, $user, $code, $entry['pending_handoff']);
         }
@@ -432,6 +624,28 @@ function qrr_api_post($action, $data) {
     $choice = qrr_location_choice($db, $wid, $data['levels'] ?? []);
     $ref = (string) ($data['reference_type'] ?? '');
     $refId = qrr_api_int($data, 'reference_id');
+    $pick = null;
+    $pickOrder = qrr_api_int($data, 'pick_order_id');
+    if ($pickOrder) {
+        if ($kind !== 'consume') {
+            throw new InvalidArgumentException('Pick lists are only supported for consumption');
+        }
+        qrr_api_permit(qrr_orders_right($user));
+        qrr_check_reference($db, $user, 'salesorder', $pickOrder);
+        $order = qrr_order_lines($db, $pickOrder);
+        $pickWid = qrr_api_int($data, 'pick_warehouse_id');
+        if (!isset($warehouses[$pickWid])) {
+            throw new InvalidArgumentException('Unknown pick warehouse');
+        }
+        $pick = [
+            'lines' => $order['lines'],
+            'order_id' => $pickOrder,
+            'warehouse_id' => $pickWid,
+            'visible_codes' => qrr_item_codes(qrr_browser_inventory($db)['state']['items']),
+        ];
+        $ref = 'salesorder';
+        $refId = $pickOrder;
+    }
     if ($ref !== '') {
         qrr_check_reference($db, $user, $ref, $refId);
     }
@@ -480,6 +694,7 @@ function qrr_api_post($action, $data) {
                         'post_stock' => !empty($data['post_stock']),
                         'reference_type' => $ref,
                         'reference_id' => $refId,
+                        'pick_list' => $pick,
                     ],
                     $warehouses,
                 );
@@ -491,6 +706,8 @@ function qrr_api_post($action, $data) {
     }
     return $results;
 }
+// Native bootstrap has already established the session. All methods still need inventory
+// access; POST additionally validates the module token and bounds the decoded request size.
 try {
     qrr_api_permit(qrr_inventory_right($user));
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {

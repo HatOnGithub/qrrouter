@@ -116,6 +116,13 @@
               maxlength="1024"
               placeholder="Choose a fixture or paste an identifier / QR URL"
             ></textarea>
+            <label for="mock-barcode-symbology">Barcode format</label>
+            <select id="mock-barcode-symbology">
+              <option value="QRCODE">QR Code</option>
+              <option value="DATAMATRIX">Data Matrix</option>
+              <option value="C128">Code 128</option>
+              <option value="PDF417">PDF417</option>
+            </select>
             <div class="mock-camera-row">
               <button type="submit" id="mock-camera-show">Show QR code</button>
               <button type="button" id="mock-camera-clear">Clear frame</button>

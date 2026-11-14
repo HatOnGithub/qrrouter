@@ -8,6 +8,10 @@ import { ItemType, Lookup } from '@core/models/inventory';
 import { TranslationService } from '@services/translation.service';
 import { faArrowLeft, faFloppyDisk, faXmark } from '@fortawesome/free-solid-svg-icons';
 
+/**
+ * Shared creation/registration/edit form. Submit user choices through the normal gateway;
+ * native identity generation, linking and stock authority remain on the server.
+ */
 @Component({
   selector: 'qrr-editor',
   standalone: true,

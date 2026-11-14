@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { InventoryService } from './inventory.service';
 
+/** Construct known native-card URLs from positive IDs; the destination enforces record access. */
 @Injectable({ providedIn: 'root' })
 export class NativeLinksService {
   private inventory = inject(InventoryService);

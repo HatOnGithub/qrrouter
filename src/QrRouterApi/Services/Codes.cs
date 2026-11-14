@@ -3,6 +3,10 @@ using System.Text.RegularExpressions;
 
 namespace QrRouterApi.Services;
 
+/// <summary>
+/// QR identity/checksum contract shared with PHP and TypeScript. Legacy formats stay readable;
+/// a valid identifier never grants access to its record.
+/// </summary>
 public static partial class Codes
 {
     public const string Alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";

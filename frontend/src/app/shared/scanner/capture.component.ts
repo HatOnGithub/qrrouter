@@ -13,7 +13,9 @@ import { ScannerComponent } from './scanner.component';
   template: `
     <qrr-scanner
       [multiple]="multiple()"
+      [content]="content()"
       [initial]="initial()"
+      [validate]="validate()"
       [entryMode]="mode()"
       (modeChanged)="switchMode($event)"
       (changed)="changed.emit($event)"
@@ -26,7 +28,9 @@ export class CaptureComponent {
   private router = inject(Router);
   private params = toSignal(this.route.queryParamMap);
   readonly multiple = input(true);
+  readonly content = input<'items' | 'locations' | 'items-or-bins' | 'any'>('items');
   readonly initial = input<string[]>([]);
+  readonly validate = input<(code: string, codes: string[]) => string>(() => '');
   readonly changed = output<string[]>();
   readonly thumbnail = output<string>();
   protected mode = computed(() => (this.params()?.get('input') === 'manual' ? 'manual' : 'camera'));

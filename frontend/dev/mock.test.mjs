@@ -254,6 +254,39 @@ test('lookups, location summaries and picking share the current mock state', asy
   assert.ok(picks.some(row => row.product.ref === 'BOLT-M8' && row.take > 0));
 });
 
+test('pick lists reject unrelated items, excess quantities and repeated picks without mutations', async () => {
+  const picks = await read('picking', { warehouse_id: 1, order_id: 39 });
+  const row = picks.find(row => row.type === 'box');
+  assert.ok(row);
+  const unrelated = Object.values((await read('bootstrap')).state.items).find(
+    item => item.label === 'Network cable'
+  );
+  const payload = {
+    kind: 'consume',
+    pick_order_id: 39,
+    pick_warehouse_id: 1,
+    codes: [row.code],
+    quantities: { [row.code]: row.take + 1 },
+  };
+  const before = (await read('bootstrap')).state;
+  let response = await command('workflow', payload);
+  assert.equal((await response.json()).result[0].ok, false);
+  response = await command('workflow', {
+    ...payload,
+    codes: [unrelated.code],
+    quantities: { [unrelated.code]: 1 },
+  });
+  assert.equal((await response.json()).result[0].ok, false);
+  assert.deepEqual((await read('bootstrap')).state, before);
+  payload.quantities[row.code] = row.take;
+  response = await command('workflow', payload);
+  assert.equal((await response.json()).result[0].ok, true);
+  const after = (await read('bootstrap')).state;
+  response = await command('workflow', payload);
+  assert.equal((await response.json()).result[0].ok, false);
+  assert.deepEqual((await read('bootstrap')).state, after);
+});
+
 test('scenarios reset data, enforce read-only access and recover from service errors', async () => {
   for (const scenario of ['empty', 'no-employees', 'read-only', 'pending', 'unavailable']) {
     const reset = await fetch(base + '/__mock/reset', {

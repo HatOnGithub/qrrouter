@@ -39,7 +39,11 @@ function native_function($path, $name) {
         for ($j = $i; $j < $count; $j++) {
             $token = $tokens[$j];
             $text .= is_array($token) ? $token[1] : $token;
-            if ($token === '{' || is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+            if (
+                $token === '{' ||
+                (is_array($token) &&
+                    in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))
+            ) {
                 $depth++;
                 $opened = true;
             } elseif ($token === '}' && --$depth === 0 && $opened) {
@@ -54,19 +58,50 @@ function contract($file, $method, $parameters) {
     $definition = native_function($source . '/' . $file, $method);
     $signature = substr($definition, 0, strpos($definition, '{'));
     preg_match_all('/\$([A-Za-z_][A-Za-z0-9_]*)/', $signature, $matches);
-    check(array_slice($matches[1], 0, count($parameters)) === $parameters, 'Changed parameter positions: ' . $method);
+    check(
+        array_slice($matches[1], 0, count($parameters)) === $parameters,
+        'Changed parameter positions: ' . $method,
+    );
     // New mandatory arguments would break existing positional calls.
-    $arguments = explode(',', substr($signature, strpos($signature, '(') + 1, strrpos($signature, ')') - strpos($signature, '(') - 1));
+    $arguments = explode(
+        ',',
+        substr(
+            $signature,
+            strpos($signature, '(') + 1,
+            strrpos($signature, ')') - strpos($signature, '(') - 1,
+        ),
+    );
     foreach (array_slice($arguments, count($parameters)) as $argument) {
-        if (trim($argument) === '') { continue; }
+        if (trim($argument) === '') {
+            continue;
+        }
         check(str_contains($argument, '='), 'New mandatory argument: ' . $method);
     }
     return $definition;
 }
 
 $productFile = 'product/class/product.class.php';
-$plain = contract($productFile, 'correct_stock', ['user', 'id_entrepot', 'nbpiece', 'movement', 'label', 'price', 'inventorycode']);
-$batch = contract($productFile, 'correct_stock_batch', ['user', 'id_entrepot', 'nbpiece', 'movement', 'label', 'price', 'dlc', 'dluo', 'lot', 'inventorycode']);
+$plain = contract($productFile, 'correct_stock', [
+    'user',
+    'id_entrepot',
+    'nbpiece',
+    'movement',
+    'label',
+    'price',
+    'inventorycode',
+]);
+$batch = contract($productFile, 'correct_stock_batch', [
+    'user',
+    'id_entrepot',
+    'nbpiece',
+    'movement',
+    'label',
+    'price',
+    'dlc',
+    'dluo',
+    'lot',
+    'inventorycode',
+]);
 contract($productFile, 'fetch', ['id']);
 contract($productFile, 'load_stock', ['option']);
 contract('product/stock/class/productlot.class.php', 'fetch', ['id', 'product_id', 'batch']);
@@ -74,27 +109,74 @@ contract('product/stock/class/productlot.class.php', 'create', ['user']);
 $warehouseFetch = contract('product/stock/class/entrepot.class.php', 'fetch', ['id']);
 contract('product/stock/class/entrepot.class.php', 'create', ['user']);
 contract('user/class/user.class.php', 'hasRight', ['module', 'permlevel1', 'permlevel2']);
-contract('core/lib/admin.lib.php', 'dolibarr_set_const', ['db', 'name', 'value', 'type', 'visible', 'note', 'entity']);
+contract('core/lib/admin.lib.php', 'dolibarr_set_const', [
+    'db',
+    'name',
+    'value',
+    'type',
+    'visible',
+    'note',
+    'entity',
+]);
 contract('core/modules/DolibarrModules.class.php', '_load_tables', ['reldir']);
 contract('core/modules/DolibarrModules.class.php', '_init', ['array_sql', 'options']);
 contract('core/modules/DolibarrModules.class.php', '_remove', ['array_sql', 'options']);
-contract('core/class/extrafields.class.php', 'addExtraField', ['attrname', 'label', 'type', 'pos', 'size', 'elementtype', 'unique', 'required', 'default_value', 'param', 'alwayseditable', 'perms', 'list', 'help', 'computed', 'entity', 'langfile', 'enabled']);
+contract('core/class/extrafields.class.php', 'addExtraField', [
+    'attrname',
+    'label',
+    'type',
+    'pos',
+    'size',
+    'elementtype',
+    'unique',
+    'required',
+    'default_value',
+    'param',
+    'alwayseditable',
+    'perms',
+    'list',
+    'help',
+    'computed',
+    'entity',
+    'langfile',
+    'enabled',
+]);
 contract('core/class/extrafields.class.php', 'fetch_name_optionals_label', ['elementtype']);
 contract('mrp/class/mo.class.php', 'fetch', ['id', 'ref']);
 contract('mrp/class/mo.class.php', 'fetchLines', []);
 foreach (['fk_product', 'qty', 'role'] as $field) {
-    check(preg_match("/'" . $field . "'\\s*=>/", file_get_contents($source . '/mrp/class/moline.class.php')) === 1,
-        'Missing native manufacturing line field: ' . $field);
+    check(
+        preg_match(
+            "/'" . $field . "'\\s*=>/",
+            file_get_contents($source . '/mrp/class/moline.class.php'),
+        ) === 1,
+        'Missing native manufacturing line field: ' . $field,
+    );
 }
-$restricted = contract('core/lib/security.lib.php', 'restrictedArea', ['user', 'features', 'object', 'tableandshare', 'feature2', 'dbt_keyfield', 'dbt_select', 'isdraft']);
+$restricted = contract('core/lib/security.lib.php', 'restrictedArea', [
+    'user',
+    'features',
+    'object',
+    'tableandshare',
+    'feature2',
+    'dbt_keyfield',
+    'dbt_select',
+    'isdraft',
+]);
 
 class MovementDatabase {
     public $begins = 0;
     public $commits = 0;
     public $rollbacks = 0;
-    public function begin() { $this->begins++; }
-    public function commit() { $this->commits++; }
-    public function rollback() { $this->rollbacks++; }
+    public function begin() {
+        $this->begins++;
+    }
+    public function commit() {
+        $this->commits++;
+    }
+    public function rollback() {
+        $this->rollbacks++;
+    }
 }
 class MouvementStock {
     public static $calls = [];
@@ -116,13 +198,19 @@ class User {
 }
 
 // These are the official method bodies, not rewritten stock wrappers.
-eval('class NativeProduct {
+eval(
+    'class NativeProduct {
     public $id = 4;
     public $db;
     public $error = "";
     public $errors = [];
     public function setErrorsFromObject($object) { $this->error = $object->error; }
-    public ' . $plain . "\npublic " . $batch . "\n}");
+    public ' .
+        $plain .
+        "\npublic " .
+        $batch .
+        "\n}"
+);
 $movementFile = $fixture . '/product/stock/class/mouvementstock.class.php';
 mkdir(dirname($movementFile), 0777, true);
 file_put_contents($movementFile, '<?php /* MouvementStock is supplied by this isolated test. */');
@@ -130,16 +218,45 @@ $product = new NativeProduct();
 $product->db = new MovementDatabase();
 $user = new User();
 foreach ([0, 1] as $direction) {
-    check($product->correct_stock($user, 12, 3, $direction, 'QR transfer', 17.5, 'QRR-OP') === 1, 'Plain movement failed');
+    check(
+        $product->correct_stock($user, 12, 3, $direction, 'QR transfer', 17.5, 'QRR-OP') === 1,
+        'Plain movement failed',
+    );
     $call = MouvementStock::$calls[array_key_last(MouvementStock::$calls)];
-    check($call[1] === 4 && $call[2] === 12 && (float) $call[3] === ($direction ? -3.0 : 3.0), 'Changed stock sign or identity');
+    check(
+        $call[1] === 4 && $call[2] === 12 && (float) $call[3] === ($direction ? -3.0 : 3.0),
+        'Changed stock sign or identity',
+    );
     check($call[5] === 17.5 && $call[7] === 'QRR-OP', 'Changed price or recovery marker');
-    check($product->correct_stock_batch($user, 12, 2, $direction, 'QR batch', 17.5, 1700000000, 1800000000, 'BOX-001', 'QRR-BATCH') === 1, 'Batch movement failed');
+    check(
+        $product->correct_stock_batch(
+            $user,
+            12,
+            2,
+            $direction,
+            'QR batch',
+            17.5,
+            1700000000,
+            1800000000,
+            'BOX-001',
+            'QRR-BATCH',
+        ) === 1,
+        'Batch movement failed',
+    );
     $call = MouvementStock::$calls[array_key_last(MouvementStock::$calls)];
     check((float) $call[3] === ($direction ? -2.0 : 2.0), 'Changed batch movement sign');
-    check($call[7] === 'QRR-BATCH' && $call[9] === 1700000000 && $call[10] === 1800000000 && $call[11] === 'BOX-001', 'Changed batch/date/recovery positions');
+    check(
+        $call[7] === 'QRR-BATCH' &&
+            $call[9] === 1700000000 &&
+            $call[10] === 1800000000 &&
+            $call[11] === 'BOX-001',
+        'Changed batch/date/recovery positions',
+    );
 }
-check($product->db->commits === 4 && $product->db->rollbacks === 0, 'Successful movements did not commit');
+check(
+    $product->db->commits === 4 && $product->db->rollbacks === 0,
+    'Successful movements did not commit',
+);
 MouvementStock::$result = -1;
 check($product->correct_stock($user, 12, 1, 0) === -1, 'Native failure was ignored');
 check($product->correct_stock_batch($user, 12, 1, 0) === -1, 'Native batch failure was ignored');
@@ -155,13 +272,21 @@ $hookmanager = new class {
         return $this->resArray['result'];
     }
 };
-function accessforbidden() { throw new RuntimeException('Permission check terminated instead of returning'); }
+function accessforbidden() {
+    throw new RuntimeException('Permission check terminated instead of returning');
+}
 require_once __DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_security.lib.php';
-check(!qrr_native_read_access($user, 'commande', 39, 'commande'), 'Denied native hook was bypassed');
+check(
+    !qrr_native_read_access($user, 'commande', 39, 'commande'),
+    'Denied native hook was bypassed',
+);
 $hookmanager->resArray = ['result' => 1];
 check(qrr_native_read_access($user, 'commande', 39, 'commande'), 'Allowed native hook was ignored');
 if ((new ReflectionFunction('restrictedArea'))->getNumberOfParameters() >= 10) {
-    check($hookmanager->parameters['nodie'] === 1 && $hookmanager->parameters['mode'] === 'read', 'Explicit native read mode missing');
+    check(
+        $hookmanager->parameters['nodie'] === 1 && $hookmanager->parameters['mode'] === 'read',
+        'Explicit native read mode missing',
+    );
 }
 $user->status = 0;
 check(!qrr_internal_user($user), 'Inactive modern-status user accepted');
@@ -176,12 +301,16 @@ require_once __DIR__ . '/../dolibarr/qrrouter/core/modules/modQrrouter.class.php
 $module = new modQrrouter(null);
 check($module->need_dolibarr_version === [21, 0, 2], 'Incorrect Dolibarr minimum');
 check($module->phpmin === [8, 0], 'Incorrect PHP minimum');
-check(empty($module->need_dolibarr_max_version), 'An upper version cap blocks incremental upgrades');
+check(
+    empty($module->need_dolibarr_max_version),
+    'An upper version cap blocks incremental upgrades',
+);
 
 // Exercise activation through the real native field-creation methods, not just signatures.
 // An interrupted activation may leave the SQL column without its field definition.
 $extraFile = 'core/class/extrafields.class.php';
-eval('class ExtraFields {
+eval(
+    'class ExtraFields {
     public $db, $error = "", $errno = "", $attributes = [];
     public function __construct($db) { $this->db = $db; }
     public function fetch_name_optionals_label($element) {
@@ -189,28 +318,58 @@ eval('class ExtraFields {
             $this->attributes[$element]["label"]["qrrouter_serial_prefix"] = "Existing prefix";
         }
     }
-    ' . native_function($source . '/' . $extraFile, 'addExtraField') . "\n"
-    . native_function($source . '/' . $extraFile, 'create') . "\n"
-    . native_function($source . '/' . $extraFile, 'create_label') . "\n}");
+    ' .
+        native_function($source . '/' . $extraFile, 'addExtraField') .
+        "\n" .
+        native_function($source . '/' . $extraFile, 'create') .
+        "\n" .
+        native_function($source . '/' . $extraFile, 'create_label') .
+        "\n}"
+);
 mkdir($fixture . '/core/class', 0777, true);
 file_put_contents($fixture . '/' . $extraFile, '<?php /* Native methods supplied above. */');
-function dol_now() { return 1700000000; }
+function dol_now() {
+    return 1700000000;
+}
 class ActivationDatabase {
-    public $column = false, $defined = false, $adds = 0, $inserts = [];
-    public function prefix() { return 'llx_'; }
-    public function sanitize($value) { return $value; }
-    public function escape($value) { return str_replace("'", "''", (string) $value); }
-    public function idate($value) { return '2023-11-14 22:13:20'; }
+    public $column = false,
+        $defined = false,
+        $adds = 0,
+        $inserts = [];
+    public function prefix() {
+        return 'llx_';
+    }
+    public function sanitize($value) {
+        return $value;
+    }
+    public function escape($value) {
+        return str_replace("'", "''", (string) $value);
+    }
+    public function idate($value) {
+        return '2023-11-14 22:13:20';
+    }
     public function DDLAddField($table, $name, $definition) {
         $this->adds++;
-        check($table === 'llx_product_extrafields' && $name === 'qrrouter_serial_prefix', 'Wrong prefix field target');
-        check($definition['type'] === 'varchar' && (int) $definition['value'] === 76, 'Wrong prefix column definition');
-        if ($this->column) { return -1; }
+        check(
+            $table === 'llx_product_extrafields' && $name === 'qrrouter_serial_prefix',
+            'Wrong prefix field target',
+        );
+        check(
+            $definition['type'] === 'varchar' && (int) $definition['value'] === 76,
+            'Wrong prefix column definition',
+        );
+        if ($this->column) {
+            return -1;
+        }
         $this->column = true;
         return 1;
     }
-    public function lasterror() { return 'Column already exists'; }
-    public function lasterrno() { return 'DB_ERROR_COLUMN_ALREADY_EXISTS'; }
+    public function lasterror() {
+        return 'Column already exists';
+    }
+    public function lasterrno() {
+        return 'DB_ERROR_COLUMN_ALREADY_EXISTS';
+    }
     public function query($sql) {
         $this->inserts[] = $sql;
         $this->defined = true;
@@ -219,91 +378,215 @@ class ActivationDatabase {
 }
 class ActivationModule extends modQrrouter {
     public $registrations = 0;
-    protected function _load_tables($reldir, $onlywithsuffix = '') { return 1; }
-    protected function _init($array_sql, $options = '') { $this->registrations++; return 1; }
+    protected function _load_tables($reldir, $onlywithsuffix = '') {
+        return 1;
+    }
+    protected function _init($array_sql, $options = '') {
+        $this->registrations++;
+        return 1;
+    }
 }
 $conf = (object) ['entity' => 1];
 foreach ([false, true] as $leftoverColumn) {
     $activationDb = new ActivationDatabase();
     $activationDb->column = $leftoverColumn;
     $activation = new ActivationModule($activationDb);
-    check($activation->init() === 1 && $activation->registrations === 1, 'Activation failed creating native prefix field');
-    check(count($activationDb->inserts) === 1 && $activationDb->defined, 'Prefix field definition missing');
-    check(str_contains($activationDb->inserts[0], 'QRRSerialPrefixHelp'), 'Prefix field help missing');
+    check(
+        $activation->init() === 1 && $activation->registrations === 1,
+        'Activation failed creating native prefix field',
+    );
+    check(
+        count($activationDb->inserts) === 1 && $activationDb->defined,
+        'Prefix field definition missing',
+    );
+    check(
+        str_contains($activationDb->inserts[0], 'QRRSerialPrefixHelp'),
+        'Prefix field help missing',
+    );
     check($activation->init() === 1 && $activation->registrations === 2, 'Reactivation failed');
-    check($activationDb->adds === 1 && count($activationDb->inserts) === 1, 'Reactivation overwrote existing prefix configuration');
+    check(
+        $activationDb->adds === 1 && count($activationDb->inserts) === 1,
+        'Reactivation overwrote existing prefix configuration',
+    );
 }
 
 // Run the real warehouse fetch: older releases populate statut without updating status.
 function dol_syslog($message, $level = 0) {}
-function getCountry($id, $mode) { return ['label' => 'Fixture', 'code' => 'XX']; }
-function qrr_stock_write_right($user) { return true; }
+function getCountry($id, $mode) {
+    return ['label' => 'Fixture', 'code' => 'XX'];
+}
+function qrr_stock_write_right($user) {
+    return true;
+}
 function qrr_product($db, $id) {
     return new class {
         public $type = 0;
-        public function hasbatch() { return false; }
+        public function hasbatch() {
+            return false;
+        }
     };
 }
 class WarehouseDatabase {
     public $warehouseStatus = 1;
     public $exists = true;
-    public function prefix() { return 'llx_'; }
-    public function query($sql) { return true; }
-    public function num_rows($result) { return $this->exists ? 1 : 0; }
+    public function prefix() {
+        return 'llx_';
+    }
+    public function query($sql) {
+        return true;
+    }
+    public function num_rows($result) {
+        return $this->exists ? 1 : 0;
+    }
     public function fetch_object($result) {
-        return (object) (['statut' => $this->warehouseStatus] + array_fill_keys([
-            'rowid', 'entity', 'fk_parent', 'fk_project', 'label', 'description', 'lieu',
-            'address', 'zip', 'town', 'country_id', 'phone', 'fax', 'model_pdf', 'import_key',
-            'date_creation', 'date_modification', 'fk_departement', 'barcode', 'fk_barcode_type',
-            'warehouse_usage', 'user_creation_id',
-        ], 1));
+        return (object) (['statut' => $this->warehouseStatus] +
+            array_fill_keys(
+                [
+                    'rowid',
+                    'entity',
+                    'fk_parent',
+                    'fk_project',
+                    'label',
+                    'description',
+                    'lieu',
+                    'address',
+                    'zip',
+                    'town',
+                    'country_id',
+                    'phone',
+                    'fax',
+                    'model_pdf',
+                    'import_key',
+                    'date_creation',
+                    'date_modification',
+                    'fk_departement',
+                    'barcode',
+                    'fk_barcode_type',
+                    'warehouse_usage',
+                    'user_creation_id',
+                ],
+                1,
+            ));
     }
 }
-eval('#[AllowDynamicProperties] class Entrepot {
+eval(
+    '#[AllowDynamicProperties] class Entrepot {
     const STATUS_CLOSED = 0;
     public $db, $statut, $status, $error;
     public function __construct($db) { $this->db = $db; }
     public function fetch_optionals() {}
-    public ' . $warehouseFetch . "\n}");
+    public ' .
+        $warehouseFetch .
+        "\n}"
+);
 mkdir($fixture . '/core/lib', 0777, true);
 file_put_contents($fixture . '/core/lib/company.lib.php', '<?php /* getCountry supplied above. */');
-file_put_contents($fixture . '/product/stock/class/entrepot.class.php', '<?php /* Real fetch supplied above. */');
-eval(native_function(__DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_service.lib.php', 'qrr_warehouse_closed'));
-eval(native_function(__DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_service.lib.php', 'qrr_service_preflight'));
-foreach ([
-    [['statut' => 1, 'status' => 0], false],
-    [['statut' => 0, 'status' => 1], true],
-    [['status' => 1], false],
-    [['status' => 0], true],
-    [[], true],
-] as [$properties, $closed]) {
-    check(qrr_warehouse_closed((object) $properties) === $closed, 'Legacy, modern or unknown warehouse status mishandled');
+file_put_contents(
+    $fixture . '/product/stock/class/entrepot.class.php',
+    '<?php /* Real fetch supplied above. */',
+);
+eval(
+    native_function(
+        __DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_service.lib.php',
+        'qrr_warehouse_closed',
+    )
+);
+eval(
+    native_function(
+        __DIR__ . '/../dolibarr/qrrouter/lib/qrrouter_service.lib.php',
+        'qrr_service_preflight',
+    )
+);
+foreach (
+    [
+        [['statut' => 1, 'status' => 0], false],
+        [['statut' => 0, 'status' => 1], true],
+        [['status' => 1], false],
+        [['status' => 0], true],
+        [[], true],
+    ]
+    as [$properties, $closed]
+) {
+    check(
+        qrr_warehouse_closed((object) $properties) === $closed,
+        'Legacy, modern or unknown warehouse status mishandled',
+    );
 }
 $warehouseDb = new WarehouseDatabase();
 foreach ([1, 2, 0] as $warehouseStatus) {
     $warehouseDb->warehouseStatus = $warehouseStatus;
     $warehouse = new Entrepot($warehouseDb);
-    check($warehouse->fetch(12) === 1 && (int) $warehouse->statut === $warehouseStatus, 'Native warehouse status was not populated');
+    check(
+        $warehouse->fetch(12) === 1 && (int) $warehouse->statut === $warehouseStatus,
+        'Native warehouse status was not populated',
+    );
     $rejected = false;
     try {
-        qrr_service_preflight($warehouseDb, $user, [], [
-            'product_id' => 4,
-            'effects' => [['warehouse_id' => 12, 'delta' => 1]],
-        ]);
+        qrr_service_preflight(
+            $warehouseDb,
+            $user,
+            [],
+            [
+                'product_id' => 4,
+                'effects' => [['warehouse_id' => 12, 'delta' => 1]],
+            ],
+        );
     } catch (RuntimeException $error) {
-        check($error->getMessage() === 'Warehouse missing or closed', 'Unexpected warehouse preflight error');
+        check(
+            $error->getMessage() === 'Warehouse missing or closed',
+            'Unexpected warehouse preflight error',
+        );
         $rejected = true;
     }
-    check($rejected === ($warehouseStatus === 0), 'Open warehouse rejected or closed warehouse accepted');
+    check(
+        $rejected === ($warehouseStatus === 0),
+        'Open warehouse rejected or closed warehouse accepted',
+    );
 }
 $warehouseDb->exists = false;
 try {
-    qrr_service_preflight($warehouseDb, $user, [], [
-        'product_id' => 4,
-        'effects' => [['warehouse_id' => 12, 'delta' => 1]],
-    ]);
+    qrr_service_preflight(
+        $warehouseDb,
+        $user,
+        [],
+        [
+            'product_id' => 4,
+            'effects' => [['warehouse_id' => 12, 'delta' => 1]],
+        ],
+    );
     throw new LogicException('Missing warehouse accepted');
 } catch (RuntimeException $error) {
-    check($error->getMessage() === 'Warehouse missing or closed', 'Unexpected missing warehouse error');
+    check(
+        $error->getMessage() === 'Warehouse missing or closed',
+        'Unexpected missing warehouse error',
+    );
 }
-echo 'Dolibarr ' . $version . ': passed ' . $checks . ' native API/stock/permission/descriptor checks.' . PHP_EOL;
+$mapping = contract('core/modules/barcode/doc/tcpdfbarcode.modules.php', 'getTcpdfEncodingType', [
+    'dolEncodingType',
+]);
+eval('class NativeBarcodeMapping { public $is2d = false; ' . $mapping . ' }');
+$barcodeEngine = new NativeBarcodeMapping();
+require_once $source . '/includes/tecnickcom/tcpdf/tcpdf_barcodes_1d.php';
+require_once $source . '/includes/tecnickcom/tcpdf/tcpdf_barcodes_2d.php';
+foreach (['QRCODE,H', 'DATAMATRIX', 'C128', 'PDF417'] as $encoding) {
+    $native = $barcodeEngine->getTcpdfEncodingType($encoding);
+    check($native !== '', 'Native barcode mapping supports ' . $encoding);
+    $barcode = $barcodeEngine->is2d
+        ? new TCPDF2DBarcode('23456X', $native)
+        : new TCPDFBarcode('23456X', $native);
+    check(!empty($barcode->getBarcodeArray()), 'Native barcode encodes the same alphanumeric ID');
+    check(
+        str_contains($barcode->getBarcodeSVGcode(3, 3, 'black'), '<svg'),
+        'Native SVG renderer available',
+    );
+}
+check(
+    $barcodeEngine->getTcpdfEncodingType('UNSUPPORTED') === '',
+    'Native barcode mapping rejects unknown formats',
+);
+echo 'Dolibarr ' .
+    $version .
+    ': passed ' .
+    $checks .
+    ' native API/stock/permission/descriptor checks.' .
+    PHP_EOL;

@@ -5,12 +5,14 @@
 @if (error()) {
   <p class="alert" role="alert">{{ error() }}</p>
 }
-@if (api.context()!.permissions.manage) {
+@if (api.can('create')) {
   <qrr-card [title]="'Create printable batch' | t">
-    <a mat-stroked-button routerLink="/create" [queryParams]="{ bulk: 'assigned' }">
-      <fa-icon [icon]="icons.create" aria-hidden="true" />
-      {{ 'Create assigned QR batch' | t }}
-    </a>
+    @if (api.can('create')) {
+      <a mat-stroked-button routerLink="/create" [queryParams]="{ bulk: 'assigned' }">
+        <fa-icon [icon]="icons.create" aria-hidden="true" />
+        {{ 'Create assigned QR batch' | t }}
+      </a>
+    }
     <form class="batch-form" (ngSubmit)="create()" #form="ngForm">
       <mat-form-field class="number" appearance="outline" subscriptSizing="dynamic">
         <mat-label>{{ 'Number of QR codes (1–200)' | t }}</mat-label>
@@ -33,6 +35,14 @@
   </qrr-card>
 }
 <qrr-card [title]="'Label batches' | t">
+  <mat-form-field appearance="outline">
+    <mat-label>{{ 'Barcode format' | t }}</mat-label>
+    <mat-select [(ngModel)]="symbology">
+      @for (barcode of api.context()!.barcode_formats; track barcode.id) {
+        <mat-option [value]="barcode.id">{{ barcode.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
   <mat-form-field appearance="outline">
     <mat-label>{{ 'Printer / label format' | t }}</mat-label>
     <mat-select [(ngModel)]="format">
@@ -74,15 +84,17 @@
           <td>{{ row.batch.codes.length }}</td>
           <td>{{ row.unassigned }}</td>
           <td>
-            <a
-              mat-stroked-button
-              [href]="api.link('batch_print.php', { batch: row.id, format })"
-              target="_blank"
-              rel="noopener"
-            >
-              <fa-icon [icon]="icons.print" aria-hidden="true" />
-              {{ 'Print' | t }}
-            </a>
+            @if (api.can('print')) {
+              <a
+                mat-stroked-button
+                [href]="api.link('batch_print.php', { batch: row.id, format, symbology })"
+                target="_blank"
+                rel="noopener"
+              >
+                <fa-icon [icon]="icons.print" aria-hidden="true" />
+                {{ 'Print' | t }}
+              </a>
+            }
           </td>
         </tr>
       } @empty {

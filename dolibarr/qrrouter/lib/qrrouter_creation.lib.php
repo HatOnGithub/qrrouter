@@ -30,6 +30,7 @@ function qrr_creation_serial_prefix($db, $productId) {
     }
     return (string) ($product->array_options['options_qrrouter_serial_prefix'] ?? '');
 }
+/** Allowlist user choices and resolve native/location facts before calling domain commands. */
 function qrr_api_fields($data, $existing = null, $prepared = null) {
     global $db, $user;
     $type = $data['type'] ?? 'generic';
@@ -64,6 +65,7 @@ function qrr_api_fields($data, $existing = null, $prepared = null) {
         $linked =
             $type === 'tracked' && $serial !== '' && qrr_native_serial_exists($db, $pid, $serial);
         $prepared = qrr_service('POST', 'prepare-creation', [
+            'operation' => $existing ? 'update' : 'create',
             'type' => $type,
             'label' => $data['label'] ?? '',
             'details' => $data['details'] ?? '',

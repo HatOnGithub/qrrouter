@@ -28,6 +28,8 @@ After correcting the warehouse or installing the compatibility fix, refresh and 
 
 ## Pending synchronization or an uncertain stock result
 
+Expand **More details** in the synchronization banner or the item's pending-operation notice to inspect the requested changes. The table shows intent; it does not confirm whether Dolibarr has committed the changes.
+
 1. Wait for the original request to finish and allow at least 30 seconds before recovery.
 2. Resolve the displayed cause, such as the missing table, unavailable service or warehouse validation error.
 3. Select **Recover synchronization**. Recovery uses the original operation and its native receipt, including when stock already committed.
@@ -63,7 +65,7 @@ Upgrades from JSON-based versions through v0.3.6 import `state.json` into SQLite
 
 ## Missing actions, camera problems or stale styling
 
-- **Missing actions:** check QR read/manage permissions and the native product, stock, Binloc, employee and document permissions needed for the action. Also check that the required modules are enabled.
+- **Missing actions:** check QR read/manage permissions and the native product, stock, employee and document permissions needed for the action. History also requires **View QR operation history**. Binloc is needed only for the one-time location import. Also check that the required modules are enabled.
 - **Camera unavailable:** use HTTPS, allow browser camera access, and try **Start camera** or **Restart camera**. **Manual / USB entry** remains available. The development virtual camera requires browser support for canvas streams; some browser builds, including Windows WebKit, do not provide it.
 - **Old layout after an upgrade:** install matching module and service packages, reload the page and confirm that the new frontend files are deployed. Restart PHP workers if their opcode cache retains old files. Firefox fieldset borders are fixed in v0.3.7.1.
 

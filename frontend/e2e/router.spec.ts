@@ -4,6 +4,7 @@ import type { Bootstrap } from '../src/app/core/models/inventory';
 import { validCode } from '../src/app/shared/scanner/codes';
 import { readFile, writeFile } from 'node:fs/promises';
 import { readRecords, recordsCsv } from '../src/app/features/csv/csv';
+import { BarcodeDecoder } from '../src/app/shared/scanner/barcode-decoder';
 
 async function open(page: Page, route: string): Promise<void> {
   await page.goto('index.php#/' + route);
@@ -81,7 +82,8 @@ test('inventory searches native tags and readable extra fields', async ({ page }
         item.status !== 'consumed' &&
         (productId ? item.product_id === productId : [3, 4].includes(item.product_id))
     );
-    await expect(page.locator('tbody tr')).toHaveCount(expected.length);
+    if (expected.length) await expect(page.locator('tbody tr')).toHaveCount(expected.length);
+    else await expect(page.getByText('No matching items', { exact: true })).toBeVisible();
     for (const item of expected as any[])
       await expect(page.locator(`a[href="#/items/${item.code}"]`)).toBeVisible();
   }
@@ -260,8 +262,100 @@ test('DYMO labels add details and preserve physical dimensions at every size', a
     route.fulfill({ status: 500, body: 'QR renderer unavailable' })
   );
   await page.reload();
-  await expect(page.getByRole('status')).toContainText('QR image failed to load');
+  await expect(page.getByRole('status')).toContainText('Barcode image failed to load');
   await expect(page.getByRole('button', { name: 'Print DYMO labels', exact: true })).toBeDisabled();
+});
+
+test('barcode formats preserve identifiers and position 2D and 1D labels correctly', async ({
+  page,
+}) => {
+  const code = process.env['QRR_E2E_ITEM']!;
+  const decoder = new BarcodeDecoder();
+  // Use the real native SVG renderer for QR too: this fixture deliberately has no GD.
+  await page.route('**/qr.php?code=*', async route => {
+    const response = await page.request.get(
+      route.request().url().replace('/qr.php?', '/barcode.php?')
+    );
+    await route.fulfill({ response });
+  });
+  for (const symbology of ['QRCODE', 'DATAMATRIX', 'C128', 'PDF417']) {
+    for (const format of ['dymo-25x54', 'dymo-54x101']) {
+      await page.goto('label.php?' + new URLSearchParams({ code, symbology, format }));
+      await expect(
+        page.getByRole('button', { name: 'Print DYMO labels', exact: true })
+      ).toBeEnabled();
+      await expect(page.locator('.qrr-id-code')).toHaveText(code);
+      const qr = (await page.locator('.qrr-qr-column').boundingBox())!;
+      const top = (await page.locator('.qrr-label-details').first().boundingBox())!;
+      if (symbology === 'C128') {
+        expect(qr.y).toBeGreaterThanOrEqual(top.y + top.height - 1);
+        expect(qr.width).toBeGreaterThan(top.width - 2);
+      } else {
+        expect(qr.x + qr.width).toBeLessThanOrEqual(top.x + 1);
+        if (format === 'dymo-54x101') {
+          const bottom = (await page.locator('.qrr-label-bottom-details').boundingBox())!;
+          expect(bottom.y).toBeGreaterThanOrEqual(qr.y + qr.height - 1);
+          expect(bottom.x).toBeLessThanOrEqual(qr.x + 1);
+          expect(bottom.width).toBeGreaterThan(qr.width);
+        }
+      }
+      expect(
+        await page.locator('.qrr-label-detail').evaluateAll(fields =>
+          fields.every(field => {
+            const span = field.querySelector('span')!;
+            return (
+              span.scrollWidth <= field.clientWidth + 1 &&
+              span.scrollHeight <= field.clientHeight + 1
+            );
+          })
+        )
+      ).toBe(true);
+      const raster = await page.locator('.qrr-print-image').evaluate((image: HTMLImageElement) => {
+        const canvas = document.createElement('canvas');
+        // Round-trip at the actual label dimensions rasterized at 300 DPI, including
+        // padding and object-fit, rather than only decoding an unconstrained source image.
+        const dpi = 300 / 96;
+        const rect = image.getBoundingClientRect();
+        const style = getComputedStyle(image);
+        const left = parseFloat(style.paddingLeft);
+        const right = parseFloat(style.paddingRight);
+        const top = parseFloat(style.paddingTop);
+        const bottom = parseFloat(style.paddingBottom);
+        canvas.width = Math.ceil((rect.width + 8) * dpi);
+        canvas.height = Math.ceil((rect.height + 8) * dpi);
+        const context = canvas.getContext('2d')!;
+        context.fillStyle = 'white';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        const width = rect.width - left - right;
+        const height = rect.height - top - bottom;
+        const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+        context.drawImage(
+          image,
+          (4 + left + (width - image.naturalWidth * scale) / 2) * dpi,
+          (4 + top + (height - image.naturalHeight * scale) / 2) * dpi,
+          image.naturalWidth * scale * dpi,
+          image.naturalHeight * scale * dpi
+        );
+        return {
+          pixels: Array.from(context.getImageData(0, 0, canvas.width, canvas.height).data),
+          width: canvas.width,
+          height: canvas.height,
+        };
+      });
+      expect(
+        decoder.decode(new Uint8ClampedArray(raster.pixels), raster.width, raster.height)
+      ).toBe(code);
+      if (format === 'dymo-54x101' && ['DATAMATRIX', 'C128'].includes(symbology)) {
+        await page
+          .locator('.qrr-thermal-label')
+          .screenshot({ path: `../artifacts/barcode-layout-${symbology.toLowerCase()}.png` });
+      }
+    }
+  }
+  await page.getByRole('combobox', { name: 'Barcode format' }).selectOption('DATAMATRIX');
+  await page.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(page).toHaveURL(/symbology=DATAMATRIX/);
+  await expect(page.locator('.qrr-id-code')).toHaveText(code);
 });
 
 test('scanner workstation shows product context and touch quantity controls on mobile', async ({
@@ -570,7 +664,7 @@ for (const destination of [
   });
 }
 
-test('picking preview uses native order lookup and server allocation', async ({ page }) => {
+test('customer picking respects a manually completed saved list', async ({ page }) => {
   await open(page, 'inventory');
   await page.locator('nav').getByRole('link', { name: 'Picking', exact: true }).click();
   await page.getByRole('combobox', { name: 'Customer order', exact: true }).fill('SO');
@@ -579,7 +673,13 @@ test('picking preview uses native order lookup and server allocation', async ({ 
   await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Print / Save as PDF', exact: true })
-  ).toBeEnabled();
+  ).toBeDisabled();
+  await expect(
+    page.getByText('Selected order has no pickable product lines.', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('Two units supplied from untracked stock', { exact: false })
+  ).toBeVisible();
 });
 
 test('manufacturing pick sheets load native components without produced or consumed rows', async ({
@@ -594,9 +694,10 @@ test('manufacturing pick sheets load native components without produced or consu
   await expect(
     page.locator('h2').getByRole('link', { name: 'MO-0019', exact: true })
   ).toHaveAttribute('href', /mrp\/mo_card.php\?id=19/);
-  await expect(page.locator('tbody')).toContainText('PART-003');
-  await expect(page.locator('tbody')).not.toContainText('SERIAL-004');
-  const quantities = await page.locator('tbody tr td:last-child').allTextContents();
+  const sheet = page.locator('qrr-card').first();
+  await expect(sheet.locator('tbody')).toContainText('PART-003');
+  await expect(sheet.locator('tbody')).not.toContainText('SERIAL-004');
+  const quantities = await sheet.locator('tbody tr td:last-child').allTextContents();
   expect(quantities.reduce((sum, quantity) => sum + Number(quantity), 0)).toBe(3);
 });
 
@@ -896,6 +997,7 @@ test('navigation decodes repeated HTML entities from the translation response', 
 test('scan selection and camera pages fit mobile portrait without page scrolling', async ({
   page,
 }) => {
+  const registrationCode = await blank(page);
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
@@ -933,12 +1035,11 @@ test('scan selection and camera pages fit mobile portrait without page scrolling
         expect(Math.abs(frame.width - frame.height), route).toBeLessThanOrEqual(1);
       }
       if (route.includes('manual')) {
-        await page
-          .getByRole('textbox', { name: 'QR identifiers' })
-          .fill(process.env['QRR_E2E_ITEM']!);
+        const code = route.startsWith('register') ? registrationCode : process.env['QRR_E2E_ITEM']!;
+        await page.getByRole('textbox', { name: 'QR identifiers' }).fill(code);
         await page.getByRole('button', { name: 'Add codes', exact: true }).click();
         await expect(
-          page.getByRole('button', { name: 'Remove ' + process.env['QRR_E2E_ITEM'], exact: true })
+          page.getByRole('button', { name: 'Remove ' + code, exact: true })
         ).toBeVisible();
       }
       const bounds = await page.locator('qrr-root .content').evaluate(el => ({

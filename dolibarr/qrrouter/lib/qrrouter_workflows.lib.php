@@ -4,6 +4,36 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
 
+/** A bin is public only when its location, every member and any pending destination are visible. */
+function qrr_physical_bins($db) {
+    global $conf;
+    $visible = qrr_browser_inventory($db)['state']['items'];
+    $warehouses = qrr_warehouses($db);
+    $bins = qrr_command('query-physical-bins', []);
+    $out = [];
+    foreach ($bins as $bin) {
+        if (
+            !isset($warehouses[(int) $bin['warehouse_id']]) ||
+            array_diff($bin['codes'], array_keys($visible)) ||
+            (!empty($bin['pending_move']) &&
+                !isset($warehouses[(int) $bin['pending_move']['target']['warehouse_id']]))
+        ) {
+            continue;
+        }
+        $bin['qr'] = 'QRRBIN:1:' . (int) $conf->entity . ':' . $bin['id'];
+        $out[] = $bin;
+    }
+    return $out;
+}
+function qrr_physical_bin($db, $id) {
+    foreach (qrr_physical_bins($db) as $bin) {
+        if ($bin['id'] === $id) {
+            return $bin;
+        }
+    }
+    throw new DomainException('Physical bin is unavailable');
+}
+
 function qrr_workflow_codes($raw, $limit = 200) {
     if (is_array($raw)) {
         $raw = implode("\n", $raw);
@@ -78,7 +108,10 @@ function qrr_registration_fields($db, $user, $posted, $warehouses, $type) {
         'native_batch' => $nativeBatch,
     ];
 }
-/** Metadata registration only: native quantities are not increased on registration. */
+/**
+ * Register unused QR labels. Existing native identities link matching stock; a newly generated
+ * tracked serial can be received through the native command protocol instead of only linked.
+ */
 function qrr_register_codes($db, $user, $codes, $type, $fields) {
     $data = array_merge(
         qrr_service_fields(
@@ -98,6 +131,10 @@ function qrr_register_codes($db, $user, $codes, $type, $fields) {
         ? qrr_native_command($db, $user, 'register', $data)
         : qrr_command('register', $data);
 }
+/**
+ * Match movements by operation inventorycode and exact product/lot/warehouse/delta. Count
+ * duplicates and unrelated movements so partial/conflicting evidence cannot look complete.
+ */
 function qrr_native_evidence($db, $op) {
     $sql =
         'SELECT fk_entrepot, value, fk_product, batch FROM ' .
@@ -260,8 +297,10 @@ function qrr_native_apply($db, $user, $entry, $op) {
     }
 }
 
-/** Plans the only allowed persisted changes, never accepting arbitrary field replacement from POST. */
-
+/**
+ * Plan -> native preflight -> revision-checked stage -> native transaction -> evidence finish.
+ * Staging must commit before stock writes; failure after that point retains recoverable intent.
+ */
 function qrr_run_inventory_action($db, $user, $code, $kind, $args, $warehouses) {
     $data = [
         'code' => $code,
@@ -294,6 +333,7 @@ function qrr_finish_inventory_action($db, $user, $code, $op) {
         'proof' => qrr_native_evidence($db, $op),
     ]);
 }
+/** Query native evidence afresh; the browser may request reconciliation but cannot supply proof. */
 function qrr_reconcile_inventory_action($db, $user, $code) {
     $op = qrr_load_state()['items'][$code]['pending_operation'] ?? null;
     if (!$op) {

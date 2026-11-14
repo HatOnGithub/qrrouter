@@ -4,6 +4,7 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
 
+/** Base identity check precedes every admin shortcut: external/inactive users stay excluded. */
 function qrr_internal_user($user) {
     return is_object($user) &&
         (int) ($user->id ?? 0) > 0 &&
@@ -28,8 +29,79 @@ function qrr_stock_read_right($user) {
 function qrr_inventory_right($user) {
     return qrr_read_right($user) && qrr_products_right($user) && qrr_stock_read_right($user);
 }
+/** Independent QR capabilities never replace Dolibarr's native permissions. */
+function qrr_permission_keys() {
+    return [
+        'create',
+        'modify',
+        'delete',
+        'move',
+        'consume',
+        'return',
+        'adjust',
+        'loans',
+        'picking',
+        'print',
+        'recover',
+        'manage',
+    ];
+}
+function qrr_permission_right($user, $permission) {
+    return qrr_inventory_right($user) &&
+        (!empty($user->admin) || $user->hasRight('qrrouter', $permission));
+}
+/** Keep this public-action mapping aligned with C# OperationPermission and Angular can(). */
+function qrr_operation_permission($action, $data = []) {
+    return match ($action) {
+        'create', 'bulk', 'register', 'physical-bin-create' => 'create',
+        'update', 'physical-bin-assign' => 'modify',
+        'delete-unassigned' => 'delete',
+        'physical-bin-move' => 'move',
+        'count', 'box-transfer' => 'adjust',
+        'pick-list-save', 'pick-list-complete' => 'picking',
+        'native-recover', 'native-cancel', 'reconcile' => 'recover',
+        'mapping', 'label-settings', 'location-configure', 'location-import' => 'manage',
+        'workflow' => match ($data['kind'] ?? '') {
+            'move' => 'move',
+            'consume' => 'consume',
+            'return' => 'return',
+            'correct', 'transfer' => 'adjust',
+            'checkout', 'checkin' => 'loans',
+            default => '',
+        },
+        default => '',
+    };
+}
+function qrr_require_operation_right($user, $action, $data = []) {
+    $permission = qrr_operation_permission($action, $data);
+    if ($permission !== '' && !qrr_permission_right($user, $permission)) {
+        throw new DomainException('Missing QR Router ' . $permission . ' permission');
+    }
+}
 function qrr_locations_right($user) {
     return qrr_inventory_right($user);
+}
+function qrr_history_right($user) {
+    return qrr_inventory_right($user) &&
+        (!empty($user->admin) || $user->hasRight('stock', 'mouvement', 'lire')) &&
+        (!empty($user->admin) || $user->hasRight('qrrouter', 'history'));
+}
+/** A history grant does not expose products, warehouses or documents hidden natively. */
+function qrr_history_visibility($db) {
+    $view = qrr_browser_inventory($db);
+    $state = qrr_service('GET', '');
+    $references = array_keys($view['consumption_references']);
+    foreach ($state['pick_lists'] ?? [] as $list) {
+        if (qrr_reference_visible($GLOBALS['user'], 'salesorder', (int) $list['order_id'])) {
+            $references[] = 'salesorder:' . (int) $list['order_id'];
+        }
+    }
+    return [
+        'codes' => qrr_item_codes($view['state']['items']),
+        'warehouses' => array_map('intval', array_keys($view['warehouses'])),
+        'bins' => array_column(qrr_physical_bins($db), 'id'),
+        'references' => array_values(array_unique($references)),
+    ];
 }
 function qrr_users_read_all($user) {
     return qrr_internal_user($user) &&
@@ -88,6 +160,7 @@ function qrr_reference_visible($user, $type, $id) {
     // Native object checks include entity sharing, customer assignments and subordinate visibility.
     return qrr_native_read_access($user, $feature, (int) $id, qrr_reference_schema($type), '');
 }
+/** Broad read grants alone are insufficient: validate the product, linked lot and warehouse. */
 function qrr_item_visible($db, $item, $warehouses = null, $products = null) {
     if (!is_array($item)) {
         return false;
@@ -134,7 +207,90 @@ function qrr_require_native_visible($db, $pending) {
     }
 }
 
-/** Never serialize raw service snapshots, audit contexts, proofs or operation patches to clients. */
+/**
+ * Describe known public fields only after checking both sides of a change. The result contains
+ * display rows, not the original candidate snapshot; intended values are not commit evidence.
+ */
+function qrr_pending_change_details($db, $code, $before, $after, $warehouses, $products) {
+    foreach ([$before, $after] as $side) {
+        if ($side !== null && !qrr_item_visible($db, $side, $warehouses)) {
+            return [];
+        }
+    }
+    $fields = [
+        'label' => 'Label',
+        'type' => 'Type',
+        'product_id' => 'Product',
+        'warehouse_id' => 'Warehouse',
+        'qty' => 'Quantity',
+        'serial' => 'Serial',
+        'native_batch' => 'Lot / serial',
+        'status' => 'Status',
+    ];
+    if (qrr_locations_right($GLOBALS['user'])) {
+        $fields['bin'] = 'Location';
+    }
+    $rows = [];
+    foreach ($fields as $key => $label) {
+        $values = [];
+        foreach ([$before, $after] as $side) {
+            $value = $side[$key] ?? null;
+            if ($key === 'warehouse_id' && $value > 0) {
+                $value = $warehouses[$value]['ref'];
+            } elseif ($key === 'product_id' && $value > 0) {
+                $value = $products[$value]['ref'] ?? qrr_product($db, $value)->ref;
+            }
+            $values[] = is_scalar($value) && $value !== '' ? (string) $value : null;
+        }
+        if ($values[0] !== $values[1]) {
+            $rows[] = [
+                'code' => (string) $code,
+                'field' => $label,
+                'before' => $values[0],
+                'after' => $values[1],
+            ];
+        }
+    }
+    return $rows;
+}
+/**
+ * Summarize the allowed patch and signed warehouse deltas without exposing raw effects/proofs.
+ * A hidden destination/effect warehouse suppresses the details instead of leaking its identity.
+ */
+function qrr_pending_operation_details($db, $item, $pending, $warehouses, $products) {
+    $after = array_merge($item, (array) ($pending['patch'] ?? []));
+    if (!empty($pending['to'])) {
+        $after['warehouse_id'] = (int) $pending['to'];
+    }
+    foreach ($pending['effects'] ?? [] as $effect) {
+        if (!empty($effect['warehouse_id']) && !isset($warehouses[$effect['warehouse_id']])) {
+            return [];
+        }
+    }
+    if (!qrr_item_visible($db, $after, $warehouses)) {
+        return [];
+    }
+    $rows = qrr_pending_change_details($db, $item['code'], $item, $after, $warehouses, $products);
+    foreach ($pending['effects'] ?? [] as $effect) {
+        $wid = (int) ($effect['warehouse_id'] ?? 0);
+        $delta = $effect['delta'] ?? 0;
+        if (isset($warehouses[$wid]) && is_numeric($delta) && $delta != 0) {
+            $rows[] = [
+                'code' => $item['code'],
+                'field' => 'Stock movement',
+                'before' => null,
+                'after' => ($delta > 0 ? '+' : '') . $delta . ' (' . $warehouses[$wid]['ref'] . ')',
+            ];
+        }
+    }
+    return $rows;
+}
+
+/**
+ * Sole full-inventory browser projection: overlay native observations, apply object visibility
+ * and select safe fields. Never serialize raw snapshots, audit contexts, proofs or patches.
+ * Catalogs, checkout users and document-linked consumption are filtered separately below.
+ */
 function qrr_browser_inventory($db) {
     global $user;
     if (!qrr_inventory_right($user)) {
@@ -148,6 +304,15 @@ function qrr_browser_inventory($db) {
         fn($item) => qrr_item_visible($db, $item, $warehouses, $products),
     );
     foreach (qrr_native_observations($db, $raw) as $code => $fields) {
+        $item = $raw['items'][$code];
+        if (
+            empty($item['pending_bin_move']) &&
+            ((int) $item['warehouse_id'] !== (int) $fields['warehouse_id'] ||
+                (string) $item['bin_key'] !== (string) $fields['bin_key'] ||
+                $fields['status'] === 'consumed')
+        ) {
+            unset($raw['items'][$code]['physical_bin_id']);
+        }
         $raw['items'][$code] = array_merge($raw['items'][$code], $fields);
     }
     $users = qrr_personal_users($db);
@@ -167,6 +332,8 @@ function qrr_browser_inventory($db) {
         'updated_at',
         'status',
         'consumed_units',
+        'physical_bin_id',
+        'pending_bin_move',
     ]);
     $state = [
         'schema' => (int) $raw['schema'],
@@ -190,6 +357,13 @@ function qrr_browser_inventory($db) {
         foreach (['pending_operation', 'pending_handoff'] as $key) {
             if (!empty($item[$key])) {
                 $visible[$key] = array_intersect_key($item[$key], array_flip(['id', 'kind', 'at']));
+                $visible[$key]['details'] = qrr_pending_operation_details(
+                    $db,
+                    $item,
+                    $item[$key],
+                    $warehouses,
+                    $products,
+                );
             }
         }
         if (!empty($item['checkout'])) {
@@ -255,6 +429,31 @@ function qrr_browser_inventory($db) {
             $raw['pending_native'],
             array_flip(['id', 'action', 'at']),
         );
+        $details = [];
+        foreach ($raw['pending_native']['changes'] ?? [] as $code => $change) {
+            $details = array_merge(
+                $details,
+                qrr_pending_change_details(
+                    $db,
+                    $code,
+                    $change['before'] ?? null,
+                    $change['after'] ?? null,
+                    $warehouses,
+                    $products,
+                ),
+            );
+        }
+        if ($details) {
+            $details[] = [
+                'code' => '',
+                'field' => 'Native synchronization',
+                'before' => null,
+                'after' => !empty($raw['pending_native']['link_existing'])
+                    ? 'Link existing stock'
+                    : 'Apply stock changes',
+            ];
+        }
+        $state['pending_native']['details'] = $details;
     }
     $productIds = array_column($state['items'], 'product_id');
     return [

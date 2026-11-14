@@ -326,7 +326,9 @@ test('read-only operators can inspect stock but cannot open management workflows
       .getByRole('link', { name: /Consume items/ })
   ).toHaveCount(0);
   await page.goto('/#/workflow/consume');
-  await expect(page.getByText('QR management permission required', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Permission required for this QR action', { exact: true })
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Confirm operation', exact: true })).toHaveCount(0);
   expect((await mock.bootstrap()).state).toEqual(before);
 });
@@ -368,6 +370,15 @@ test('pending synchronization blocks writes until recovery and item reconciliati
   const item = await mock.item('Network cable');
   const before = (await mock.bootstrap()).state;
   await page.goto('/#/labels');
+  const synchronization = page.locator('qrr-pending-details').first();
+  await expect(synchronization.getByRole('table')).toBeHidden();
+  await synchronization.locator('summary').click();
+  await expect(
+    synchronization.getByRole('table', { name: 'Requested synchronization changes' })
+  ).toBeVisible();
+  await expect(synchronization.getByRole('row').filter({ hasText: 'Pending cable' })).toBeVisible();
+  await synchronization.locator('summary').click();
+  await expect(synchronization.getByRole('table')).toBeHidden();
   await page.getByRole('spinbutton', { name: /Number of QR codes/ }).fill('2');
   await page.getByRole('button', { name: 'Create batch', exact: true }).click();
   await expect(
@@ -383,14 +394,420 @@ test('pending synchronization blocks writes until recovery and item reconciliati
   const row = page.locator('tbody tr').filter({ hasText: item.label });
   await expect(row.locator('.inventory-status')).toHaveText('Pending');
   await row.getByRole('link', { name: item.label, exact: true }).click();
+  const operation = page.locator('qrr-pending-details');
+  await operation.locator('summary').click();
+  await expect(operation.getByRole('row').filter({ hasText: 'Warehouse' })).toContainText('OTHER');
+  await expect(operation.getByRole('row').filter({ hasText: '+1 (OTHER)' })).toBeVisible();
   await page.getByRole('button', { name: 'Reconcile pending operation', exact: true }).click();
-  await expect(page.locator('qrr-root').getByRole('status')).toContainText(
-    'Mock pending operation reconciled'
-  );
+  await expect(
+    page
+      .locator('qrr-root')
+      .getByRole('status')
+      .filter({ hasText: 'Mock pending operation reconciled' })
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Move', exact: true })).toBeVisible();
   const recovered = (await mock.bootstrap()).state;
   expect(recovered.items[item.code].pending_operation).toBeUndefined();
   expect(recovered.items[item.code].qty).toBe(item.qty);
   expect(recovered.history).toEqual([]);
   expect(recovered.revision).toBe(before.revision + 2);
+});
+
+test('pending synchronization details remain readable without recovery permission', async ({
+  page,
+  mock,
+}) => {
+  await mock.reset('pending');
+  let emptyDetails = false;
+  await page.route('**/api.php?resource=bootstrap', async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.permissions.recover = false;
+    data.permissions.admin = false;
+    if (emptyDetails) delete data.state.pending_native.details;
+    await route.fulfill({ response, json: data });
+  });
+  await page.goto('/#/inventory');
+  const details = page.locator('qrr-pending-details').first();
+  await details.locator('summary').click();
+  await expect(details.getByRole('table')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Recover synchronization', exact: true })
+  ).toHaveCount(0);
+  emptyDetails = true;
+  await page.reload();
+  await details.locator('summary').click();
+  await expect(
+    details.getByText('No additional details are available with your current permissions.')
+  ).toBeVisible();
+  await expect(details.getByRole('table')).toHaveCount(0);
+});
+
+test('workflow scanning rejects unrelated labels and enforces loaded pick quantities', async ({
+  page,
+  mock,
+}) => {
+  const drill = await mock.item('Network cable');
+  const box = await mock.item('Bolts box A');
+  await page.goto('/#/workflow/consume?input=manual');
+  await mock.lookup('Customer order', 'SO', /SO-0039/);
+  await mock.select('Pick from warehouse', 'MAIN');
+  await page.getByRole('button', { name: 'Load pick list', exact: true }).click();
+  await expect(page.locator('qrr-card').filter({ hasText: 'Pick list safeguards' })).toContainText(
+    box.code
+  );
+  const entry = page.getByRole('textbox', { name: 'QR identifiers', exact: true });
+  await entry.fill(drill.code);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Item is not on the loaded pick list');
+  await expect(
+    page.getByRole('button', { name: 'Review selected items', exact: true })
+  ).toBeDisabled();
+  await entry.fill(box.code);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await page.getByRole('button', { name: 'Review selected items', exact: true }).click();
+  await page.getByRole('spinbutton', { name: 'Quantity', exact: true }).fill('13');
+  await page.getByRole('button', { name: 'Confirm operation', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Quantity exceeds the pick list' })
+  ).toBeVisible();
+  expect((await mock.bootstrap()).state.items[box.code].qty).toBe(box.qty);
+  await page.getByRole('spinbutton', { name: 'Quantity', exact: true }).fill('2');
+  await mock.confirm();
+  expect((await mock.bootstrap()).state.items[box.code].qty).toBe(box.qty! - 2);
+});
+
+for (const kind of ['correct', 'transfer', 'checkin', 'return']) {
+  test(`${kind} rejects a scanned item that does not belong to the workflow`, async ({
+    page,
+    mock,
+  }) => {
+    const drill = await mock.item('Workshop drill');
+    await page.goto('/#/workflow/' + kind + '?input=manual');
+    await page.getByRole('textbox', { name: 'QR identifiers', exact: true }).fill(drill.code);
+    await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Review selected items', exact: true })
+    ).toBeDisabled();
+  });
+}
+
+test('unfinished pick lists survive navigation and can be completed manually without changing stock', async ({
+  page,
+  mock,
+}) => {
+  await page.goto('/#/picking');
+  await mock.lookup('Customer order', 'SO', /SO-0039/);
+  await mock.select('Warehouse', 'MAIN');
+  await page.getByRole('button', { name: 'Save pick list', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Order #39/ })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: /Order #39/ })).toBeVisible();
+  const before = (await mock.bootstrap()).state.items;
+  await page.getByRole('button', { name: 'Complete manually', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Confirm manual completion', exact: true })
+  ).toBeDisabled();
+  await page
+    .getByRole('textbox', { name: 'Manual completion reason', exact: true })
+    .fill('Remaining units supplied from untracked stock');
+  await page.getByRole('button', { name: 'Confirm manual completion', exact: true }).click();
+  await expect(page.getByText(/Remaining units supplied from untracked stock/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Resume picking', exact: true })).toHaveCount(0);
+  expect((await mock.bootstrap()).state.items).toEqual(before);
+});
+
+async function inventoryCommand(
+  request: import('@playwright/test').APIRequestContext,
+  action: string,
+  payload: unknown
+) {
+  const bootstrap = await (await request.get('/custom/qrrouter/api.php?resource=bootstrap')).json();
+  const response = await request.post('/custom/qrrouter/api.php?action=' + action, {
+    form: { token: bootstrap.token, qrr_token: bootstrap.csrf, payload: JSON.stringify(payload) },
+  });
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()).result;
+}
+
+test('scanning a location QR opens current contents and refreshes after stock changes', async ({
+  page,
+  request,
+  mock,
+}) => {
+  const box = await mock.item('Bolts box A');
+  const levels = { 1: 101, 2: '1' };
+  await inventoryCommand(request, 'workflow', {
+    kind: 'move',
+    codes: [box.code],
+    warehouse_id: 1,
+    levels,
+  });
+  const qr = locationQr(1, levels);
+  await page.goto('/#/scan?input=manual');
+  await page.getByRole('textbox', { name: 'QR identifiers', exact: true }).fill(qr);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await expect(page).toHaveURL(/locations/);
+  await expect(page.locator('tbody').nth(1)).toContainText('25');
+  await inventoryCommand(request, 'workflow', {
+    kind: 'consume',
+    codes: [box.code],
+    quantities: { [box.code]: 3 },
+    post_stock: true,
+  });
+  await page.getByRole('button', { name: 'Refresh contents', exact: true }).click();
+  await expect(page.locator('tbody').nth(1)).toContainText('22');
+});
+
+test('move workflow scans a destination location and shows its current contents', async ({
+  page,
+  request,
+  mock,
+}) => {
+  const item = await mock.item('Workshop drill');
+  const levels = { 1: 102, 2: '2' };
+  const qr = locationQr(2, levels);
+  await page.goto('/#/workflow/move?input=manual&code=' + item.code);
+  await page.getByRole('button', { name: 'Scan destination bin', exact: true }).click();
+  await page.getByRole('textbox', { name: 'QR identifiers', exact: true }).fill(qr);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Destination contents: B-2', exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Destination warehouse', exact: true })
+  ).toContainText('OTHER');
+  await mock.confirm();
+  expect((await mock.bootstrap()).state.items[item.code]).toMatchObject({
+    warehouse_id: 2,
+    bin: 'B-2',
+  });
+});
+
+test('physical bins pack items and move their contents to a scanned location with a permanent QR', async ({
+  page,
+  request,
+  mock,
+}) => {
+  const first = await mock.item('Bolts box A');
+  const second = await mock.item('Bolts box B');
+  const source = { 1: 101, 2: '1' };
+  const target = { 1: 102, 2: '2' };
+  await inventoryCommand(request, 'workflow', {
+    kind: 'move',
+    codes: [first.code, second.code],
+    warehouse_id: 1,
+    levels: source,
+  });
+  const qr = locationQr(2, target);
+  await page.goto('/#/bins?input=manual');
+  await page.getByRole('textbox', { name: 'Physical bin name', exact: true }).fill('Blue tote');
+  await mock.select('Current warehouse', 'MAIN');
+  await mock.select('Aisle', 'A');
+  await page.getByRole('spinbutton', { name: 'Shelf', exact: true }).fill('1');
+  await page.getByRole('button', { name: 'Create physical bin', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Blue tote', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Pack or unpack items', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'QR identifiers', exact: true })
+    .fill(first.code + ' ' + second.code);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await page.getByRole('button', { name: 'Pack selected items', exact: true }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+  const binBefore = (
+    await (await request.get('/custom/qrrouter/api.php?resource=physical-bins')).json()
+  )[0];
+  await page.getByRole('button', { name: 'Scan destination bin', exact: true }).click();
+  await page.getByRole('textbox', { name: 'QR identifiers', exact: true }).fill(qr);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Destination contents: B-2', exact: true })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm bin move', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Physical bin and contents moved' })
+  ).toBeVisible();
+  const items = (await mock.bootstrap()).state.items;
+  expect(items[first.code]).toMatchObject({
+    warehouse_id: 2,
+    bin: 'B-2',
+    qty: 25,
+    physical_bin_id: binBefore.id,
+  });
+  expect(items[second.code]).toMatchObject({
+    warehouse_id: 2,
+    bin: 'B-2',
+    qty: 10,
+    physical_bin_id: binBefore.id,
+  });
+  const binAfter = (
+    await (await request.get('/custom/qrrouter/api.php?resource=physical-bins')).json()
+  )[0];
+  expect(binAfter.qr).toBe(binBefore.qr);
+  await page.goto('/#/scan?input=manual');
+  await page.getByRole('textbox', { name: 'QR identifiers', exact: true }).fill(binAfter.qr);
+  await page.getByRole('button', { name: 'Add codes', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Blue tote', exact: true })).toBeVisible();
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+});
+
+test('virtual camera reads a printed location URL and opens its current report @virtual-camera', async ({
+  page,
+  request,
+  mock,
+}) => {
+  const levels = { 1: 101, 2: '1' };
+  const qr = locationQr(1, levels);
+  await page.goto('/#/scan?input=camera');
+  await expect(page.getByRole('button', { name: 'Stop camera', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Camera mock', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'QR content', exact: true })
+    .fill(
+      'https://example.invalid/custom/qrrouter/index.php#/locations?location=' +
+        encodeURIComponent(qr)
+    );
+  await page.getByRole('button', { name: 'Show QR code', exact: true }).click();
+  await expect(page).toHaveURL(/locations/);
+  await page.getByRole('button', { name: 'Close camera controls', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Bin', exact: true })).toContainText('A-1');
+  await mock.expectCameraReleased();
+});
+
+test('action history retains performed work and filters by item and operation', async ({
+  page,
+  request,
+  mock,
+}) => {
+  const item = await mock.item('Workshop drill');
+  await inventoryCommand(request, 'workflow', {
+    kind: 'move',
+    codes: [item.code],
+    warehouse_id: 2,
+    levels: { 1: 102, 2: '4' },
+    reason: 'Audit destination verification',
+  });
+  await page.goto('/#/history');
+  await expect(page.getByRole('heading', { name: 'Action history', exact: true })).toBeVisible();
+  await expect(page.locator('tbody')).toContainText('Audit destination verification');
+  await expect(
+    page.locator('tbody').getByRole('link', { name: item.label, exact: true })
+  ).toBeVisible();
+  await page
+    .getByRole('textbox', { name: 'Search actions, items or reasons', exact: true })
+    .fill(item.code);
+  await mock.select('Recorded action', 'Move items');
+  await page.getByRole('button', { name: 'Apply filters / Refresh', exact: true }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator('tbody')).toContainText('Audit destination verification');
+  await page
+    .getByRole('textbox', { name: 'Search actions, items or reasons', exact: true })
+    .fill('no-matching-history-event');
+  await page.getByRole('button', { name: 'Apply filters / Refresh', exact: true }).click();
+  await expect(page.locator('tbody')).toContainText('No recorded actions match these filters');
+});
+
+test('action history blocks direct access without the history permission', async ({
+  page,
+  request,
+  mock,
+}) => {
+  await mock.reset('read-only');
+  await page.goto('/#/history');
+  await expect(
+    page.getByText('Operation history permission required', { exact: true })
+  ).toBeVisible();
+  const response = await request.get('/custom/qrrouter/api.php?resource=history');
+  expect(response.status()).toBe(403);
+});
+
+function locationQr(warehouse: number, levels: Record<string, string | number>): string {
+  return `QRRLOC:1:1:${warehouse}:${Buffer.from(JSON.stringify(levels)).toString('base64url')}`;
+}
+
+test('history permission lets a reader see QR movement history and its separate page', async ({
+  page,
+  request,
+  mock,
+}) => {
+  const item = await mock.item('Workshop drill');
+  const other = await mock.item('Bolts box A');
+  await inventoryCommand(request, 'workflow', {
+    kind: 'move',
+    codes: [item.code],
+    warehouse_id: 2,
+    levels: { 1: 102, 2: '4' },
+    reason: 'Visible movement record',
+  });
+  await inventoryCommand(request, 'workflow', {
+    kind: 'move',
+    codes: [other.code],
+    warehouse_id: 2,
+    levels: { 1: 102, 2: '4' },
+    reason: 'Other QR movement',
+  });
+  // Grant read-only history access without replacing the recorded state.
+  await page.route('**/api.php?resource=bootstrap', async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.permissions = {
+      ...data.permissions,
+      admin: false,
+      manage: false,
+      stock: false,
+      history: true,
+      create: false,
+      modify: false,
+      delete: false,
+      move: false,
+      consume: false,
+      return: false,
+      adjust: false,
+      loans: false,
+      picking: false,
+      recover: false,
+    };
+    await route.fulfill({ response, json: data });
+  });
+  await page.goto('/#/items/' + item.code);
+  const history = page
+    .locator('qrr-card')
+    .filter({ has: page.getByRole('heading', { name: 'Movement history', exact: true }) });
+  await expect(history).toContainText('Visible movement record');
+  await expect(history).not.toContainText('Other QR movement');
+  await expect(page.getByRole('link', { name: 'Edit metadata', exact: true })).toHaveCount(0);
+  await history.getByRole('link', { name: 'Open operation history page', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('history\\?code=' + item.code));
+  await expect(page.locator('tbody')).toContainText('Visible movement record');
+  await expect(page.locator('tbody')).not.toContainText('Other QR movement');
+  await page.getByRole('link', { name: 'All QR entries', exact: true }).click();
+  await expect(page.locator('tbody')).toContainText('Other QR movement');
+});
+
+test('read-only history permission is enforced by the API and does not grant stock changes', async ({
+  page,
+  request,
+  mock,
+}) => {
+  await mock.reset('history-reader');
+  const context = await mock.bootstrap();
+  expect(context.permissions.history).toBe(true);
+  expect(context.permissions.admin).toBe(false);
+  expect(context.permissions.manage).toBe(false);
+  await page.goto('/#/history');
+  await expect(page.getByRole('heading', { name: 'Action history', exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Operation history permission required', { exact: true })
+  ).toHaveCount(0);
+  expect((await request.get('/custom/qrrouter/api.php?resource=history')).ok()).toBe(true);
+  const rejected = await request.post('/custom/qrrouter/api.php?action=bulk', {
+    form: {
+      token: context.token,
+      qrr_token: context.csrf,
+      payload: JSON.stringify({ type: 'unassigned', count: 1 }),
+    },
+  });
+  expect(rejected.status()).toBe(403);
 });

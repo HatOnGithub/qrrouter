@@ -6,6 +6,7 @@ import { InventoryService } from '@services/inventory.service';
 import { faArrowRight } from '@fortawesome/free-solid-svg-icons';
 
 /** Collects identifiers only. Product and inventory details belong to the editor page. */
+/** Capture unused labels before the shared editor prepares their typed registration choices. */
 @Component({
   selector: 'qrr-registration-selection',
   standalone: true,
@@ -30,6 +31,11 @@ export class RegistrationComponent {
   );
   protected thumbnail = history.state?.thumbnail || '';
   private draft = history.state?.draft;
+  protected validateScan = (code: string): string => {
+    const item = this.api.context()!.state.items[code];
+    if (!item) return 'Unknown QR label';
+    return item.type === 'unassigned' ? '' : 'This QR label is already registered';
+  };
 
   protected continue(): void {
     void this.router.navigate(['/register/details'], {

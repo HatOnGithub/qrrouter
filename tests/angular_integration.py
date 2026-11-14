@@ -18,6 +18,7 @@ import tempfile
 import time
 import dolibarr_fixture as fixture
 import native_fixture as native_contract
+from barcode_fixture import install_barcodes
 from sqlite_fixture import read_state, write_state
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -39,6 +40,7 @@ print('All PHP adapter files pass syntax checks.', flush=True)
 subprocess.run(php + [str(root / 'tests/test_translation.php')], check=True)
 subprocess.run(php + [str(root / 'tests/test_service_settings.php')], check=True)
 subprocess.run(php + [str(root / 'tests/test_labels.php')], check=True)
+subprocess.run(php + [str(root / 'tests/test_permissions.php')], check=True)
 
 
 
@@ -110,6 +112,7 @@ $GLOBALS['conf']->global = (object) ($GLOBALS['db']->state()['constants'][(strin
     before_return, _, after_return = main.rpartition('return 1;')
     main = before_return + locale_fixture + '\nreturn 1;' + after_return
     main = main.replace("$GLOBALS['user']=new class {public $id=8,$admin=1;public function hasRight(...$a){return true;}};", """
+if (!defined('DOL_MAIN_URL_ROOT')) define('DOL_MAIN_URL_ROOT', 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 $role=$_GET['role']??'admin';
 $GLOBALS['user']=new class($role) {
  public $id=8,$admin,$socid=0,$statut=1; private $role;
@@ -117,6 +120,15 @@ $GLOBALS['user']=new class($role) {
  public function hasRight(...$a){
   if($this->admin)return true;
   if($a===['qrrouter','read'])return $this->role!=='no-qr';
+  if($a===['qrrouter','use'])return $this->role!=='no-use';
+  if($a===['qrrouter','print'])return $this->role!=='no-print';
+  if(count($a)===2&&$a[0]==='qrrouter'&&in_array($a[1],['create','modify','delete','move','consume','return','adjust','loans','picking','recover'],true)) {
+    if(str_starts_with($this->role,'only-'))return $a[1]===substr($this->role,5);
+    if($this->role==='mover')return $a[1]==='move';
+    return in_array($this->role,['manager','operator','restricted','mover','no-product-write','no-native-move'],true);
+  }
+  if($a===['qrrouter','history'])return str_starts_with($this->role,'history-')||$this->role==='no-movement-read';
+  if($a===['stock','mouvement','lire'])return $this->role!=='no-movement-read';
   if($a===['produit','lire'])return $this->role!=='no-product';
   if($a===['service','lire'])return true;
   if($a===['categorie','lire'])return $this->role!=='no-tags';
@@ -125,16 +137,18 @@ $GLOBALS['user']=new class($role) {
   if($a===['commande','lire'])return !in_array($this->role,['operator','manufacturing-reader'],true);
   if($a===['mrp','read'])return in_array($this->role,['manufacturing-reader','restricted-manufacturing'],true);
   if($a===['expedition','lire'])return false;
-  if($a===['qrrouter','manage'])return in_array($this->role,['manager','operator','restricted'],true);
-  if($a===['stock','mouvement','creer']||$a===['produit','creer']||$a===['binloc','write'])return $this->role==='operator';
+  if($a===['qrrouter','manage'])return in_array($this->role,['manager','operator','restricted','legacy-manage-only'],true);
+  if($a===['stock','mouvement','creer'])return in_array($this->role,['operator','mover','no-product-write'],true);
+  if($a===['produit','creer']||$a===['binloc','write'])return $this->role==='operator';
   return false;
  }
 };
-function isModEnabled($module){$role=$_GET['role']??'';return !(($module==='qrrouter'&&$role==='disabled')||$role==='disabled-'.$module);}
+function isModEnabled($module){if($module==='binloc'&&!empty($_GET['without_binloc']))return false;$role=$_GET['role']??'';return !(($module==='qrrouter'&&$role==='disabled')||$role==='disabled-'.$module);}
 function restrictedArea($actor,$feature,$id=0,$table='',$feature2='',$key='fk_soc',$select='rowid',$draft=0,$mode=0){
  if($mode!==1)throw new RuntimeException('Object checks must use non-terminating mode');
  $allowed=['produit'=>[3,4],'stock'=>[1,2],'commande'=>[39],'mrp'=>[19],'expedition'=>[29],'user'=>[8,9]];
- return in_array((int)$id,$allowed[$feature]??[],true)&&!(($_GET['role']??'')==='restricted'&&$feature==='commande')&&!(($_GET['role']??'')==='restricted-manufacturing'&&$feature==='mrp')?1:0;
+ $allowed['stock']=array_map('intval',array_keys($GLOBALS['db']->state()['warehouses']));
+ return in_array((int)$id,$allowed[$feature]??[],true)&&!(in_array($_GET['role']??'',['restricted','history-restricted-order'],true)&&$feature==='commande')&&!(($_GET['role']??'')==='restricted-manufacturing'&&$feature==='mrp')&&!(in_array($_GET['role']??'',['hidden-product','history-hidden-product'],true)&&$feature==='produit'&&(int)$id===4)&&!(in_array($_GET['role']??'',['hidden-warehouse','history-hidden-warehouse'],true)&&$feature==='stock'&&(int)$id===2)?1:0;
 }
 """)
     commande = """<?php
@@ -211,6 +225,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         (webroot / target).parent.mkdir(parents=True, exist_ok=True)
         (webroot / target).write_text(content, encoding='utf-8')
     native_path = data / 'native.json'
+    install_barcodes(webroot)
     native_path.write_text(json.dumps({'warehouses': {'1': {'ref': 'MAIN', 'lieu': 'Main', 'status': 1}, '2': {'ref': 'OTHER', 'lieu': 'Other', 'status': 1}},
                                        'stock': {'3': {'1': 30, '2': 4}}, 'movements': [], 'users_empty': True}))
     api_base = f'http://127.0.0.1:{port()}'
@@ -298,10 +313,11 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         bootstrap = request()
         assert bootstrap['state']['schema'] == 2 and bootstrap['permissions']['admin']
         assert bootstrap['users'] == {} and bootstrap['state']['items'] == {}
-        for locale, translated in [('nl_NL', 'Voorraad'), ('fr_FR', 'Stock')]:
+        for locale, translated, more_details in [('nl_NL', 'Voorraad', 'Meer details'), ('fr_FR', 'Stock', 'Plus de détails')]:
             with client.open(base + 'api.php?resource=bootstrap&testlang=' + locale) as response:
                 localized = json.load(response)
                 assert localized['locale'] == locale and localized['translations']['Inventory'] == translated
+                assert localized['translations']['More details'] == more_details
         assert request('print-translations', params={'lang': 'nl_NL'})['Warehouse inventory'] == 'Magazijninventaris'
         request('print-translations', params={'lang': '../en_US'}, expected=400)
         with client.open(base + 'api.php?resource=bootstrap&testentities=1') as response:
@@ -346,6 +362,33 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             result = request(action='register', payload={'type': kind, 'codes': [code], 'label': 'Fixture ' + kind, 'serial': 'SN-REGISTER' if kind == 'tracked' else '', 'details': 'Inspect seals annually; keep dry.' if kind == 'tracked' else '', 'product_id': 3 if kind == 'generic' else 4, 'warehouse_id': 1, 'qty': qty, 'levels': {'1': 'A'}})
             assert result['codes'] == [code]
         native = lambda: json.loads(native_path.read_text())
+        barcode_state = read_state(data / 'qrrouter/entity-1/state.sqlite3')
+        for symbology in ['QRCODE', 'DATAMATRIX', 'C128', 'PDF417']:
+            with client.open(base + 'barcode.php?' + urlencode({'code': tracked, 'symbology': symbology})) as response:
+                image = response.read().decode()
+                assert response.headers['Content-Type'].startswith('image/svg+xml') and '<svg' in image
+                assert 'Warning' not in image and 'Fatal error' not in image
+            with client.open(base + 'label.php?' + urlencode({'code': tracked, 'symbology': symbology})) as response:
+                assert f'"symbology":"{symbology}"' in response.read().decode()
+        for symbology in ['EAN13', 'UPC', '../QRCODE', '0']:
+            try:
+                client.open(base + 'barcode.php?' + urlencode({'code': tracked, 'symbology': symbology}))
+                raise AssertionError('Unsupported barcode format accepted')
+            except HTTPError as error:
+                assert error.code == 400
+        assert read_state(data / 'qrrouter/entity-1/state.sqlite3') == barcode_state
+        print('Barcode rendering PASS: four native symbologies, unchanged six-character IDs, rejected numeric-only formats and no state mutation.', flush=True)
+        # PHP turns all-digit map keys into integers; the ID itself must remain a string at
+        # query/history boundaries even when every character happens to be numeric.
+        numeric_state = read_state(data / 'qrrouter/entity-1/state.sqlite3')
+        numeric_fixture = json.loads(json.dumps(numeric_state))
+        numeric_fixture['items']['222263'] = {**numeric_fixture['items'][generic], 'code': '222263'}
+        try:
+            write_state(data / 'qrrouter/entity-1/state.sqlite3', numeric_fixture)
+            assert '222263' in request()['state']['items']
+            request('locations', params={'warehouse_id': 1})
+        finally:
+            write_state(data / 'qrrouter/entity-1/state.sqlite3', numeric_state)
         search_products = request()['products']
         assert search_products['4']['tags'] == ['Hydraulics', 'Service parts']
         assert search_products['4']['extrafields']['material'] == {'label': 'Material', 'value': 'Stainless steel'}
@@ -457,7 +500,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         for role in ['no-qr', 'no-product', 'no-stock', 'external', 'external-admin', 'inactive', 'anonymous', 'disabled', 'disabled-stock', 'disabled-product', 'disabled-productbatch']:
             request(role=role, expected=403)
             request('products', role=role, expected=403)
-            for endpoint in ['index.php', 'label.php', 'batch_print.php', 'bin_print.php', 'qr.php', 'thumbnail.php']:
+            for endpoint in ['index.php', 'label.php', 'batch_print.php', 'bin_print.php', 'qr.php', 'barcode.php', 'thumbnail.php']:
                 url = base + endpoint + '?' + urlencode({'role': role, 'code': tracked, 'batch': batch, 'warehouse_id': 1})
                 try:
                     with client.open(url) as response:
@@ -508,15 +551,41 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         seeded['server_only'] = secret
         seeded['items'][generic]['server_only'] = secret
         seeded['items'][tracked]['server_only'] = secret
-        seeded['items'][generic]['pending_operation'] = {'id': 'test-pending', 'kind': 'move', 'at': '2026-01-01T00:00:00Z', 'patch': {'reason': secret}, 'effects': [{'price': secret}]}
+        seeded['items'][generic]['pending_operation'] = {
+            'id': 'test-pending', 'kind': 'move', 'at': '2026-01-01T00:00:00Z',
+            'patch': {'warehouse_id': 2, 'bin': 'PENDING-DESTINATION', 'reason': secret},
+            'effects': [{'warehouse_id': 1, 'delta': -1}, {'warehouse_id': 2, 'delta': 1, 'price': secret}],
+            'proof': secret,
+        }
+        seeded['pending_native'] = {
+            'id': 'test-native-pending', 'action': 'update', 'at': '2026-01-01T00:00:00Z',
+            'items': {secret: secret}, 'result': secret, 'proof': secret,
+            'changes': {
+                generic: {'before': original_state['items'][generic], 'after': {**original_state['items'][generic], 'warehouse_id': 2, 'label': 'Pending public label', 'server_only': secret}},
+                tracked: {'before': original_state['items'][tracked], 'after': {**original_state['items'][tracked], 'label': 'Pending restricted label', 'server_only': secret}},
+            },
+        }
         seeded['history'].append({'context': {'secret': secret}})
         try:
             write_state(state_file, seeded)
             for role in ['admin', 'reader', 'operator']:
                 view = request(role=role)
                 assert secret not in json.dumps(view)
-                assert set(view['state']['items'][generic]['pending_operation']) == {'id', 'kind', 'at'}
+                pending = view['state']['items'][generic]['pending_operation']
+                assert set(pending) == {'id', 'kind', 'at', 'details'}
+                assert any(row['field'] == 'Warehouse' for row in pending['details'])
+                assert any(row['field'] == 'Stock movement' and row['after'].startswith('+1') for row in pending['details'])
+                native_pending = view['state']['pending_native']
+                assert set(native_pending) == {'id', 'action', 'at', 'details'}
+                assert any(row['after'] == 'Pending public label' for row in native_pending['details'])
+                assert all(set(row) == {'code', 'field', 'before', 'after'} for row in native_pending['details'] + pending['details'])
                 assert secret not in json.dumps(request('locations', role=role, params={'warehouse_id': 2}))
+            hidden = request(role='hidden-warehouse')['state']
+            assert hidden['items'][generic]['pending_operation']['details'] == []
+            assert hidden['pending_native']['details'] == []
+            product_hidden = request(role='hidden-product')['state']['pending_native']['details']
+            assert all(row['code'] != tracked for row in product_hidden)
+            assert 'Pending restricted label' not in json.dumps(product_hidden)
             foreign = native(); foreign['product_entities'] = {'4': 2}; native_path.write_text(json.dumps(foreign))
             scoped = request()
             native_entries('product', 4, expected=403)
@@ -526,7 +595,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             assert all(tracked not in row['codes'] and box not in row['codes'] for row in scoped['state']['batches'].values())
             assert all(row.get('code') not in [tracked, box] for row in request('picking', params={'warehouse_id': 2, 'order_id': 39}))
             assert not request('locations', params={'warehouse_id': 2})['summary']['tracked']
-            for endpoint in ['label.php', 'qr.php', 'thumbnail.php']:
+            for endpoint in ['label.php', 'qr.php', 'barcode.php', 'thumbnail.php']:
                 try:
                     client.open(base + endpoint + '?' + urlencode({'code': tracked}))
                     raise AssertionError('Foreign product served by ' + endpoint)
@@ -538,6 +607,7 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
             restored = native(); restored.pop('product_entities', None); native_path.write_text(json.dumps(restored))
         assert request()['state']['revision'] == before
         print('Authorization PASS: native read rights, external/disabled users, object scopes, restricted references, employee privacy, field projection and direct media access.', flush=True)
+        print('Pending details PASS: requested field changes and stock movements, native product/warehouse scopes and no raw recovery data.', flush=True)
         print('Native references PASS: product/warehouse/lot tabs, card hooks, internal location filtering, employee loans, transaction history and authorization.', flush=True)
         request(action='register', payload={'type': 'generic', 'codes': [blank], 'label': 'Unsafe', 'product_id': 999, 'warehouse_id': 1}, expected=409)
         assert request()['state']['items'][blank]['type'] == 'unassigned'
@@ -600,6 +670,9 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         request(action='create', payload={'type': 'box', 'label': 'RECOVER-BOX', 'product_id': 4, 'warehouse_id': 1, 'qty': 3}, expected=409)
         assert len(native()['lots']) == count_before and native()['stock']['4']['1'] == stock_before
         pending_path = data / 'qrrouter/entity-1/state.sqlite3'
+        requested_changes = request()['state']['pending_native']['details']
+        assert any(row['field'] == 'Quantity' and row['before'] is None and row['after'] == '3' for row in requested_changes)
+        assert any(row['after'] == 'RECOVER-BOX' for row in requested_changes)
         def assert_hidden_recovery():
             saved_native = native_path.read_bytes()
             saved_pending = read_state(pending_path)
@@ -763,7 +836,151 @@ echo json_encode(['parts'=>$module->module_parts,'tabs'=>$module->tabs,'allowed'
         changed = native(); changed.pop('serial_prefixes'); native_path.write_text(json.dumps(changed))
         print('Product prefix PASS: trusted product prefix for single, bulk and registered individuals; browser override ignored; invalid prefix rejected before stock changes.', flush=True)
         print('Native integration PASS: bulk and single random serials, existing serial links, box lots, internal locations, live native stock observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
+        # Saved lists use trusted order lines, retain partial progress, and can close without a stock mutation.
+        request('pick-lists', role='operator', expected=403)
+        request(action='pick-list-save', role='restricted', payload={'order_id': 39, 'warehouse_id': 1}, expected=403)
+        saved_list = request(action='pick-list-save', payload={'order_id': 39, 'warehouse_id': 1,
+            'lines': [{'product_id': 4, 'qty': 9999}]})
+        assert saved_list['status'] == 'open' and saved_list['lines'][0]['product_id'] == 3
+        assert saved_list['lines'][0]['requested'] == 3
+        assert request('pick-lists', role='restricted') == []
+        wrong_pick = request(action='workflow', payload={'kind': 'consume', 'codes': [new_box],
+            'quantities': {new_box: 1}, 'pick_order_id': 39, 'pick_warehouse_id': 1, 'post_stock': True})
+        assert not wrong_pick[0]['ok']
+        picked = request(action='workflow', payload={'kind': 'consume', 'codes': [generic],
+            'quantities': {generic: 1}, 'pick_order_id': 39, 'pick_warehouse_id': 1, 'post_stock': True})
+        assert picked[0]['ok'], picked
+        progress = request('pick-lists')[0]
+        assert progress['status'] == 'in_progress' and progress['lines'][0]['remaining'] == 2
+        request(action='pick-list-complete', payload={'order_id': 39, 'reason': ''}, expected=409)
+        stock_before_manual = native_path.read_bytes()
+        items_before_manual = request()['state']['items']
+        completed = request(action='pick-list-complete', payload={'order_id': 39, 'reason': 'Two units supplied from untracked stock'})
+        assert completed['status'] == 'manually_completed'
+        assert completed['lines'][0]['manual'] == 2 and completed['lines'][0]['remaining'] == 0
+        assert completed['completed_by'] > 0 and completed['completion_reason']
+        assert request()['state']['items'] == items_before_manual and native_path.read_bytes() == stock_before_manual
+        assert request('picking', params={'order_id': 39, 'warehouse_id': 1}) == []
+        print('Pick lists PASS: trusted order quantities, permissions, scan constraints, partial fulfillment and audited manual completion without stock changes.', flush=True)
+        # Internal locations and physical bins must work with Binloc's files absent.
+        def internal_request(resource='bootstrap', **kwargs):
+            return request(resource, **kwargs)
+        assert not (webroot / 'custom/binloc').exists()
+        assert internal_request()['permissions']['locations']
+        assert internal_request('levels', params={'warehouse_id': 1})
+        source_levels = {'1': 'A.01'}
+        target_levels = {'1': 'B.02'}
+        members = []
+        for label in ['Internal box one', 'Internal box two']:
+            members.append(internal_request(action='create', payload={'type': 'box', 'label': label, 'product_id': 4,
+                'warehouse_id': 1, 'qty': 3, 'levels': source_levels}))
+        physical = internal_request(action='physical-bin-create', payload={'label': 'Blue tote', 'warehouse_id': 1, 'levels': source_levels})
+        internal_request(action='physical-bin-assign', payload={'bin_id': physical['id'], 'codes': members})
+        physical_before = internal_request('physical-bins')[0]
+        assert set(physical_before['codes']) == set(members)
+        import base64
+        target_qr = 'QRRLOC:1:1:2:' + base64.urlsafe_b64encode(json.dumps(target_levels).encode()).decode().rstrip('=')
+        report = internal_request('location-qr', params={'payload': target_qr})
+        assert report['bin'] == 'B.02' and report['levels'] == target_levels
+        assert not report['summary']['tracked'] and not report['summary']['totals']
+        internal_request('location-qr', params={'payload': target_qr.replace('QRRLOC:1:1:', 'QRRLOC:1:2:')}, expected=403)
+        internal_request('location-qr', params={'payload': 'QRRLOC:1:1:2:broken'}, expected=400)
+        moved = internal_request(action='physical-bin-move', payload={'bin_id': physical['id'], 'warehouse_id': 2, 'levels': target_levels})
+        assert moved['complete'] and all(result['ok'] for result in moved['results']), moved
+        current = internal_request()['state']['items']
+        assert all(current[code]['warehouse_id'] == 2 and current[code]['bin'] == 'B.02' and current[code]['physical_bin_id'] == physical['id'] and current[code]['qty'] == 3 for code in members)
+        report = internal_request('location-qr', params={'payload': target_qr})
+        assert sum(row['box'] for row in report['summary']['totals']) == 6
+        assert not internal_request('physical-bins')[0].get('pending_move')
+        with client.open(base + 'bin_print.php?' + urlencode({'warehouse_id': 2, 'bin': 'B.02', 'labels': 1, 'without_binloc': 1})) as response:
+            printed = response.read().decode()
+            assert 'qrr-location-code' in printed and 'B.02' in printed and 'location=QRRLOC' in printed
+        with client.open(base + 'physical_bin_print.php?' + urlencode({'bin_id': physical['id'], 'without_binloc': 1})) as response:
+            printed = response.read().decode()
+            assert 'Blue tote' in printed and 'physical_bin=' in printed and 'B.02' not in printed
+        with client.open(base + 'native.php?' + urlencode({'kind': 'product', 'id': 4, 'q': 'B.02', 'without_binloc': 1})) as response:
+            related = response.read().decode()
+            assert all(code in related for code in members) and 'B.02' in related
+        print('Internal locations PASS: Binloc files absent, preserved locations, physical bin packing, whole-bin native moves, location QR reports and permanent labels.', flush=True)
+        for role in ['reader', 'manager', 'operator', 'restricted']:
+            request('history', role=role, expected=403)
+        permitted_history = request(role='history-reader')['permissions']
+        assert permitted_history['history'] and not permitted_history['admin'] and not permitted_history['manage']
+        granted_history = request('history', role='history-reader', params={'code': members[0]})
+        assert granted_history['total'] > 0
+        assert all(members[0] in row['codes'] for row in granted_history['entries'])
+        assert any(row['operation'] == 'move' for row in granted_history['entries'])
+        assert request('history', role='reader', params={'code': members[0]}, expected=403)
+        request('history', role='history-reader', params={'code': "' OR 1=1 --"}, expected=400)
+        before_history = internal_request()['state']['revision']
+        history = internal_request('history')
+        assert history['total'] > 50 and len(history['entries']) == 50
+        assert history['entries'][0]['id'] > history['entries'][1]['id']
+        next_page = internal_request('history', params={'page': 2})
+        assert next_page['entries'][0]['id'] < history['entries'][-1]['id']
+        movements = internal_request('history', params={'event': 'move', 'q': members[0]})
+        assert movements['total'] >= 2 and all(row['operation'] == 'move' and members[0] in row['codes'] for row in movements['entries'])
+        manual = internal_request('history', params={'event': 'pick-list-complete'})
+        assert manual['entries'][0]['order_id'] == 39 and 'untracked' in manual['entries'][0]['reason']
+        assert internal_request('history', params={'q': "' OR 1=1 --"})['total'] == 0
+        assert internal_request('history', params={'from': '2099-01-01T00:00:00Z'})['total'] == 0
+        assert internal_request()['state']['revision'] == before_history
+        assert all('context' not in row and 'changes' not in row for row in history['entries'])
+        assert key not in json.dumps(history)
+        print('Action history PASS: grantable read-only permission, exact QR histories, denied ungranted users, searches, filters, paging and audit projection.', flush=True)
+        print('Native integration PASS: bulk assigned serials, exact label serials, automatic and named serials, box lots, internal locations, live native observations, lot transfers, handoffs, transactional rollback and durable recovery.', flush=True)
         print('Gateway integration PASS: native workflows, real C# state, CSRF, permissions, trusted facts, product/order lookups, Angular hosting and no API-key exposure.', flush=True)
+        # Independently granted actions must work without the former all-purpose manage grant.
+        request(role='no-use', expected=403)
+        request('products', role='no-use', expected=403)
+        request(action='bulk', role='legacy-manage-only', payload={'type': 'unassigned', 'count': 1}, expected=403)
+        created_batch = request(action='bulk', role='only-create', payload={'type': 'unassigned', 'count': 1})
+        unused = request()['state']['batches'][created_batch]['codes'][0]
+        request(action='delete-unassigned', role='only-create', payload={'code': unused}, expected=403)
+        generic_fields = {'type': 'generic', 'product_id': 3, 'warehouse_id': 1, 'label': 'Permission-created unit'}
+        permission_item = request(action='create', role='only-create', payload=generic_fields)
+        request(action='bulk', role='only-modify', payload={'type': 'unassigned', 'count': 1}, expected=403)
+        request(action='update', role='only-modify', payload={**generic_fields, 'code': permission_item, 'label': 'Permission-edited unit'})
+        request(action='update', role='only-modify', payload={**generic_fields, 'code': unused}, expected=403)
+        native_before_delete = native_path.read_bytes()
+        request(action='delete-unassigned', role='only-delete', payload={'code': unused})
+        request(action='delete-unassigned', role='only-delete', payload={'code': permission_item}, expected=409)
+        assert native_path.read_bytes() == native_before_delete
+        # Native writes require native permissions even if every QR action is granted.
+        native_mover = request(action='create', payload={'type': 'tracked', 'product_id': 4, 'warehouse_id': 1, 'label': 'Permission movement serial'})
+        before_denied = request()['state']['revision']; native_before_denied = native_path.read_bytes()
+        request(action='create', role='no-product-write', payload={'type': 'tracked', 'product_id': 4, 'warehouse_id': 1, 'label': 'Must not create native lot'}, expected=403)
+        denied_move = request(action='workflow', role='no-native-move', payload={'kind': 'move', 'codes': [native_mover], 'warehouse_id': 2})
+        assert not denied_move[0]['ok']
+        assert request()['state']['revision'] == before_denied and native_path.read_bytes() == native_before_denied
+        moved_existing = request(action='workflow', role='mover', payload={'kind': 'move', 'codes': [native_mover], 'warehouse_id': 2})
+        assert moved_existing[0]['ok'], moved_existing
+        assert request()['state']['items'][native_mover]['warehouse_id'] == 2
+        native_before_metadata = native_path.read_bytes()
+        request(action='update', role='only-modify', payload={'code': native_mover, 'type': 'tracked', 'product_id': 4, 'warehouse_id': 2, 'label': 'Permission metadata edited'})
+        assert native_path.read_bytes() == native_before_metadata
+        hidden_product = request(role='hidden-product')
+        assert '4' not in hidden_product['products'] and all(item['product_id'] != 4 for item in hidden_product['state']['items'].values())
+        assert all(row['id'] != 4 for row in request('products', role='hidden-product', params={'q': 'SERIAL'}))
+        hidden_warehouse = request(role='hidden-warehouse')
+        assert '2' not in hidden_warehouse['warehouses'] and native_mover not in hidden_warehouse['state']['items']
+        for role in ['history-hidden-product', 'history-hidden-warehouse']:
+            assert request('history', role=role, params={'code': native_mover})['total'] == 0
+        assert request('history', role='history-restricted-order', params={'event': 'pick-list-complete'})['total'] == 0
+        request('history', role='no-movement-read', expected=403)
+        for endpoint, role, expected_status in [('label.php','no-print',403), ('label.php','hidden-product',404), ('qr.php','hidden-product',404), ('thumbnail.php','hidden-product',404), ('index.php','no-use',403)]:
+            try:
+                with client.open(base + endpoint + '?' + urlencode({'role': role, 'code': native_mover})) as response:
+                    assert response.status == expected_status
+            except HTTPError as error:
+                assert error.code == expected_status, (endpoint, role, error.code)
+        forged_permission = Request(base + 'api.php?role=reader&action=bulk', data=urlencode({'token': 'fixture-dolibarr-token', 'qrr_token': bootstrap['csrf'], 'payload': json.dumps({'count': 1})}).encode(), headers={'X-Qrr-Use':'1','X-Qrr-Permissions':'create,modify,delete','X-Qrr-Admin':'1'})
+        try:
+            client.open(forged_permission)
+            raise AssertionError('Browser-forged capability headers were trusted')
+        except HTTPError as error:
+            assert error.code == 403
+        print('Granular permissions PASS: explicit module access, independent create/edit/delete grants, no manage fallback, native object scopes, stock/lot rights, scoped history, direct media/print authorization and ignored forged headers.', flush=True)
         if args.browser:
             env = dict(os.environ, QRR_E2E_URL=base, QRR_E2E_ITEM=tracked, QRR_E2E_BOX=box)
             browser_command = ['npm.cmd' if os.name == 'nt' else 'npm', 'run', 'e2e']

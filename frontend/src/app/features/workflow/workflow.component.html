@@ -32,8 +32,8 @@
       }}
     </p>
   }
-  @if (!api.context()!.permissions.manage) {
-    <p class="alert">{{ 'QR management permission required' | t }}</p>
+  @if (!api.can(kind())) {
+    <p class="alert">{{ 'Permission required for this QR action' | t }}</p>
   } @else {
     @if (error()) {
       <p class="alert" role="alert">{{ error() | t }}</p>
@@ -73,8 +73,58 @@
         </button>
       </qrr-card>
     } @else if (!review()) {
+      @if (kind() === 'consume' && api.context()!.permissions.orders && api.can('picking')) {
+        <qrr-card [title]="'Pick list safeguards' | t">
+          <p>
+            {{
+              'Optionally load a customer order pick list before scanning. Only listed QR labels and quantities will be accepted.'
+                | t
+            }}
+          </p>
+          <qrr-lookup
+            resource="orders"
+            label="Customer order"
+            (selected)="pickOrder = $event?.id || 0; clearPickList()"
+          />
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Pick from warehouse' | t }}</mat-label>
+            <mat-select [(ngModel)]="pickWarehouse" (ngModelChange)="clearPickList()">
+              @for (w of api.context()!.warehouses | keyvalue; track w.key) {
+                <mat-option [value]="+w.key">{{ w.value.ref }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <button
+            mat-stroked-button
+            (click)="loadPickList()"
+            [disabled]="pickBusy() || !pickOrder || !pickWarehouse"
+          >
+            {{ 'Load pick list' | t }}
+          </button>
+          @if (pickRows(); as picks) {
+            <p>
+              <qrr-native-link type="salesorder" [id]="pickOrder" [label]="'Order #' + pickOrder" />
+            </p>
+            <ul>
+              @for (row of picks; track $index) {
+                <li>
+                  {{ row.bin }} · {{ row.product.ref }} · {{ row.code || ('Not allocated' | t) }}:
+                  {{ row.take }}
+                </li>
+              } @empty {
+                <li>{{ 'No remaining items to pick' | t }}</li>
+              }
+            </ul>
+          }
+        </qrr-card>
+      }
       <qrr-card class="capture-card" [title]="'Scan items' | t">
-        <qrr-capture [initial]="codes()" (changed)="codes.set($event)" />
+        <qrr-capture
+          [initial]="codes()"
+          [validate]="validateScan"
+          [content]="kind() === 'move' ? 'items-or-bins' : 'items'"
+          (changed)="scanned($event)"
+        />
         <button
           action
           class="scanner-primary"
@@ -226,7 +276,7 @@
                 <mat-select
                   name="warehouse"
                   [(ngModel)]="warehouse"
-                  (ngModelChange)="levels = {}"
+                  (ngModelChange)="levels = {}; destinationInitial = {}"
                   required
                 >
                   <mat-option [value]="0">—</mat-option>
@@ -252,9 +302,25 @@
             </mat-form-field>
           </div>
           @if (kind() === 'move' || kind() === 'return') {
-            <qrr-location-fields [warehouse]="warehouse" (selected)="levels = $event" />
+            @if (kind() === 'move') {
+              <qrr-destination
+                [warehouse]="warehouse"
+                [values]="levels"
+                (resolving)="destinationBusy.set($event)"
+                (selected)="
+                  warehouse = $event.warehouse_id;
+                  levels = $event.levels;
+                  destinationInitial = $event.levels
+                "
+              />
+            }
+            <qrr-location-fields
+              [warehouse]="warehouse"
+              [initial]="destinationInitial"
+              (selected)="levels = $event"
+            />
           }
-          @if (kind() === 'consume') {
+          @if (kind() === 'consume' && !pickOrder) {
             <div class="grid">
               <mat-form-field appearance="outline">
                 <mat-label>{{ 'Transaction reference' | t }}</mat-label>
@@ -319,8 +385,9 @@
               mat-flat-button
               [disabled]="
                 busy() ||
+                destinationBusy() ||
                 form.invalid ||
-                (!!referenceType && !referenceId) ||
+                (!pickOrder && !!referenceType && !referenceId) ||
                 (kind() === 'checkout' && !person) ||
                 ((kind() === 'move' || kind() === 'return') && !warehouse)
               "

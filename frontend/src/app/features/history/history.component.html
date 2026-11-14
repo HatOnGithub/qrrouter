@@ -1,0 +1,184 @@
+@if (!code()) {
+  <h1>{{ 'Action history' | t }}</h1>
+  <p class="subtitle">
+    {{
+      'Inventory changes, pick-list activity and recovery operations are retained automatically. Started operations and their completion are recorded separately.'
+        | t
+    }}
+  </p>
+}
+@if (!permitted()) {
+  <p class="alert">{{ 'Operation history permission required' | t }}</p>
+} @else {
+  @if (error()) {
+    <p class="alert" role="alert">{{ error() | t }}</p>
+  }
+  @if (code()) {
+    <div class="actions">
+      <button mat-stroked-button (click)="load()" [disabled]="busy()">
+        {{ 'Refresh history' | t }}
+      </button>
+      <a mat-stroked-button routerLink="/history" [queryParams]="{ code: code() }">
+        {{ 'Open operation history page' | t }}
+      </a>
+    </div>
+  } @else {
+    @if (exactCode()) {
+      <p>
+        {{ 'QR identifier' | t }}:
+        <strong>{{ exactCode() }}</strong>
+        <a routerLink="/history" [queryParams]="{}">{{ 'All QR entries' | t }}</a>
+      </p>
+    }
+    <qrr-card [title]="'Filter actions' | t">
+      <form (ngSubmit)="load()">
+        <div class="grid">
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Search actions, items or reasons' | t }}</mat-label>
+            <input matInput name="query" [(ngModel)]="query" maxlength="200" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'User' | t }}</mat-label>
+            <mat-select name="actor" [(ngModel)]="actor">
+              <mat-option [value]="0">{{ 'All users' | t }}</mat-option>
+              @for (user of api.context()!.users | keyvalue; track user.key) {
+                <mat-option [value]="+user.key">{{ user.value }} (#{{ user.key }})</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Recorded action' | t }}</mat-label>
+            <mat-select name="event" [(ngModel)]="event">
+              <mat-option value="">{{ 'All actions' | t }}</mat-option>
+              @for (event of operations | keyvalue; track event.key) {
+                <mat-option [value]="event.key">{{ event.value | t }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'From date' | t }}</mat-label>
+            <input matInput type="date" name="from" [(ngModel)]="from" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Through date' | t }}</mat-label>
+            <input matInput type="date" name="to" [(ngModel)]="to" />
+          </mat-form-field>
+        </div>
+        <button mat-flat-button type="submit" [disabled]="busy()">
+          {{ 'Apply filters / Refresh' | t }}
+        </button>
+      </form>
+    </qrr-card>
+  }
+  @if (busy()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+  @if (data(); as data) {
+    <p role="status">{{ data.total }} {{ 'recorded actions' | t }}</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ 'When' | t }}</th>
+            <th>{{ 'User' | t }}</th>
+            <th>{{ 'Action' | t }}</th>
+            <th>{{ 'Affected records' | t }}</th>
+            <th>{{ 'Details' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of data.entries; track entry.id) {
+            <tr>
+              <td>
+                {{ entry.at | date: 'medium' }}
+                <small>#{{ entry.revision }}</small>
+              </td>
+              <td>{{ api.context()!.users[entry.user_id] || 'User #' + entry.user_id }}</td>
+              <td>
+                <strong>{{ name(entry.operation) | t }}</strong>
+                <small>{{ name(entry.action) | t }} · {{ entry.status | t }}</small>
+              </td>
+              <td>
+                @for (code of entry.codes; track code) {
+                  @if (api.context()!.state.items[code]) {
+                    <div>
+                      <a [routerLink]="['/items', code]">
+                        {{ api.itemName(api.context()!.state.items[code], code) }}
+                      </a>
+                      <small>{{ code }}</small>
+                    </div>
+                  } @else {
+                    <div>{{ code }}</div>
+                  }
+                }
+                @if (entry.order_id) {
+                  <qrr-native-link
+                    type="salesorder"
+                    [id]="entry.order_id"
+                    [label]="'Order #' + entry.order_id"
+                  />
+                }
+                @if (entry.bin_id || (entry.action === 'physical-bin-create' && entry.record_id)) {
+                  <a routerLink="/bins" [queryParams]="{ bin_id: entry.bin_id || entry.record_id }">
+                    {{ 'Physical bin' | t }} {{ entry.bin_id || entry.record_id }}
+                  </a>
+                }
+                @if (entry.label) {
+                  <div>{{ entry.label }}</div>
+                }
+              </td>
+              <td>
+                @if (entry.source_warehouse_id) {
+                  <div>
+                    {{ 'From' | t }}:
+                    {{
+                      api.context()!.warehouses[entry.source_warehouse_id]?.ref ||
+                        'Warehouse #' + entry.source_warehouse_id
+                    }}
+                    · {{ entry.source_location }}
+                  </div>
+                }
+                @if (entry.quantity !== null) {
+                  <div>{{ 'Quantity' | t }}: {{ entry.quantity }}</div>
+                }
+                @if (entry.warehouse_id) {
+                  <div>
+                    {{
+                      api.context()!.warehouses[entry.warehouse_id]?.ref ||
+                        'Warehouse #' + entry.warehouse_id
+                    }}
+                    · {{ entry.location }}
+                  </div>
+                }
+                @if (entry.reason) {
+                  <div>{{ entry.reason }}</div>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5">{{ 'No recorded actions match these filters' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button
+        mat-stroked-button
+        (click)="load(data.page - 1)"
+        [disabled]="busy() || data.page <= 1"
+      >
+        {{ 'Previous' | t }}
+      </button>
+      <span>{{ 'Page' | t }} {{ data.page }}</span>
+      <button
+        mat-stroked-button
+        (click)="load(data.page + 1)"
+        [disabled]="busy() || data.page * data.page_size >= data.total"
+      >
+        {{ 'Next' | t }}
+      </button>
+    </div>
+  }
+}

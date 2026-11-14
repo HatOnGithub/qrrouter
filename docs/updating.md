@@ -1,5 +1,7 @@
 # Update guide
 
+Refresh QR Router's module permissions after installing the updated module. Non-administrators now need an explicit **Use QR Router** grant and individual action permissions; the old **manage** grant controls configuration only. Review user and group grants using the [permission guide](user-guide/help.md#missing-pages-or-actions) before operators resume work.
+
 [Project overview](../README.md) | [Installation](installation.md) | [User guide](user-guide/README.md)
 
 Updates replace application files. Inventory, configuration and native stock must remain in their existing persistent stores. Use matching module and service files from the same release.

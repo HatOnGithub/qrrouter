@@ -3,6 +3,7 @@ import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
 import { faPlus, faPrint } from '@fortawesome/free-solid-svg-icons';
 
+/** Create bounded label batches and link authorized printouts; native receipt handling stays in PHP. */
 @Component({
   selector: 'qrr-labels',
   standalone: true,
@@ -16,6 +17,7 @@ export class LabelsComponent {
   protected api = inject(InventoryService);
   protected count = 20;
   protected format = 'dymo-25x54';
+  protected symbology = 'QRCODE';
   protected busy = signal(false);
   protected error = signal('');
   protected batches = computed(() =>

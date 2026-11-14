@@ -18,6 +18,10 @@ public static class Creation
         return value;
     }
 
+    /// <summary>
+    /// Prepare normalized labels/native identities without persistence or Dolibarr access.
+    /// PHP supplies the trusted product prefix and checks native identity availability.
+    /// </summary>
     public static JsonObject Prepare(JsonObject data)
     {
         var type = data.S("type", "generic");

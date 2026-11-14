@@ -18,7 +18,7 @@ with socket.socket() as sock:
     port = sock.getsockname()[1]
 base = f'http://127.0.0.1:{port}'
 key = secrets.token_hex(32)
-headers = {'X-Api-Key': key, 'X-Qrr-Entity': '1', 'X-Qrr-User': '7', 'X-Qrr-Read': '1',
+headers = {'X-Api-Key': key, 'X-Qrr-Entity': '1', 'X-Qrr-User': '7', 'X-Qrr-Read': '1', 'X-Qrr-Use': '1',
            'X-Qrr-Manage': '1', 'X-Qrr-Admin': '1', 'X-Qrr-Stock': '1', 'Content-Type': 'application/json'}
 passed = 0
 

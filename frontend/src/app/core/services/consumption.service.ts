@@ -3,6 +3,7 @@ import { ConsumptionEntry, Item } from '@core/models/inventory';
 import { InventoryService } from './inventory.service';
 import { TranslationService } from './translation.service';
 
+/** Resolve consumption destinations only through the gateway's authorized reference catalog. */
 @Injectable({ providedIn: 'root' })
 export class ConsumptionService {
   private inventory = inject(InventoryService);

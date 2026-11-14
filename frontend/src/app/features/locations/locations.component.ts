@@ -3,7 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SharedModule } from '@shared/shared.module';
 import { InventoryService } from '@services/inventory.service';
-import { BinSummary, Level } from '@core/models/inventory';
+import { BinSummary, Level, LocationScan } from '@core/models/inventory';
 import { faFloppyDisk, faPrint } from '@fortawesome/free-solid-svg-icons';
 import {
   LocationLevelsEditorComponent,
@@ -11,6 +11,7 @@ import {
 } from './location-levels-editor.component';
 
 interface LocationData {
+  pending_count?: number;
   bins: string[];
   summary: BinSummary;
   qr: Record<string, { known: number; unknown: number }>;
@@ -37,6 +38,7 @@ export class LocationsComponent {
   protected error = signal('');
   protected notice = signal('');
   protected busy = signal(false);
+  protected updated = signal('');
   protected show: Record<string, boolean> = {};
   protected separator: Record<string, string> = {};
   protected showWarehouse = false;
@@ -84,6 +86,10 @@ export class LocationsComponent {
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed())
       .subscribe(query => {
+        if (query.get('location')) {
+          void this.openLocation(query.get('location')!);
+          return;
+        }
         const warehouse = Number(query.get('warehouse_id'));
         if (this.api.context()!.warehouses[warehouse]) {
           this.warehouse = warehouse;
@@ -95,6 +101,19 @@ export class LocationsComponent {
           );
         }
       });
+  }
+
+  private async openLocation(payload: string): Promise<void> {
+    this.busy.set(true);
+    try {
+      const location = await this.api.read<LocationScan>('location-qr', { payload });
+      this.warehouse = location.warehouse_id;
+      await this.load(true, location.bin);
+    } catch (error) {
+      this.error.set(this.api.message(error));
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected async load(
@@ -125,6 +144,7 @@ export class LocationsComponent {
       });
       if (request !== this.sequence) return;
       this.data.set(data);
+      this.updated.set(new Date().toISOString());
       if (newWarehouse) {
         const levels = await this.api.levels(this.warehouse);
         if (request !== this.sequence) return;

@@ -5,6 +5,10 @@ using QrRouterApi.Services;
 
 namespace QrRouterApi.Controllers;
 
+/// <summary>
+/// Private adapter API. Identity headers are trusted only after API-key authentication;
+/// native object access is established by PHP before it calls this controller.
+/// </summary>
 [ApiController]
 [Route("api/inventory")]
 public sealed class InventoryController(IInventoryService service) : ControllerBase
@@ -22,12 +26,18 @@ public sealed class InventoryController(IInventoryService service) : ControllerB
             Flag("X-Qrr-Read"),
             Flag("X-Qrr-Manage"),
             Flag("X-Qrr-Stock"),
-            Flag("X-Qrr-Admin")
+            Flag("X-Qrr-Admin"),
+            Flag("X-Qrr-History"),
+            Flag("X-Qrr-Use"),
+            Request
+                .Headers["X-Qrr-Permissions"]
+                .ToString()
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         );
     }
 
     [HttpGet]
-    // The PHP adapter does not use private audit history. Load it only for explicit exports.
+    // Normal inventory reads omit history; its permission-checked query serves the history views.
     public IActionResult Get([FromQuery] bool includeHistory = false) =>
         Ok(service.State(Actor(), includeHistory));
 

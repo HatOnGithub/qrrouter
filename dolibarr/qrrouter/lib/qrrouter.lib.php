@@ -125,11 +125,10 @@ function qrr_read_right($user) {
     return qrr_internal_user($user) &&
         qrr_module_enabled() &&
         (!empty($user->admin) ||
-            $user->hasRight('qrrouter', 'read') ||
-            $user->hasRight('qrrouter', 'manage'));
+            ($user->hasRight('qrrouter', 'use') && $user->hasRight('qrrouter', 'read')));
 }
 function qrr_write_right($user) {
-    return qrr_read_right($user) && (!empty($user->admin) || $user->hasRight('qrrouter', 'manage'));
+    return qrr_permission_right($user, 'manage');
 }
 function qrr_products_right($user) {
     return qrr_internal_user($user) && (!empty($user->admin) || $user->hasRight('produit', 'lire'));
@@ -144,6 +143,7 @@ function qrr_token() {
     }
     return $_SESSION['qrr_token'];
 }
+/** Module-session CSRF check in addition to the native token checked by Dolibarr bootstrap. */
 function qrr_check_post() {
     if (
         $_SERVER['REQUEST_METHOD'] !== 'POST' ||
@@ -198,6 +198,10 @@ function qrr_base() {
 function qrr_data_dir() {
     return rtrim(DOL_DATA_ROOT, '/\\') . '/qrrouter/entity-' . (int) $GLOBALS['conf']->entity;
 }
+/**
+ * Adapter convenience state, not a browser response or complete recovery/export contract.
+ * Recovery helpers that need original snapshots must explicitly fetch private service state.
+ */
 function qrr_load_state() {
     global $db;
     $state = qrr_service('GET', '');
@@ -216,7 +220,7 @@ function qrr_load_state() {
 }
 
 function qrr_product($db, $id) {
-    if ((int) $id <= 0) {
+    if ((int) $id <= 0 || !qrr_products_right($GLOBALS['user'])) {
         return null;
     }
     require_once DOL_DOCUMENT_ROOT . '/product/class/product.class.php';
@@ -227,13 +231,21 @@ function qrr_product($db, $id) {
     if (
         (int) $p->type !== 0 ||
         !isset($p->entity) ||
-        !in_array((int) $p->entity, array_map('intval', explode(',', getEntity('product'))), true)
+        !in_array(
+            (int) $p->entity,
+            array_map('intval', explode(',', getEntity('product'))),
+            true,
+        ) ||
+        !qrr_native_read_access($GLOBALS['user'], 'produit', (int) $id, 'product&product')
     ) {
         return null;
     }
     return $p;
 }
 function qrr_warehouses($db) {
+    if (!qrr_stock_read_right($GLOBALS['user'])) {
+        return [];
+    }
     $warehouses = [];
     $sql =
         'SELECT rowid, ref, lieu FROM ' .
@@ -246,13 +258,19 @@ function qrr_warehouses($db) {
         throw new RuntimeException('Unable to read Dolibarr warehouses');
     }
     while ($r = $db->fetch_object($res)) {
-        $warehouses[(int) $r->rowid] = ['ref' => (string) $r->ref, 'label' => (string) $r->lieu];
+        if (qrr_native_read_access($GLOBALS['user'], 'stock', (int) $r->rowid, 'entrepot&stock')) {
+            $warehouses[(int) $r->rowid] = [
+                'ref' => (string) $r->ref,
+                'label' => (string) $r->lieu,
+            ];
+        }
     }
     $db->free($res);
     return $warehouses;
 }
 function qrr_stock_totals($db, $productIds) {
     $out = [];
+    $visibleWarehouses = qrr_warehouses($db);
     $ids = array_values(array_unique(array_filter(array_map('intval', $productIds))));
     if (!$ids) {
         return $out;
@@ -272,6 +290,12 @@ function qrr_stock_totals($db, $productIds) {
         throw new RuntimeException('Unable to read Dolibarr stock');
     }
     while ($r = $db->fetch_object($res)) {
+        if (
+            !isset($visibleWarehouses[(int) $r->fk_entrepot]) ||
+            !qrr_product($db, (int) $r->fk_product)
+        ) {
+            continue;
+        }
         $out[(int) $r->fk_product][(int) $r->fk_entrepot] = (float) $r->reel;
     }
     $db->free($res);
@@ -280,6 +304,10 @@ function qrr_stock_totals($db, $productIds) {
 
 function qrr_bin_valid($bin) {
     return is_string($bin) && strlen($bin) <= 100 && !preg_match('/[<>\x00-\x1f]/', $bin);
+}
+/** PHP coerces numeric-looking map keys to integers; code lists must remain JSON strings. */
+function qrr_item_codes($items) {
+    return array_map('strval', array_keys($items));
 }
 function qrr_input_code($code) {
     return strtoupper(trim((string) $code));
@@ -353,6 +381,7 @@ function qrr_warehouse_person_name($display) {
 /** Reuse an exact employee-named warehouse, or create one through native Entrepot::create().
  * Creation is only permitted to Dolibarr stock-warehouse creators; never direct SQL.
  */
+/** Resolve/create an employee mapping without bypassing native user or warehouse-create rights. */
 function qrr_ensure_personal_warehouse($db, $actingUser, $personId, $people) {
     if (!isset($people[$personId])) {
         throw new RuntimeException('Choose an active Dolibarr user');

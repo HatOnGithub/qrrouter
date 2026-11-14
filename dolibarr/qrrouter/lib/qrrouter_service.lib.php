@@ -45,6 +45,10 @@ function qrr_service_settings() {
     }
 }
 
+/**
+ * Private transport. Build identity/capability headers from the current Dolibarr user/entity,
+ * never inbound browser headers. A timeout is an uncertain outcome, not proof of rollback.
+ */
 function qrr_service($method, $action, $data = null) {
     global $user, $conf;
     $settings = qrr_service_settings();
@@ -58,10 +62,17 @@ function qrr_service($method, $action, $data = null) {
         'X-Api-Key: ' . $key,
         'X-Qrr-Entity: ' . (int) $conf->entity,
         'X-Qrr-User: ' . (int) $user->id,
-        'X-Qrr-Read: ' . (qrr_read_right($user) ? '1' : '0'),
+        'X-Qrr-Read: ' . (qrr_inventory_right($user) ? '1' : '0'),
+        'X-Qrr-Use: ' . (qrr_read_right($user) ? '1' : '0'),
+        'X-Qrr-Permissions: ' .
+        implode(
+            ',',
+            array_filter(qrr_permission_keys(), fn($right) => qrr_permission_right($user, $right)),
+        ),
         'X-Qrr-Manage: ' . (qrr_write_right($user) ? '1' : '0'),
         'X-Qrr-Stock: ' . (qrr_stock_write_right($user) ? '1' : '0'),
         'X-Qrr-Admin: ' . (!empty($user->admin) ? '1' : '0'),
+        'X-Qrr-History: ' . (qrr_history_right($user) ? '1' : '0'),
     ];
     $handle = curl_init(
         $base . '/api/inventory' . ($action !== '' ? '/' . rawurlencode($action) : ''),
@@ -98,6 +109,7 @@ function qrr_service($method, $action, $data = null) {
     }
     return $action === '' ? $result : $result['result'] ?? null;
 }
+/** Attach fresh native observations and prevent unrelated writes during root synchronization. */
 function qrr_command($action, $data) {
     global $db;
     if (!in_array($action, ['native-finish', 'native-cancel'], true)) {
@@ -161,9 +173,6 @@ function qrr_warehouse_closed($warehouse) {
 
 /** Integration preflight before durable staging; native execution repeats checks before writing. */
 function qrr_service_preflight($db, $user, $entry, $plan) {
-    if (!empty($entry['product_lot_id'])) {
-        qrr_native_rights($user);
-    }
     if (empty($plan['effects'])) {
         return;
     }

@@ -11,44 +11,60 @@
         <fa-icon [icon]="icons.manual" aria-hidden="true" />
         <strong>{{ 'Manual / USB entry' | t }}</strong>
       </a>
-      @if (api.context()!.permissions.manage) {
-        <a routerLink="/register">
-          <fa-icon [icon]="icons.register" aria-hidden="true" />
-          <strong>{{ 'Register items' | t }}</strong>
-        </a>
-        <a routerLink="/workflow/transfer">
-          <fa-icon [icon]="icons.transfer" aria-hidden="true" />
-          <strong>{{ 'Transfer contents between containers' | t }}</strong>
-        </a>
-        <a routerLink="/workflow/move">
-          <fa-icon [icon]="icons.move" aria-hidden="true" />
-          <strong>{{ 'Move items' | t }}</strong>
-          <small>{{ 'Warehouse or bin' | t }}</small>
-        </a>
-        <a routerLink="/workflow/consume">
-          <fa-icon [icon]="icons.consume" aria-hidden="true" />
-          <strong>{{ 'Consume items' | t }}</strong>
-          <small>{{ 'Remove from stock' | t }}</small>
-        </a>
-        <a routerLink="/workflow/return">
-          <fa-icon [icon]="icons.return" aria-hidden="true" />
-          <strong>{{ 'Return items' | t }}</strong>
-          <small>{{ 'Return to stock' | t }}</small>
-        </a>
+      @if (api.canAny('create', 'move', 'consume', 'return', 'adjust', 'loans')) {
+        @if (api.can('create')) {
+          <a routerLink="/register">
+            <fa-icon [icon]="icons.register" aria-hidden="true" />
+            <strong>{{ 'Register items' | t }}</strong>
+          </a>
+        }
+        @if (api.can('transfer')) {
+          <a routerLink="/workflow/transfer">
+            <fa-icon [icon]="icons.transfer" aria-hidden="true" />
+            <strong>{{ 'Transfer contents between containers' | t }}</strong>
+          </a>
+        }
+        @if (api.can('move')) {
+          <a routerLink="/workflow/move">
+            <fa-icon [icon]="icons.move" aria-hidden="true" />
+            <strong>{{ 'Move items' | t }}</strong>
+            <small>{{ 'Warehouse or bin' | t }}</small>
+          </a>
+        }
+        @if (api.can('consume')) {
+          <a routerLink="/workflow/consume">
+            <fa-icon [icon]="icons.consume" aria-hidden="true" />
+            <strong>{{ 'Consume items' | t }}</strong>
+            <small>{{ 'Remove from stock' | t }}</small>
+          </a>
+        }
+        @if (api.can('return')) {
+          <a routerLink="/workflow/return">
+            <fa-icon [icon]="icons.return" aria-hidden="true" />
+            <strong>{{ 'Return items' | t }}</strong>
+            <small>{{ 'Return to stock' | t }}</small>
+          </a>
+        }
         @if (api.context()!.permissions.stock) {
-          <a routerLink="/workflow/checkout">
-            <fa-icon [icon]="icons.checkout" aria-hidden="true" />
-            <strong>{{ 'Check out items' | t }}</strong>
-          </a>
-          <a routerLink="/workflow/checkin">
-            <fa-icon [icon]="icons.checkin" aria-hidden="true" />
-            <strong>{{ 'Check in items' | t }}</strong>
-          </a>
-          <a routerLink="/workflow/correct">
-            <fa-icon [icon]="icons.correct" aria-hidden="true" />
-            <strong>{{ 'Correct container quantity' | t }}</strong>
-            <small>{{ 'Count and adjust' | t }}</small>
-          </a>
+          @if (api.can('checkout')) {
+            <a routerLink="/workflow/checkout">
+              <fa-icon [icon]="icons.checkout" aria-hidden="true" />
+              <strong>{{ 'Check out items' | t }}</strong>
+            </a>
+          }
+          @if (api.can('checkin')) {
+            <a routerLink="/workflow/checkin">
+              <fa-icon [icon]="icons.checkin" aria-hidden="true" />
+              <strong>{{ 'Check in items' | t }}</strong>
+            </a>
+          }
+          @if (api.can('correct')) {
+            <a routerLink="/workflow/correct">
+              <fa-icon [icon]="icons.correct" aria-hidden="true" />
+              <strong>{{ 'Correct container quantity' | t }}</strong>
+              <small>{{ 'Count and adjust' | t }}</small>
+            </a>
+          }
         }
       }
     </nav>
@@ -66,7 +82,8 @@
         <qrr-capture
           [initial]="codes()"
           [multiple]="true"
-          (changed)="codes.set($event); resultIndex.set(0)"
+          content="any"
+          (changed)="scanned($event)"
         />
         <a
           action

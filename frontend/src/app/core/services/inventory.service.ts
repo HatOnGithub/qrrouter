@@ -3,6 +3,10 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Bootstrap, Item, Level, Lookup } from '@core/models/inventory';
 
+/**
+ * Shared public inventory snapshot and same-origin gateway client. PHP supplies tokens and
+ * capability flags; neither the private service key nor native movement evidence lives here.
+ */
 @Injectable({ providedIn: 'root' })
 export class InventoryService {
   private http = inject(HttpClient);
@@ -14,6 +18,25 @@ export class InventoryService {
   readonly items = computed(() => Object.values(this.context()?.state.items || {}));
   readonly loading = signal(false);
   readonly error = signal('');
+  /** UI affordance only: server endpoints independently enforce grants and native object access. */
+  can(action: string): boolean {
+    const permissions = this.context()?.permissions;
+    if (!permissions?.use) return false;
+    const key =
+      (
+        { correct: 'adjust', transfer: 'adjust', checkout: 'loans', checkin: 'loans' } as Record<
+          string,
+          string
+        >
+      )[action] || action;
+    return (
+      !!permissions[key as keyof Bootstrap['permissions']] &&
+      (!['adjust', 'loans', 'recover'].includes(key) || permissions.stock)
+    );
+  }
+  canAny(...actions: string[]): boolean {
+    return actions.some(action => this.can(action));
+  }
   itemName(item: Item | undefined, fallback = ''): string {
     return (
       item?.label ||
@@ -39,6 +62,7 @@ export class InventoryService {
     return firstValueFrom(this.http.get<T>(this.base, { params: { resource, ...values } }));
   }
 
+  /** Submit choices with both form tokens; callers refresh and inspect uncertain/pending results. */
   async command<T>(action: string, payload: unknown): Promise<T> {
     const context = this.context();
     if (!context) throw new Error('Session is not loaded. Refresh the page.');

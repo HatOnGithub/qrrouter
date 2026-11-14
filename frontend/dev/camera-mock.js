@@ -9,6 +9,7 @@
   const mode = document.querySelector('#mock-camera-mode');
   const fixture = document.querySelector('#mock-camera-fixture');
   const content = document.querySelector('#mock-camera-content');
+  const symbology = document.querySelector('#mock-barcode-symbology');
   const format = document.querySelector('#mock-camera-format');
   const zoom = document.querySelector('#mock-camera-zoom');
   const rotation = document.querySelector('#mock-camera-rotation');
@@ -53,7 +54,10 @@
       context.translate(width / 2, height / 2);
       context.rotate((Number(rotation.value) * Math.PI) / 180);
       context.imageSmoothingEnabled = false;
-      context.drawImage(image, -size / 2, -size / 2, size, size);
+      const aspect = image.naturalWidth / image.naturalHeight;
+      const drawWidth = aspect >= 1 ? size : size * aspect;
+      const drawHeight = aspect >= 1 ? size / aspect : size;
+      context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       context.restore();
     }
     context.textAlign = 'center';
@@ -204,7 +208,7 @@
     show.disabled = true;
     reportError();
     try {
-      const response = await fetch('/__mock/camera/qr?' + new URLSearchParams({ text: value }));
+      const response = await fetch('/__mock/camera/qr?' + new URLSearchParams({ text: value, symbology: symbology.value }));
       if (!response.ok) throw new Error((await response.json()).message);
       const source = URL.createObjectURL(await response.blob());
       const next = new Image();

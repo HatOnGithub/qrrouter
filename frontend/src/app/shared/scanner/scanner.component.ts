@@ -12,9 +12,9 @@ import {
   viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import jsQR from 'jsqr';
+import { BarcodeDecoder } from './barcode-decoder';
 import { SharedModule } from '@shared/shared.module';
-import { normalizeCode, validCode } from './codes';
+import { locationCode, physicalBinCode, normalizeCode, validCode } from './codes';
 import { TranslationService } from '@services/translation.service';
 import {
   faCamera,
@@ -26,6 +26,10 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
+/**
+ * Camera/manual capture with shared normalization and feature-supplied eligibility validation.
+ * Capturing a valid identifier never proves access or reserves stock; the gateway rechecks it.
+ */
 @Component({
   selector: 'qrr-scanner',
   standalone: true,
@@ -51,7 +55,9 @@ export class ScannerComponent implements OnDestroy {
   private ready = signal(false);
   private video = viewChild<ElementRef<HTMLVideoElement>>('video');
   readonly multiple = input(true);
+  readonly content = input<'items' | 'locations' | 'items-or-bins' | 'any'>('items');
   readonly initial = input<string[]>([]);
+  readonly validate = input<(code: string, codes: string[]) => string>(() => '');
   readonly changed = output<string[]>();
   readonly thumbnail = output<string>();
   protected codes = signal<string[]>([]);
@@ -63,6 +69,8 @@ export class ScannerComponent implements OnDestroy {
   private frame = 0;
   private generation = 0;
   private canvas = document.createElement('canvas');
+  private decoder = new BarcodeDecoder();
+  private lastDecode = 0;
 
   constructor() {
     effect(() => this.codes.set([...this.initial()]));
@@ -93,8 +101,17 @@ export class ScannerComponent implements OnDestroy {
     if (!values.length) return;
     const next = [...this.codes()];
     for (const code of values) {
-      if (!validCode(code)) {
+      const accepted =
+        (validCode(code) && this.content() !== 'locations') ||
+        (locationCode(code) && ['locations', 'any'].includes(this.content())) ||
+        (physicalBinCode(code) && ['items-or-bins', 'any'].includes(this.content()));
+      if (!accepted) {
         this.error.set(this.translations.text('Invalid identifier') + ': ' + code.slice(0, 52));
+        return;
+      }
+      const problem = this.validate()(code, next);
+      if (problem) {
+        this.error.set(this.translations.text(problem) + ': ' + code);
         return;
       }
       if (!next.includes(code)) next.push(code);
@@ -117,6 +134,8 @@ export class ScannerComponent implements OnDestroy {
     this.changed.emit(this.codes());
   }
 
+  // stop() advances the generation. A late permission/play result from an earlier camera
+  // session must release its stream instead of restarting capture after navigation or stop.
   protected async start(): Promise<void> {
     this.stop();
     const generation = this.generation;
@@ -157,6 +176,12 @@ export class ScannerComponent implements OnDestroy {
 
   private decode(generation: number): void {
     if (generation !== this.generation || !this.stream) return;
+    // Bound multi-format decoding work while keeping the camera preview smooth.
+    if (performance.now() - this.lastDecode < 100) {
+      this.frame = requestAnimationFrame(() => this.decode(generation));
+      return;
+    }
+    this.lastDecode = performance.now();
     const video = this.video()!.nativeElement;
     if (video.readyState >= 2 && video.videoWidth) {
       const scale = Math.min(1, 800 / video.videoWidth);
@@ -165,12 +190,13 @@ export class ScannerComponent implements OnDestroy {
       const context = this.canvas.getContext('2d', { willReadFrequently: true })!;
       context.drawImage(video, 0, 0, this.canvas.width, this.canvas.height);
       const pixels = context.getImageData(0, 0, this.canvas.width, this.canvas.height);
-      const result = jsQR(pixels.data, pixels.width, pixels.height, {
-        inversionAttempts: 'attemptBoth',
-      });
+      const result = this.decoder.decode(pixels.data, pixels.width, pixels.height);
       if (result) {
-        const code = normalizeCode(result.data);
-        if (validCode(code) && !this.codes().includes(code)) {
+        const code = normalizeCode(result);
+        if (
+          (validCode(code) || locationCode(code) || physicalBinCode(code)) &&
+          !this.codes().includes(code)
+        ) {
           this.add(code);
           if (this.codes().includes(code)) {
             const small = document.createElement('canvas');

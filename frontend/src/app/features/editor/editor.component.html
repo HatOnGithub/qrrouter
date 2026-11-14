@@ -21,8 +21,8 @@
       ) | t
     }}
   </p>
-  @if (!api.context()!.permissions.manage) {
-    <p class="alert">{{ 'QR management permission required' | t }}</p>
+  @if (!api.can(editing ? 'modify' : 'create')) {
+    <p class="alert">{{ 'Permission required for this QR action' | t }}</p>
   } @else {
     @if (error()) {
       <p class="alert" role="alert">{{ error() }}</p>

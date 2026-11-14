@@ -6,7 +6,6 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
 
 function qrr_stock_write_right($user) {
     return qrr_inventory_right($user) &&
-        qrr_write_right($user) &&
         (!empty($user->admin) || $user->hasRight('stock', 'mouvement', 'creer'));
 }
 function qrr_native_batch($db, $product, $item, $warehouseId, $qty) {
@@ -41,7 +40,10 @@ function qrr_native_batch($db, $product, $item, $warehouseId, $qty) {
     $sellby = $obj->sellby ? $db->jdate($obj->sellby) : 0;
     return [$batch, $eatby, $sellby];
 }
-/** Return signed movements tagged with one unique inventory code. Read only. */
+/**
+ * Read matching outgoing/incoming movements for one handoff inventorycode. Extra or duplicate
+ * movements are conflicting evidence, not permission to infer that a transfer completed.
+ */
 function qrr_transfer_evidence($db, $pending) {
     $sql =
         'SELECT fk_entrepot, value, fk_product, batch FROM ' .
@@ -199,7 +201,10 @@ function qrr_do_native_transfer($db, $user, $item, $pending) {
         throw $e;
     }
 }
-/** Durable staged state: if the PHP request crashes after stock commit, reconcile using inventorycode. */
+/**
+ * Preflight and persist loan intent before executing the native transfer. The caller performs
+ * stock execution; a crash after native commit is reconciled using the saved inventorycode.
+ */
 function qrr_stage_handoff($db, $user, $code, $kind, $personId, $reason, $warehouses, $users) {
     $data = [
         'code' => $code,

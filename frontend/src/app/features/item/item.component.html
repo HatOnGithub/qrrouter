@@ -1,6 +1,21 @@
 @if (item(); as item) {
   <h1>{{ api.itemName(item) }}</h1>
   <p class="subtitle">QR {{ item.code }} · {{ item.type }}</p>
+  @if (item.physical_bin_id) {
+    <p>
+      <a routerLink="/bins" [queryParams]="{ bin_id: item.physical_bin_id }">
+        {{ 'Physical bin' | t }} {{ item.physical_bin_id }}
+      </a>
+    </p>
+  }
+  @if (item.pending_bin_move) {
+    <p class="alert">
+      {{
+        'This item belongs to an unfinished physical bin move. Reconcile any pending stock operation, then resume the bin move.'
+          | t
+      }}
+    </p>
+  }
   @if (error()) {
     <p class="alert" role="alert">{{ error() }}</p>
   }
@@ -17,7 +32,8 @@
             | t
         }}
       </p>
-      @if (api.context()!.permissions.stock) {
+      <qrr-pending-details [pending]="pending" [operation]="pending.kind" />
+      @if (api.can('recover')) {
         <button mat-stroked-button [disabled]="busy()" (click)="reconcile()">
           <fa-icon [icon]="icons.reconcile" aria-hidden="true" />
           {{ 'Reconcile pending operation' | t }}
@@ -102,34 +118,40 @@
           [alt]="'QR ' + item.code"
         />
         <p>
-          <a
-            mat-stroked-button
-            [href]="api.link('label.php', { code: item.code })"
-            target="_blank"
-            rel="noopener"
-          >
-            <fa-icon [icon]="icons.print" aria-hidden="true" />
-            {{ 'Print label' | t }}
-          </a>
-          <a
-            mat-stroked-button
-            [href]="api.link('label.php', { code: item.code, format: 'dymo-25x54' })"
-            target="_blank"
-            rel="noopener"
-          >
-            {{ 'DYMO label sizes' | t }}
-          </a>
+          @if (api.can('print')) {
+            <a
+              mat-stroked-button
+              [href]="api.link('label.php', { code: item.code })"
+              target="_blank"
+              rel="noopener"
+            >
+              <fa-icon [icon]="icons.print" aria-hidden="true" />
+              {{ 'Print label' | t }}
+            </a>
+          }
+          @if (api.can('print')) {
+            <a
+              mat-stroked-button
+              [href]="api.link('label.php', { code: item.code, format: 'dymo-25x54' })"
+              target="_blank"
+              rel="noopener"
+            >
+              {{ 'DYMO label sizes' | t }}
+            </a>
+          }
         </p>
       </div>
     </div>
-    @if (api.context()!.permissions.manage) {
+    @if (api.canAny('create', 'modify', 'delete', 'move', 'consume', 'return', 'adjust', 'loans')) {
       <div class="actions">
         @if (item.type === 'unassigned') {
-          <a mat-flat-button routerLink="/register" [queryParams]="{ code: item.code }">
-            <fa-icon [icon]="icons.register" aria-hidden="true" />
-            {{ 'Register item' | t }}
-          </a>
-          @if (!item.pending_operation && !item.pending_handoff) {
+          @if (api.can('create')) {
+            <a mat-flat-button routerLink="/register" [queryParams]="{ code: item.code }">
+              <fa-icon [icon]="icons.register" aria-hidden="true" />
+              {{ 'Register item' | t }}
+            </a>
+          }
+          @if (api.can('delete') && !item.pending_operation && !item.pending_handoff) {
             @if (confirmingDelete()) {
               <div role="group" [attr.aria-label]="'Delete unassigned QR code' | t">
                 <p>
@@ -154,68 +176,99 @@
           }
         }
         @if (available(item)) {
-          <a mat-stroked-button [routerLink]="['/edit', item.code]">
-            <fa-icon [icon]="icons.edit" aria-hidden="true" />
-            {{ 'Edit metadata' | t }}
-          </a>
-          <a mat-flat-button routerLink="/workflow/move" [queryParams]="{ code: item.code }">
-            <fa-icon [icon]="icons.move" aria-hidden="true" />
-            {{ 'Move' | t }}
-          </a>
-          <a mat-stroked-button routerLink="/workflow/consume" [queryParams]="{ code: item.code }">
-            <fa-icon [icon]="icons.consume" aria-hidden="true" />
-            {{ 'Consume' | t }}
-          </a>
-          @if (api.context()!.permissions.stock) {
-            <a
-              mat-stroked-button
-              routerLink="/workflow/checkout"
-              [queryParams]="{ code: item.code }"
-            >
-              <fa-icon [icon]="icons.checkout" aria-hidden="true" />
-              {{ 'Check out' | t }}
+          @if (api.can('modify')) {
+            <a mat-stroked-button [routerLink]="['/edit', item.code]">
+              <fa-icon [icon]="icons.edit" aria-hidden="true" />
+              {{ 'Edit metadata' | t }}
             </a>
           }
+          @if (api.can('move')) {
+            <a mat-flat-button routerLink="/workflow/move" [queryParams]="{ code: item.code }">
+              <fa-icon [icon]="icons.move" aria-hidden="true" />
+              {{ 'Move' | t }}
+            </a>
+          }
+          @if (api.can('consume')) {
+            <a
+              mat-stroked-button
+              routerLink="/workflow/consume"
+              [queryParams]="{ code: item.code }"
+            >
+              <fa-icon [icon]="icons.consume" aria-hidden="true" />
+              {{ 'Consume' | t }}
+            </a>
+          }
+          @if (api.context()!.permissions.stock) {
+            @if (api.can('checkout')) {
+              <a
+                mat-stroked-button
+                routerLink="/workflow/checkout"
+                [queryParams]="{ code: item.code }"
+              >
+                <fa-icon [icon]="icons.checkout" aria-hidden="true" />
+                {{ 'Check out' | t }}
+              </a>
+            }
+          }
           @if (item.type === 'box') {
-            <a
-              mat-stroked-button
-              routerLink="/workflow/correct"
-              [queryParams]="{ code: item.code }"
-            >
-              <fa-icon [icon]="icons.correct" aria-hidden="true" />
-              {{ 'Correct quantity' | t }}
-            </a>
-            <a
-              mat-stroked-button
-              routerLink="/workflow/transfer"
-              [queryParams]="{ code: item.code }"
-            >
-              <fa-icon [icon]="icons.transfer" aria-hidden="true" />
-              {{ 'Transfer contents' | t }}
-            </a>
+            @if (api.can('correct')) {
+              <a
+                mat-stroked-button
+                routerLink="/workflow/correct"
+                [queryParams]="{ code: item.code }"
+              >
+                <fa-icon [icon]="icons.correct" aria-hidden="true" />
+                {{ 'Correct quantity' | t }}
+              </a>
+            }
+            @if (api.can('transfer')) {
+              <a
+                mat-stroked-button
+                routerLink="/workflow/transfer"
+                [queryParams]="{ code: item.code }"
+              >
+                <fa-icon [icon]="icons.transfer" aria-hidden="true" />
+                {{ 'Transfer contents' | t }}
+              </a>
+            }
           }
         }
         @if (item.checkout && api.context()!.permissions.stock) {
-          <a mat-stroked-button routerLink="/workflow/checkin" [queryParams]="{ code: item.code }">
-            <fa-icon [icon]="icons.checkin" aria-hidden="true" />
-            {{ 'Check in' | t }}
-          </a>
+          @if (api.can('checkin')) {
+            <a
+              mat-stroked-button
+              routerLink="/workflow/checkin"
+              [queryParams]="{ code: item.code }"
+            >
+              <fa-icon [icon]="icons.checkin" aria-hidden="true" />
+              {{ 'Check in' | t }}
+            </a>
+          }
         }
         @if ((item.consumed_units || 0) > 0 || item.status === 'consumed') {
-          <a mat-stroked-button routerLink="/workflow/return" [queryParams]="{ code: item.code }">
-            <fa-icon [icon]="icons.return" aria-hidden="true" />
-            {{ 'Return' | t }}
-          </a>
+          @if (api.can('return')) {
+            <a mat-stroked-button routerLink="/workflow/return" [queryParams]="{ code: item.code }">
+              <fa-icon [icon]="icons.return" aria-hidden="true" />
+              {{ 'Return' | t }}
+            </a>
+          }
         }
         @if (item.type !== 'unassigned') {
-          <a mat-stroked-button routerLink="/create" [queryParams]="{ copy: item.code }">
-            <fa-icon [icon]="icons.copy" aria-hidden="true" />
-            {{ 'Copy item' | t }}
-          </a>
+          @if (api.can('create')) {
+            <a mat-stroked-button routerLink="/create" [queryParams]="{ copy: item.code }">
+              <fa-icon [icon]="icons.copy" aria-hidden="true" />
+              {{ 'Copy item' | t }}
+            </a>
+          }
         }
       </div>
     }
   </qrr-card>
+  @if (api.context()!.permissions.history || api.context()!.permissions.admin) {
+    <qrr-card [title]="'Movement history' | t">
+      <qrr-history [code]="item.code" />
+    </qrr-card>
+  }
   @if (item.consumption_log?.length) {
     <qrr-card [title]="'Consumption history' | t">
       <table>

@@ -9,6 +9,15 @@
   <p class="alert success" role="status">{{ notice() | t }}</p>
 }
 <div class="stack">
+  <p class="actions">
+    <a mat-stroked-button routerLink="/bins">{{ 'Physical bins' | t }}</a>
+    <button mat-stroked-button (click)="load()" [disabled]="busy() || !warehouse">
+      {{ 'Refresh contents' | t }}
+    </button>
+    @if (updated()) {
+      <small>{{ 'Updated' | t }}: {{ updated() | date: 'short' }}</small>
+    }
+  </p>
   <qrr-card [title]="'Location inventory' | t">
     <div class="grid">
       <mat-form-field appearance="outline">
@@ -83,8 +92,12 @@
             <tr>
               <td>
                 <a [routerLink]="['/items', item.code]">{{ api.itemName(item) }}</a>
-                @if (api.context()!.permissions.manage) {
-                  <a mat-button [routerLink]="['/edit', item.code]">{{ 'Change location' | t }}</a>
+                @if (api.can('modify')) {
+                  @if (api.can('modify')) {
+                    <a mat-button [routerLink]="['/edit', item.code]">
+                      {{ 'Change location' | t }}
+                    </a>
+                  }
                 }
               </td>
               <td>
@@ -118,11 +131,13 @@
               </td>
               <td>
                 {{ row.generic }}
-                @if (api.context()!.permissions.manage) {
+                @if (api.can('modify')) {
                   @for (code of row.codes; track code) {
-                    <a mat-button [routerLink]="['/edit', code]">
-                      {{ 'Change location' | t }} {{ code }}
-                    </a>
+                    @if (api.can('modify')) {
+                      <a mat-button [routerLink]="['/edit', code]">
+                        {{ 'Change location' | t }} {{ code }}
+                      </a>
+                    }
                   }
                 }
               </td>
@@ -133,29 +148,44 @@
         </tbody>
       </table>
       <div class="actions">
-        <a
-          mat-stroked-button
-          [href]="
-            api.link('bin_print.php', {
-              warehouse_id: warehouse,
-              bin: bin,
-              level_id: reportLevel,
-              level_value: levelValue,
-            })
-          "
-          target="_blank"
-          rel="noopener"
-        >
-          <fa-icon [icon]="icons.print" aria-hidden="true" />
-          {{
-            (reportLevel && levelValue
-              ? 'Print location report'
-              : bin
-                ? 'Print bin inventory'
-                : 'Print warehouse inventory'
-            ) | t
-          }}
-        </a>
+        @if (!reportLevel) {
+          @if (api.can('print')) {
+            <a
+              mat-stroked-button
+              [href]="api.link('bin_print.php', { warehouse_id: warehouse, bin: bin, labels: 1 })"
+              target="_blank"
+              rel="noopener"
+            >
+              {{ 'Print bin labels' | t }}
+            </a>
+          }
+        }
+
+        @if (api.can('print')) {
+          <a
+            mat-stroked-button
+            [href]="
+              api.link('bin_print.php', {
+                warehouse_id: warehouse,
+                bin: bin,
+                level_id: reportLevel,
+                level_value: levelValue,
+              })
+            "
+            target="_blank"
+            rel="noopener"
+          >
+            <fa-icon [icon]="icons.print" aria-hidden="true" />
+            {{
+              (reportLevel && levelValue
+                ? 'Print location report'
+                : bin
+                  ? 'Print bin inventory'
+                  : 'Print warehouse inventory'
+              ) | t
+            }}
+          </a>
+        }
       </div>
       <h2>{{ 'Warehouse stock comparison' | t }}</h2>
       <p class="muted">

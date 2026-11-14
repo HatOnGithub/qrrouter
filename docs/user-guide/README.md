@@ -4,16 +4,18 @@ Open **QR Router** from Dolibarr. On a phone, use **Menu** to open the navigatio
 
 ## Find the right instructions
 
-| Interface area                                                     | Guide                                             |
-| ------------------------------------------------------------------ | ------------------------------------------------- |
-| Inventory, item details, creating and editing                      | [Inventory and items](inventory.md)               |
-| CSV inventory import, export and spreadsheet updates | [CSV import and export](csv.md) |
-| Print QR labels, blank batches, assigned batches and DYMO printing | [Labels and printing](labels.md)                  |
-| Scan QR, manual / USB entry and every warehouse action             | [Scanner workflows](scanner.md)                   |
-| Bins and locations, local label format and Picking                 | [Locations and picking](locations-and-picking.md) |
-| Loans and Personal warehouses                                      | [Employee loans](loans.md)                        |
-| Setup, refresh, permissions and pending operations                 | [Setup and help](help.md)                         |
-| Errors, missing tables, service connectivity and recovery          | [Troubleshooting](../troubleshooting.md)          |
+| Interface area                                                     | Guide                                                                         |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Inventory, item details, creating and editing                      | [Inventory and items](inventory.md)                                           |
+| CSV inventory import, export and spreadsheet updates               | [CSV import and export](csv.md)                                               |
+| Print QR labels, blank batches, assigned batches and DYMO printing | [Labels and printing](labels.md)                                              |
+| Scan QR, manual / USB entry and every warehouse action             | [Scanner workflows](scanner.md)                                               |
+| Bins and locations, local label format and Picking                 | [Locations and picking](locations-and-picking.md)                             |
+| Physical bins, packing and whole-bin moves                         | [Locations and picking](locations-and-picking.md#pack-and-move-physical-bins) |
+| Operation history and QR movements                                 | [Setup and help](help.md#action-history)                                      |
+| Loans and Personal warehouses                                      | [Employee loans](loans.md)                                                    |
+| Setup, refresh, permissions and pending operations                 | [Setup and help](help.md)                                                     |
+| Errors, missing tables, service connectivity and recovery          | [Troubleshooting](../troubleshooting.md)                                      |
 
 ## Before using stock actions
 
@@ -26,6 +28,6 @@ Choose the QR type that matches your use:
 - **Counted Container:** a named box linked to a Dolibarr lot, holding a quantity of one product.
 - **Unassigned printable label:** a QR label to register later.
 
-The printed QR ID identifies the QR entry. A serial or box lot is a separate Dolibarr identity. Scan QR item labels for actions; choose bins in the location fields instead of scanning bin labels.
+The printed QR ID identifies the QR entry. A serial or box lot is a separate Dolibarr identity. Scan item labels for stock actions. Location labels open current contents or select a destination; physical-bin labels identify movable groups of items.
 
 Use **Refresh** after changes made directly in Dolibarr. If an operation is pending, follow [Setup and help](help.md) before repeating it.

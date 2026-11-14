@@ -2,7 +2,8 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
-import { labelFormats, locales, scenarios, translations } from './fixtures.mjs';
+import bwipjs from 'bwip-js';
+import { barcodeFormats, labelFormats, locales, scenarios, translations } from './fixtures.mjs';
 import { MockError, MockStore } from './store.mjs';
 
 const escape = value =>
@@ -13,6 +14,24 @@ const escape = value =>
 const appLink = (route = 'inventory', params = {}) =>
   '/#/' + route + '?' + new URLSearchParams(params);
 const printCss = readFileSync(new URL('./print.css', import.meta.url), 'utf8');
+const barcodeFormat = (id = 'QRCODE', compact = false) => {
+  const format = barcodeFormats.find(row => row.id === id);
+  if (!format || (compact && !['QRCODE', 'DATAMATRIX'].includes(id)))
+    throw new MockError('Unsupported barcode format');
+  return format;
+};
+const barcodeSvg = async (text, symbology = 'QRCODE') => {
+  barcodeFormat(symbology);
+  if (symbology === 'QRCODE') return QRCode.toString(text, { type: 'svg', margin: 4 });
+  return bwipjs.toSVG({
+    bcid: { DATAMATRIX: 'datamatrix', C128: 'code128', PDF417: 'pdf417' }[symbology],
+    text,
+    scale: 3,
+    padding: 10,
+    backgroundcolor: 'FFFFFF',
+    ...(symbology === 'C128' ? { height: 12 } : {}),
+  });
+};
 const page = (title, body, css = '') => `
 <!doctype html>
 <html lang="en">
@@ -67,15 +86,41 @@ function send(response, status, body, type = 'application/json; charset=utf-8') 
 async function printPage(store, url) {
   const params = url.searchParams;
   const locale = params.get('lang') || store.settings.locale;
+  const symbology = params.get('symbology') || 'QRCODE';
+  const barcode = barcodeFormat(
+    symbology,
+    url.pathname.endsWith('/bin_print.php') || url.pathname.endsWith('/physical_bin_print.php')
+  );
   if (!locales.includes(locale)) throw new MockError('Unsupported print language');
   const words = translations(locale);
   const t = text => words[text] || text;
   const controls = `<form class="qrr-noprint" method="get"><label>${escape(t('Output language'))} <select name="lang">${locales.map(id => `<option value="${id}"${id === locale ? ' selected' : ''}>${{ en_US: 'English', nl_NL: 'Nederlands', fr_FR: 'Français' }[id]}</option>`).join('')}</select></label>${[
     ...params,
   ]
-    .filter(([key]) => key !== 'lang')
+    .filter(([key]) => !['lang', 'symbology'].includes(key))
     .map(([key, value]) => `<input type="hidden" name="${escape(key)}" value="${escape(value)}">`)
-    .join('')}<button>${escape(t('Apply language'))}</button></form>`;
+    .join('')}<label>${escape(t('Barcode format'))} <select name="symbology">${barcodeFormats
+    .filter(
+      row =>
+        (!url.pathname.endsWith('/bin_print.php') &&
+          !url.pathname.endsWith('/physical_bin_print.php')) ||
+        ['QRCODE', 'DATAMATRIX'].includes(row.id)
+    )
+    .map(
+      row =>
+        `<option value="${row.id}"${row.id === symbology ? ' selected' : ''}>${row.label}</option>`
+    )
+    .join('')}</select></label><button>${escape(t('Apply language'))}</button></form>`;
+  if (url.pathname.endsWith('/physical_bin_print.php')) {
+    const bin = store
+      .read('physical-bins', new URLSearchParams())
+      .find(bin => bin.id === params.get('bin_id'));
+    if (!bin) throw new MockError('Unknown physical bin');
+    return page(
+      'Physical bin label',
+      `${controls}<section class="label">${await barcodeSvg(bin.qr, symbology)}<strong>${escape(bin.label)}</strong><small>BIN ${escape(bin.id)}</small></section>`
+    );
+  }
   if (url.pathname.endsWith('/bin_print.php')) {
     const warehouse = store.warehouse(params.get('warehouse_id'));
     const bin = params.get('bin') || '';
@@ -93,9 +138,17 @@ async function printPage(store, url) {
           `<tr><td>${escape(item.bin)}</td><td>${escape(store.itemName(item))}</td><td>${escape(store.data.products[item.product_id]?.ref)}</td><td>${escape(item.code)}</td><td>${escape(item.qty ?? '?')}</td></tr>`
       )
       .join('');
+    const example = items.find(item => item.bin_values && Object.keys(item.bin_values).length);
+    const values = example?.bin_values;
+    const payload = values
+      ? `QRRLOC:1:1:${warehouse}:${Buffer.from(JSON.stringify(values)).toString('base64url')}`
+      : '';
+    const label = payload
+      ? `<div class="qrr-location-label">${await barcodeSvg(payload, symbology)}<strong>${escape(bin)}</strong></div>`
+      : '';
     return page(
       'Bin content sheets',
-      `${controls}<h1>${escape(summary.scope || bin || t('Warehouse inventory'))}</h1><p><a href="${escape(appLink('locations', { warehouse_id: warehouse, bin, level_id, level_value }))}">${escape(t('Back to bins'))}</a></p><table><thead><tr>${['Bin', 'Item', 'Product', 'QR', 'Quantity'].map(text => `<th>${escape(t(text))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`
+      `${controls}${label}<h1>${escape(summary.scope || bin || t('Warehouse inventory'))}</h1><p><a href="${escape(appLink('locations', { warehouse_id: warehouse, bin, level_id, level_value }))}">${escape(t('Back to bins'))}</a></p><table><thead><tr>${['Bin', 'Item', 'Product', 'QR', 'Quantity'].map(text => `<th>${escape(t(text))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`
     );
   }
   const batch = params.get('batch');
@@ -109,7 +162,7 @@ async function printPage(store, url) {
   const labels = await Promise.all(
     codes.map(async code => {
       const item = store.item(code);
-      const qr = await QRCode.toString(code, { type: 'svg', margin: 2 });
+      const qr = await barcodeSvg(code, symbology);
       const product = store.data.products[item.product_id];
       const details =
         item.type === 'unassigned'
@@ -121,7 +174,14 @@ async function printPage(store, url) {
   const css = profile
     ? `@media print{@page{size:${profile.width}mm ${profile.height}mm;margin:0}html,body{width:${profile.width}mm;margin:0;padding:0}h1{display:none}.label{display:flex;box-sizing:border-box;width:${profile.width}mm;height:${profile.height}mm;overflow:hidden;margin:0;padding:1mm;gap:1mm;break-after:page}.label:last-child{break-after:auto}.label svg{flex:0 0 ${profile.qr}mm;width:${profile.qr}mm;height:${profile.qr}mm}.label>div{min-width:0;max-height:100%;overflow:hidden}.label strong{font-size:10pt}.label span,.label small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7pt}}`
     : '';
-  return page(t(batch ? 'Printable QR batch' : 'Print QR label'), controls + labels.join(''), css);
+  return page(
+    t(batch ? 'Printable QR batch' : 'Print QR label'),
+    controls + labels.join(''),
+    css +
+      (barcode.layout === 'linear'
+        ? '.label{display:flex;flex-direction:column-reverse}.label svg{width:100%;height:12mm;flex:none}'
+        : '')
+  );
 }
 
 export function createMockServer(defaultStore = new MockStore()) {
@@ -168,7 +228,7 @@ export function createMockServer(defaultStore = new MockStore()) {
         send(
           response,
           200,
-          await QRCode.toString(text, { type: 'svg', margin: 4, width: 512 }),
+          await barcodeSvg(text, url.searchParams.get('symbology') || 'QRCODE'),
           'image/svg+xml'
         );
         return;
@@ -203,14 +263,23 @@ export function createMockServer(defaultStore = new MockStore()) {
         }
         return;
       }
-      if (method === 'GET' && url.pathname === '/custom/qrrouter/qr.php') {
-        const item = store.item(url.searchParams.get('code'));
-        send(
-          response,
-          200,
-          await QRCode.toString(item.code, { type: 'svg', margin: 2 }),
-          'image/svg+xml'
-        );
+      if (
+        method === 'GET' &&
+        ['/custom/qrrouter/qr.php', '/custom/qrrouter/barcode.php'].includes(url.pathname)
+      ) {
+        const payload = url.searchParams.get('location');
+        const bin = url.searchParams.get('physical_bin');
+        const symbology = url.searchParams.get('symbology') || 'QRCODE';
+        barcodeFormat(symbology, !!payload || !!bin);
+        let code;
+        if (payload) {
+          store.read('location-qr', new URLSearchParams({ payload }));
+          code = payload;
+        } else if (bin) {
+          code = store.read('physical-bins', new URLSearchParams()).find(row => row.id === bin)?.qr;
+          if (!code) throw new MockError('Unknown physical bin');
+        } else code = store.item(url.searchParams.get('code')).code;
+        send(response, 200, await barcodeSvg(code, symbology), 'image/svg+xml');
         return;
       }
       if (method === 'GET' && url.pathname === '/custom/qrrouter/thumbnail.php') {
@@ -229,8 +298,11 @@ export function createMockServer(defaultStore = new MockStore()) {
           '/custom/qrrouter/label.php',
           '/custom/qrrouter/batch_print.php',
           '/custom/qrrouter/bin_print.php',
+          '/custom/qrrouter/physical_bin_print.php',
         ].includes(url.pathname)
       ) {
+        if (!store.permissions().print)
+          throw new MockError('Missing QR Router print permission', 403);
         send(response, 200, await printPage(store, url), 'text/html; charset=utf-8');
         return;
       }

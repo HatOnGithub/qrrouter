@@ -20,6 +20,10 @@ const bytes = (value: string) => new TextEncoder().encode(value).length;
 const sameLevels = (a: Record<string, string | number>, b: Record<string, string | number>) =>
   JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
 
+/**
+ * Preview/classify CSV rows against a refreshed public snapshot, then apply ordinary gateway
+ * commands. Preview is advisory; grants and native constraints are still enforced server-side.
+ */
 @Injectable()
 export class CsvImportService {
   private api = inject(InventoryService);
@@ -29,7 +33,10 @@ export class CsvImportService {
     await this.api.refresh();
     requireValue(!this.api.error(), this.api.error());
     const context = this.api.context()!;
-    requireValue(context.permissions.manage, 'Missing Dolibarr permission');
+    requireValue(
+      context.permissions.create || context.permissions.modify,
+      'Missing Dolibarr permission'
+    );
     requireValue(!context.state.pending_native, 'Resolve the pending native synchronization first');
     this.revision = context.state.revision;
     const products = new Map<string, Promise<Lookup[]>>();
@@ -285,6 +292,10 @@ export class CsvImportService {
           keep_legacy: keepLegacy,
         };
         row.action = unchanged ? 'skip' : updating ? 'update' : current ? 'register' : 'create';
+        requireValue(
+          row.action === 'skip' || this.api.can(row.action === 'update' ? 'modify' : 'create'),
+          'Missing QR Router permission for this row'
+        );
         row.status = unchanged ? 'unchanged' : 'ready';
         row.message = unchanged
           ? 'Unchanged'
@@ -355,6 +366,7 @@ export class CsvImportService {
     }
   }
 
+  /** Reject a stale preview, preserve completed rows and stop at the first uncertain failure. */
   async apply(
     rows: ImportRow[],
     progress: () => void,

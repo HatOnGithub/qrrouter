@@ -190,3 +190,70 @@ body[data-detail-level='3'] .qrr-label-detail:is(.serial, .name, .ref, .details)
   font: inherit;
   padding: 10px;
 }
+
+/* Compact 2D: code left, details right. Large 2D: top-left code with full-width bottom rows. */
+.qrr-matrix-large:not(.qrr-label-id-only) {
+  grid-template-rows: minmax(0, 65fr) minmax(0, 35fr);
+}
+.qrr-matrix-large:not(.qrr-label-id-only) .qrr-qr-column {
+  grid-column: 1;
+  grid-row: 1;
+}
+.qrr-matrix-large:not(.qrr-label-id-only) .qrr-qr-column img {
+  width: min(var(--qr-size), calc((var(--label-height) - 2mm) * 0.65 - 4mm));
+  height: min(var(--qr-size), calc((var(--label-height) - 2mm) * 0.65 - 4mm));
+}
+.qrr-matrix-large:not(.qrr-label-id-only) > .qrr-label-details:not(.qrr-label-bottom-details) {
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+}
+.qrr-matrix-large > .qrr-label-bottom-details {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.qrr-matrix-large .qrr-label-bottom-details .qrr-label-detail {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+/* Wide 1D: reserve the entire bottom band for the barcode and intact ID. */
+/* PDF417 remains a left-hand 2D code, but needs more width to retain printable module sizes. */
+body[data-barcode-format='PDF417'] .qrr-thermal-label:not(.qrr-label-id-only) {
+  grid-template-columns: minmax(0, 60fr) minmax(0, 40fr);
+}
+body[data-barcode-format='PDF417'] .qrr-qr-column img {
+  width: 100%;
+  height: calc(var(--label-height) * 0.4);
+  padding: 0 2mm;
+  object-fit: contain;
+}
+body[data-barcode-layout='linear'] .qrr-thermal-label {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 12mm);
+  gap: 0.5mm;
+}
+body[data-barcode-layout='linear'] .qrr-qr-column {
+  grid-row: 2;
+  grid-column: 1;
+}
+body[data-barcode-layout='linear'] .qrr-label-details {
+  grid-row: 1;
+  grid-column: 1;
+  padding: 0;
+}
+body[data-barcode-layout='linear'] .qrr-qr-column img,
+body[data-barcode-layout='linear'] .long-id .qrr-qr-column img {
+  width: 100%;
+  height: 8mm;
+  padding: 0 3mm;
+  object-fit: contain;
+}
+body[data-barcode-layout='linear'] .qrr-label-id-only {
+  grid-template-rows: minmax(0, 1fr);
+}
+body[data-barcode-layout='linear'] .qrr-label-id-only .qrr-qr-column {
+  grid-row: 1;
+  justify-content: end;
+}

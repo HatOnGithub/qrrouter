@@ -4,6 +4,7 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
 require_once __DIR__ . '/qrrouter_print.lib.php';
+require_once __DIR__ . '/qrrouter_barcodes.lib.php';
 
 function qrr_label_profiles() {
     static $profiles;
@@ -51,6 +52,7 @@ function qrr_print_document(
 ) {
     try {
         $locale = qrr_print_locale(GETPOST('lang', 'alphanohtml'));
+        $symbology = qrr_barcode_format(GETPOST('symbology', 'alphanohtml'));
     } catch (InvalidArgumentException $error) {
         http_response_code(400);
         exit($error->getMessage());
@@ -62,6 +64,8 @@ function qrr_print_document(
         'warehouses' => (object) qrr_warehouses($db),
         'profiles' => qrr_label_profiles(),
         'format' => $format,
+        'symbology' => $symbology['id'],
+        'barcode_formats' => qrr_barcode_formats(),
         'title' => $translations[$title] ?? $title,
         'locale' => $locale,
         'base' => rtrim(qrr_base(), '/') . '/',

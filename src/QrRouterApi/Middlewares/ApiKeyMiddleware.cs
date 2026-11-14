@@ -5,6 +5,7 @@ using QrRouterApi.Helpers;
 
 namespace QrRouterApi.Middlewares;
 
+/// <summary>Authenticate the trusted server adapter; the health route deliberately has no key.</summary>
 public sealed class ApiKeyMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, IOptions<AppSettings> options)
@@ -16,6 +17,7 @@ public sealed class ApiKeyMiddleware(RequestDelegate next)
             await next(context);
             return;
         }
+        // Equal-length digests allow fixed-time comparison independent of key length/content.
         var actual = SHA256.HashData(
             Encoding.UTF8.GetBytes(context.Request.Headers["X-Api-Key"].ToString())
         );

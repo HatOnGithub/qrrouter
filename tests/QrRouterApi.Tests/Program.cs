@@ -343,6 +343,7 @@ try
         service.Execute(
             admin with
             {
+                Use = true,
                 Manage = false,
                 Admin = false,
             },
@@ -738,6 +739,7 @@ try
         "Native-linked consumption cannot silently change cached counts only"
     );
     passed += LocationTests.Run(directory);
+    passed += PermissionTests.Run(directory);
     var deletionActor = admin with { EntityId = 90 };
     JsonNode? DeleteRun(string action, JsonObject data) =>
         service.Execute(deletionActor, action, data);
@@ -797,6 +799,390 @@ try
             s => s.Map("items").ContainsKey(unusedCode)
         ),
         "Deletion persists across restarts"
+    );
+    var pickFields = Fields("box", 5);
+    pickFields["product_id"] = 44;
+    var pickCode = Cmd("create", pickFields)!.GetValue<string>();
+    var guardedPick = Object(
+        ("order_id", 390),
+        ("warehouse_id", 1),
+        ("lines", new[] { new { product_id = 44, qty = 2.0 } })
+    );
+    var guardedRows = (JsonArray)Cmd("query-pick", guardedPick)!;
+    Check(guardedRows.Any(row => row.S("code") == pickCode), "Pick list contains eligible box");
+    JsonObject PickArgs(int quantity) =>
+        Object(
+            ("quantity", quantity),
+            ("post_stock", true),
+            ("reference_type", "salesorder"),
+            ("reference_id", 390),
+            ("pick_list", guardedPick.DeepClone())
+        );
+    Reject(() => Stage(PlanData(pickCode, "consume", PickArgs(3))), "Overpick rejected at staging");
+    var guardedOperation = Stage(PlanData(pickCode, "consume", PickArgs(2)));
+    Check(
+        ((JsonArray)Cmd("query-pick", guardedPick)!).Count == 0,
+        "Pending picks count against order allowance"
+    );
+    Finish(pickCode, guardedOperation);
+    Check(
+        ((JsonArray)Cmd("query-pick", guardedPick)!).Count == 0,
+        "Completed picks cannot be picked again"
+    );
+    Reject(() => Stage(PlanData(pickCode, "consume", PickArgs(1))), "Repeated pick rejected");
+    var savedList = Object(
+        ("order_id", 391),
+        ("warehouse_id", 1),
+        ("lines", new[] { new { product_id = 44, qty = 5.0 } })
+    );
+    Cmd("pick-list-save", savedList);
+    Reject(
+        () => Cmd("pick-list-complete", Object(("order_id", 391), ("reason", ""))),
+        "Manual completion requires a reason"
+    );
+    var manualPickArgs = PickArgs(1);
+    manualPickArgs["reference_id"] = 391;
+    manualPickArgs["pick_list"] = savedList.DeepClone();
+    var partialPick = Stage(PlanData(pickCode, "consume", manualPickArgs));
+    Reject(
+        () => Cmd("pick-list-complete", Object(("order_id", 391), ("reason", "Untracked stock"))),
+        "Manual completion cannot hide a pending operation"
+    );
+    Finish(pickCode, partialPick);
+    var changedListRequest = (JsonObject)savedList.DeepClone();
+    changedListRequest["lines"] = Object(("ignored", true));
+    Check(
+        ((JsonArray)Cmd("query-pick", changedListRequest)!).Sum(row =>
+            row!["take"]!.GetValue<double>()
+        ) == 4,
+        "Saved pick list keeps its trusted requested quantities"
+    );
+    var progress = ((JsonArray)Cmd("query-pick-lists", new JsonObject())!).Single(list =>
+        list!.I("order_id") == 391
+    )!;
+    Check(
+        progress.S("status") == "in_progress" && progress["lines"]![0]!.I("picked") == 1,
+        "Partially fulfilled lists retain progress"
+    );
+    var beforeManual = GetItem(pickCode).ToJsonString();
+    Cmd(
+        "pick-list-complete",
+        Object(("order_id", 391), ("reason", "Remaining four supplied from untracked stock"))
+    );
+    Check(
+        GetItem(pickCode).ToJsonString() == beforeManual,
+        "Manual completion leaves inventory unchanged"
+    );
+    var reopenedPicks = new InventoryService(
+        new StateRepository(Options.Create(new AppSettings { DataDirectory = directory }))
+    );
+    var durableLists = (JsonArray)
+        reopenedPicks.Execute(admin, "query-pick-lists", new JsonObject())!;
+    Check(
+        durableLists.Single(list => list!.I("order_id") == 391)!.S("status")
+            == "manually_completed",
+        "Saved list and manual completion survive service restart"
+    );
+    Check(
+        ((JsonArray)Cmd("query-pick", savedList)!).Count == 0,
+        "Manually completed lists cannot be overpicked"
+    );
+    JsonObject InternalChoice(string name, int warehouse = 1) =>
+        (JsonObject)
+            Cmd(
+                "query-location-choice",
+                Object(
+                    ("warehouse_id", warehouse),
+                    ("levels", Object(("1", name))),
+                    (
+                        "warehouses",
+                        Object(("1", Object(("ref", "MAIN"))), ("2", Object(("ref", "OTHER"))))
+                    )
+                )
+            )!;
+    const string sourceLocation = "AISLE-A.01";
+    const string targetLocation = "RACK-B.02";
+    var physicalBin = Cmd(
+        "physical-bin-create",
+        Object(
+            ("label", "Blue tote"),
+            ("warehouse_id", 1),
+            ("choice", InternalChoice(sourceLocation))
+        )
+    )!;
+    var binId = physicalBin.S("id");
+    var packedCodes = new List<string>();
+    foreach (var units in new[] { 3, 5 })
+    {
+        var fields = Fields("box", units);
+        fields["choice"] = InternalChoice(sourceLocation);
+        packedCodes.Add(Cmd("create", fields)!.GetValue<string>());
+    }
+    Cmd("physical-bin-assign", Object(("bin_id", binId), ("codes", packedCodes)));
+    Check(
+        packedCodes.All(code => GetItem(code).S("physical_bin_id") == binId),
+        "Items are packed without a stock mutation"
+    );
+    Reject(
+        () => Cmd("physical-bin-assign", Object(("bin_id", binId), ("codes", new[] { pickCode }))),
+        "Packing items from another location rejected"
+    );
+    var binMove = Cmd(
+        "physical-bin-move-start",
+        Object(
+            ("bin_id", binId),
+            ("warehouse_id", 2),
+            ("choice", InternalChoice(targetLocation, 2))
+        )
+    )!;
+    Reject(
+        () => Stage(PlanData(packedCodes[0], "consume", Object(("quantity", 1)))),
+        "Packed items are locked during bin moves"
+    );
+    Reject(
+        () =>
+            Cmd(
+                "physical-bin-assign",
+                Object(("bin_id", binId), ("codes", packedCodes), ("remove", true))
+            ),
+        "Unpacking during a move rejected"
+    );
+    JsonObject BinMoveArgs() =>
+        Object(
+            ("warehouse_id", 2),
+            ("choice", InternalChoice(targetLocation, 2)),
+            ("physical_bin_move", binId)
+        );
+    var firstPackedMove = Stage(PlanData(packedCodes[0], "move", BinMoveArgs()));
+    Finish(packedCodes[0], firstPackedMove);
+    Reject(
+        () => Cmd("physical-bin-move-finish", Object(("bin_id", binId))),
+        "Partially moved bin remains pending"
+    );
+    var resumedService = new InventoryService(
+        new StateRepository(Options.Create(new AppSettings { DataDirectory = directory }))
+    );
+    var pendingBins = (JsonArray)
+        resumedService.Execute(admin, "query-physical-bins", new JsonObject())!;
+    Check(
+        pendingBins.Single(bin => bin.S("id") == binId)!["pending_move"] is not null,
+        "Physical bin move survives restart"
+    );
+    var secondPackedMove = Stage(PlanData(packedCodes[1], "move", BinMoveArgs()));
+    Reject(
+        () => Cmd("physical-bin-move-finish", Object(("bin_id", binId))),
+        "Pending native movements must finish before a bin move closes"
+    );
+    Finish(packedCodes[1], secondPackedMove);
+    Cmd("physical-bin-move-finish", Object(("bin_id", binId)));
+    Check(
+        packedCodes.All(code =>
+            GetItem(code).I("warehouse_id") == 2
+            && GetItem(code).S("physical_bin_id") == binId
+            && GetItem(code)["pending_bin_move"] is null
+        ),
+        "Whole bin moves retain membership and clear locks"
+    );
+    Check(
+        packedCodes.Sum(code => GetItem(code).I("qty")) == 8,
+        "Physical bin moves conserve quantities"
+    );
+    var standaloneMove = Stage(
+        PlanData(
+            packedCodes[0],
+            "move",
+            Object(("warehouse_id", 1), ("choice", InternalChoice(sourceLocation)))
+        )
+    );
+    Finish(packedCodes[0], standaloneMove);
+    Check(
+        GetItem(packedCodes[0]).S("physical_bin_id") == "",
+        "Moving an individual item unpacks it"
+    );
+    Reject(
+        () =>
+            Cmd(
+                "location-configure",
+                Object(
+                    ("warehouse_id", 2),
+                    ("warehouses", Object(("2", Object(("ref", "OTHER"))))),
+                    ("names", new[] { "Location" }),
+                    ("datatypes", new[] { "number" })
+                )
+            ),
+        "Physical bin assignments preserve upstream location level datatypes"
+    );
+    var revisionBeforeHistory = State().I("revision");
+    var history = (JsonObject)Cmd("query-history", Object(("page", 1), ("page_size", 2)))!;
+    Check(
+        ((JsonArray)history["entries"]!).Count == 2 && history.I("total") > 2,
+        "Audit history is paginated"
+    );
+    var firstHistory = history["entries"]![0]!;
+    var secondHistory = history["entries"]![1]!;
+    Check(
+        firstHistory["id"]!.GetValue<long>() > secondHistory["id"]!.GetValue<long>(),
+        "Newest actions appear first"
+    );
+    Check(
+        State().I("revision") == revisionBeforeHistory,
+        "Viewing history does not create audit events"
+    );
+    var historyPageTwo = (JsonObject)Cmd("query-history", Object(("page", 2), ("page_size", 2)))!;
+    Check(
+        historyPageTwo["entries"]![0]!["id"]!.GetValue<long>()
+            < secondHistory["id"]!.GetValue<long>(),
+        "Audit pages do not overlap"
+    );
+    var packedHistory = (JsonObject)Cmd("query-history", Object(("q", binId)))!;
+    Check(packedHistory.I("total") >= 3, "Physical bin actions are searchable");
+    var actorHistory = (JsonObject)
+        Cmd("query-history", Object(("user_id", admin.UserId), ("action", "physical-bin-assign")))!;
+    Check(
+        ((JsonArray)actorHistory["entries"]!).All(row =>
+            row.I("user_id") == admin.UserId && row.S("action") == "physical-bin-assign"
+        ),
+        "Actor and event filters apply together"
+    );
+    var noHistory = (JsonObject)Cmd("query-history", Object(("from", "2099-01-01T00:00:00Z")))!;
+    Check(noHistory.I("total") == 0, "Audit dates filter events");
+    Reject(
+        () => service.Execute(admin with { Admin = false }, "query-history", new JsonObject()),
+        "Audit access without the history permission is rejected"
+    );
+    var historyReader = admin with
+    {
+        Admin = false,
+        Manage = false,
+        Stock = false,
+        History = true,
+        Use = true,
+    };
+    var visibility = Object(
+        ("codes", State().Map("items").Select(pair => pair.Key).ToArray()),
+        ("warehouses", new[] { 1, 2, 3 }),
+        ("bins", new[] { binId }),
+        ("references", new[] { "salesorder:391" })
+    );
+    var qrHistory = (JsonObject)
+        service.Execute(
+            historyReader,
+            "query-history",
+            Object(("code", packedCodes[0]), ("visibility", visibility))
+        )!;
+    Check(qrHistory.I("total") > 0, "History permission grants read-only users access");
+    var hiddenReferenceScope = (JsonObject)visibility.DeepClone();
+    hiddenReferenceScope["references"] = new JsonArray();
+    Check(
+        (
+            (JsonObject)
+                service.Execute(
+                    historyReader,
+                    "query-history",
+                    Object(("action", "pick-list-complete"), ("visibility", hiddenReferenceScope))
+                )!
+        ).I("total") == 0,
+        "History does not reveal orders outside the native document scope"
+    );
+    var hiddenItemScope = (JsonObject)visibility.DeepClone();
+    hiddenItemScope["codes"] = new JsonArray();
+    Check(
+        (
+            (JsonObject)
+                service.Execute(
+                    historyReader,
+                    "query-history",
+                    Object(("code", packedCodes[0]), ("visibility", hiddenItemScope))
+                )!
+        ).I("total") == 0,
+        "Exact QR searches cannot bypass native item visibility"
+    );
+    Check(
+        qrHistory["entries"]!
+            .AsArray()
+            .All(row =>
+                row!["codes"]!.AsArray().Any(code => code!.GetValue<string>() == packedCodes[0])
+            ),
+        "QR history contains only actions affecting the exact QR identifier"
+    );
+    Reject(
+        () =>
+            service.Execute(
+                historyReader with
+                {
+                    History = false,
+                },
+                "query-history",
+                Object(("code", packedCodes[0]), ("visibility", visibility))
+            ),
+        "Per-QR history uses the same permission as the separate page"
+    );
+    Reject(
+        () => Cmd("query-history", Object(("code", "invalid"))),
+        "Invalid exact QR filters are rejected"
+    );
+    Reject(
+        () => Cmd("query-history", Object(("page_size", 101))),
+        "Unbounded audit requests rejected"
+    );
+    Reject(() => Cmd("query-history", Object(("from", "invalid"))), "Invalid audit dates rejected");
+    Check(
+        (
+            (JsonObject)
+                service.Execute(admin with { EntityId = 999 }, "query-history", new JsonObject())!
+        ).I("total") == 0,
+        "History is entity scoped"
+    );
+    var privateHistory = (JsonObject)Cmd("query-history", Object(("action", "native-stage")))!;
+    Check(
+        !privateHistory.ToJsonString().Contains("\"changes\"")
+            && !privateHistory.ToJsonString().Contains("\"context\""),
+        "History omits internal state snapshots"
+    );
+    var completedMoves = (JsonObject)
+        Cmd("query-history", Object(("action", "finish"), ("q", packedCodes[0])))!;
+    var lastMove = completedMoves["entries"]![0]!;
+    Check(
+        lastMove.I("source_warehouse_id") == 2
+            && lastMove.I("warehouse_id") == 1
+            && lastMove.I("quantity") == 3,
+        "Completed move audit retains source, destination and moved quantity"
+    );
+    var historyAfterRestart = (JsonObject)
+        reopenedPicks.Execute(
+            admin,
+            "query-history",
+            Object(("action", "finish"), ("q", packedCodes[0]))
+        )!;
+    Check(
+        historyAfterRestart.I("total") == completedMoves.I("total"),
+        "Audit history survives reopening storage"
+    );
+    var legacyHistory = ActionHistory.Project(
+        Object(
+            ("action", "native-stage"),
+            ("at", "2025-01-01T00:00:00Z"),
+            ("user_id", 7),
+            ("revision", 1),
+            (
+                "context",
+                Object(
+                    (
+                        "result",
+                        Object(
+                            ("action", "create"),
+                            ("changes", Object((packedCodes[0], new JsonObject()))),
+                            ("items", Object((packedCodes[1], new JsonObject())))
+                        )
+                    )
+                )
+            )
+        )
+    );
+    Check(
+        legacyHistory["codes"]!.AsArray().Count == 1
+            && legacyHistory["codes"]![0]!.GetValue<string>() == packedCodes[0],
+        "Legacy history extracts affected records without exposing unrelated native snapshots"
     );
     Console.WriteLine($"Passed {passed} assertions.");
 }

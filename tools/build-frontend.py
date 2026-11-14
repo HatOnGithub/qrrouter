@@ -15,6 +15,8 @@ if not args.skip_build:
 source = frontend / 'dist/qrrouter/browser'
 if not (source / 'index.html').is_file():
     raise SystemExit('Angular output is missing. Run npm run build first.')
+# This is generated deployment output, not service inventory. Clear obsolete top-level bundle
+# names before copying the new index/chunks so packaging cannot retain an old entry point.
 target = root / 'dolibarr/qrrouter/spa'
 target.mkdir(parents=True, exist_ok=True)
 for old in target.iterdir():

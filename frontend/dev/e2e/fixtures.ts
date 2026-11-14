@@ -1,7 +1,14 @@
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Bootstrap, Item } from '../../src/app/core/models/inventory';
 
-type Scenario = 'populated' | 'empty' | 'no-employees' | 'read-only' | 'pending' | 'unavailable';
+type Scenario =
+  | 'populated'
+  | 'empty'
+  | 'no-employees'
+  | 'read-only'
+  | 'history-reader'
+  | 'pending'
+  | 'unavailable';
 
 export class MockApplication {
   constructor(

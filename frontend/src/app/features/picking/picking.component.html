@@ -5,7 +5,7 @@
       pt(
         orderType === 'production'
           ? 'Planned component quantities only. Previous consumption is not subtracted; this does not reserve or decrement stock.'
-          : 'Planning preview only. Requested quantities are not unshipped balances; this does not reserve or decrement stock.'
+          : 'Requested quantities exclude recorded and pending QR consumption; this does not reserve stock or use native unshipped balances.'
       )
     }}
   </p>
@@ -55,14 +55,36 @@
           <fa-icon [icon]="icons.preview" aria-hidden="true" />
           {{ pt('Generate preview') }}
         </button>
-        <button
-          mat-stroked-button
-          (click)="print()"
-          [disabled]="!rows().length || loadingLanguage() || !languageReady()"
-        >
-          <fa-icon [icon]="icons.print" aria-hidden="true" />
-          {{ pt('Print / Save as PDF') }}
-        </button>
+        @if (api.can('print')) {
+          <button
+            mat-stroked-button
+            (click)="print()"
+            [disabled]="!rows().length || loadingLanguage() || !languageReady()"
+          >
+            <fa-icon [icon]="icons.print" aria-hidden="true" />
+            {{ pt('Print / Save as PDF') }}
+          </button>
+        }
+        @if (orderType === 'salesorder' && api.can('picking')) {
+          <button
+            mat-stroked-button
+            (click)="saveList()"
+            [disabled]="busy() || !warehouse || !order"
+          >
+            {{ 'Save pick list' | t }}
+          </button>
+          @if (rows().length && api.can('consume')) {
+            @if (api.can('consume')) {
+              <a
+                mat-stroked-button
+                [routerLink]="['/workflow/consume']"
+                [queryParams]="{ order: order, warehouse: warehouse }"
+              >
+                {{ 'Pick with scanner safeguards' | t }}
+              </a>
+            }
+          }
+        }
       </div>
       @if (rows().length) {
         <h2>
@@ -117,3 +139,114 @@
     </qrr-card>
   }
 </section>
+
+@if (api.context()!.permissions.orders) {
+  <qrr-card class="no-print" [title]="'Saved pick lists' | t">
+    @for (list of lists(); track list.order_id) {
+      <article>
+        <h2>
+          <qrr-native-link
+            type="salesorder"
+            [id]="list.order_id"
+            [label]="'Order #' + list.order_id"
+          />
+          ·
+          {{
+            (list.status === 'in_progress'
+              ? 'In progress'
+              : list.status === 'manually_completed'
+                ? 'Manually completed'
+                : list.status === 'completed'
+                  ? 'Completed'
+                  : 'Open'
+            ) | t
+          }}
+        </h2>
+        <p>{{ 'Created' | t }}: {{ list.created_at | date: 'short' }}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>{{ 'Product' | t }}</th>
+              <th>{{ 'Requested' | t }}</th>
+              <th>{{ 'QR picked' | t }}</th>
+              <th>{{ 'Pending' | t }}</th>
+              <th>{{ 'Manually fulfilled' | t }}</th>
+              <th>{{ 'Remaining' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (line of list.lines; track line.product_id) {
+              <tr>
+                <td>
+                  <qrr-native-link
+                    type="product"
+                    [id]="line.product_id"
+                    [label]="
+                      api.context()!.products[line.product_id]?.ref || 'Product #' + line.product_id
+                    "
+                  />
+                </td>
+                <td>{{ line.requested }}</td>
+                <td>{{ line.picked }}</td>
+                <td>{{ line.pending }}</td>
+                <td>{{ line.manual }}</td>
+                <td>{{ line.remaining }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (list.status === 'manually_completed') {
+          <p>
+            {{ 'Manually completed' | t }}: {{ list.completed_at | date: 'short' }} ·
+            {{ 'User' | t }} #{{ list.completed_by }} · {{ list.completion_reason }}
+          </p>
+          <p>
+            {{
+              'Remaining quantities were fulfilled outside QR tracking. No QR stock movement was posted.'
+                | t
+            }}
+          </p>
+        } @else if (list.status !== 'completed' && api.can('picking')) {
+          <div class="actions no-print">
+            @if (api.can('consume')) {
+              <a
+                mat-stroked-button
+                [routerLink]="['/workflow', 'consume']"
+                [queryParams]="{ order: list.order_id, warehouse: list.warehouse_id }"
+              >
+                {{ 'Resume picking' | t }}
+              </a>
+            }
+            <button mat-stroked-button (click)="completing = list.order_id; completionReason = ''">
+              {{ 'Complete manually' | t }}
+            </button>
+          </div>
+          @if (completing === list.order_id) {
+            <p>
+              {{
+                'Confirm that all remaining quantities have been fulfilled with stock not tracked by QR Router. This closes the list without changing stock.'
+                  | t
+              }}
+            </p>
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'Manual completion reason' | t }}</mat-label>
+              <input matInput [(ngModel)]="completionReason" maxlength="200" />
+            </mat-form-field>
+            <button
+              mat-flat-button
+              (click)="completeList()"
+              [disabled]="busy() || !completionReason.trim()"
+            >
+              {{ 'Confirm manual completion' | t }}
+            </button>
+            <button mat-button (click)="completing = 0" [disabled]="busy()">
+              {{ 'Cancel' | t }}
+            </button>
+          }
+        }
+      </article>
+    } @empty {
+      <p>{{ 'No saved pick lists' | t }}</p>
+    }
+  </qrr-card>
+}

@@ -26,7 +26,7 @@ test('all label sizes prioritize short name, serial and product reference', () =
       ['name', 'serial', 'ref']
     );
     assert.equal(fields[0].value, 'Named item');
-    assert.ok(fields.length > count);
+    assert.ok(fields.length >= count);
     count = fields.length;
     assert.ok(fields.length <= profile.detail_limit);
   }
@@ -34,6 +34,16 @@ test('all label sizes prioritize short name, serial and product reference', () =
 test('unassigned labels contain no descriptive text at any size', () => {
   for (const profile of profiles)
     assert.deepEqual(details({ ...item, type: 'unassigned' }, product, profile, 'MAIN'), []);
+});
+
+test('permanent item labels omit mutable warehouse and location fields', () => {
+  for (const profile of profiles) {
+    const fields = details(item, product, profile, 'MAIN');
+    assert.ok(fields.every(field => !['warehouse', 'bin', 'location'].includes(field.kind)));
+    assert.ok(
+      fields.every(field => !field.value.includes('Shelf A') && !field.value.includes('MAIN'))
+    );
+  }
 });
 test('names default to Dolibarr and can be overridden without changing the serial', () => {
   assert.equal(name({ ...item, label: '' }, product), product.label);

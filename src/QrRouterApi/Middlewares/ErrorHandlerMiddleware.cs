@@ -2,6 +2,10 @@ using System.Text.Json;
 
 namespace QrRouterApi.Middlewares;
 
+/// <summary>
+/// Translate expected failures to JSON; unexpected details stay in logs. A failed response
+/// must not imply that native stock rolled back, because native writes use another database.
+/// </summary>
 public sealed class ErrorHandlerMiddleware(
     RequestDelegate next,
     ILogger<ErrorHandlerMiddleware> logger

@@ -4,10 +4,11 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit();
 }
 
-function qrr_native_rights($user) {
+/** Existing identities need stock rights; creating a missing lot also needs product creation. */
+function qrr_native_rights($user, $createLot = false) {
     if (
         !qrr_stock_write_right($user) ||
-        (empty($user->admin) && !$user->hasRight('produit', 'creer'))
+        ($createLot && empty($user->admin) && !$user->hasRight('produit', 'creer'))
     ) {
         throw new DomainException('Stock movement and product creation permissions required');
     }
@@ -58,6 +59,7 @@ function qrr_native_lot($db, $item, $create = false) {
         );
     }
     if ($result === 0 && $create && empty($item['product_lot_id'])) {
+        qrr_native_rights($user, true);
         $lot->entity = (int) $conf->entity;
         $lot->fk_product = (int) $product->id;
         $lot->batch = (string) $item['native_batch'];
@@ -195,6 +197,7 @@ function qrr_native_observations($db, $state) {
     return $observations;
 }
 
+/** Read committed synchronization bindings by entity/operation ID; null means no saved receipt. */
 function qrr_native_receipt($db, $id) {
     global $conf;
     $result = $db->query(
@@ -216,9 +219,14 @@ function qrr_native_receipt($db, $id) {
     return $row ? json_decode($row->bindings, true, 512, JSON_THROW_ON_ERROR) : null;
 }
 
-/** Durable service intent + transactional native receipt make retries safe after lost responses. */
+/**
+ * Complete a staged candidate using a receipt committed with the native changes. If a response
+ * was lost after commit, reuse bindings and finish QR state without repeating stock calls.
+ * The service and native databases do not share a transaction; retain intent on uncertainty.
+ */
 function qrr_native_complete($db, $user, $pending) {
     global $conf;
+    qrr_require_operation_right($user, $pending['action']);
     qrr_native_rights($user);
     qrr_require_native_visible($db, $pending);
     $id = $pending['id'];
@@ -366,8 +374,21 @@ function qrr_native_complete($db, $user, $pending) {
     return qrr_service('POST', 'native-finish', ['id' => $id, 'bindings' => (object) $bindings]);
 }
 
+/** Choose receive/link semantics from native facts, persist the candidate, then execute it. */
 function qrr_native_command($db, $user, $action, $fields) {
     qrr_native_rights($user);
+    qrr_require_operation_right($user, $action);
+    if (
+        in_array($fields['type'] ?? '', ['tracked', 'box'], true) &&
+        ($action === 'bulk' ||
+            !qrr_native_serial_exists(
+                $db,
+                $fields['product_id'],
+                $fields['native_batch'] ?? ($fields['serial'] ?? ''),
+            ))
+    ) {
+        qrr_native_rights($user, true);
+    }
     $linkExisting =
         (in_array($action, ['create', 'register'], true) ||
             ($action === 'update' &&
@@ -401,8 +422,11 @@ function qrr_native_command($db, $user, $action, $fields) {
     return qrr_native_complete($db, $user, $pending);
 }
 
+/** Claim cancellation natively before clearing service intent; committed changes cannot cancel. */
 function qrr_native_cancel($db, $user, $pending) {
     global $conf;
+    qrr_require_operation_right($user, 'native-cancel');
+    qrr_require_operation_right($user, $pending['action']);
     qrr_native_rights($user);
     qrr_require_native_visible($db, $pending);
     $id = $pending['id'];

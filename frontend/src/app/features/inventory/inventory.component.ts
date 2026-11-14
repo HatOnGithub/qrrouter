@@ -76,6 +76,7 @@ export class InventoryComponent {
       item.serial,
       item.native_batch,
       item.bin,
+      item.physical_bin_id,
       item.details,
       this.productSearch()[item.product_id],
     ]
@@ -86,12 +87,14 @@ export class InventoryComponent {
   protected stats = computed(() => ({
     labels: this.api.items().length,
     unassigned: this.api.items().filter(i => i.type === 'unassigned').length,
-    pending: this.api.items().filter(i => i.pending_handoff || i.pending_operation).length,
+    pending: this.api
+      .items()
+      .filter(i => i.pending_handoff || i.pending_operation || i.pending_bin_move).length,
     loans: this.api.items().filter(i => i.checkout).length,
   }));
 
   protected status(item: Item): string {
-    return item.pending_handoff || item.pending_operation
+    return item.pending_handoff || item.pending_operation || item.pending_bin_move
       ? 'Pending'
       : item.checkout
         ? 'On loan'
